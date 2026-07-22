@@ -2,14 +2,14 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { Upload, Sparkles, Loader2, Eraser, Paintbrush, Undo2, Redo2 } from 'lucide-react';
+import { Sparkles, Loader2, Undo2, Redo2, Eraser, Paintbrush } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
+import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { generateApi } from '@/lib/api';
 
 export default function InpaintPage() {
   const params = useParams();
   const projectId = Number(params.id);
-  const fileRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
   const [imageUrl, setImageUrl] = useState('');
@@ -20,6 +20,15 @@ export default function InpaintPage() {
   const [isDrawing, setIsDrawing] = useState(false);
   const [history, setHistory] = useState<ImageData[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+
+  // Check for pre-selected image from sessionStorage (navigated from another tool)
+  useEffect(() => {
+    const sourceImage = sessionStorage.getItem('inpaint_source_image');
+    if (sourceImage) {
+      setImageUrl(sourceImage);
+      sessionStorage.removeItem('inpaint_source_image');
+    }
+  }, []);
 
   const loadImage = useCallback((url: string) => {
     const img = new window.Image();
@@ -166,26 +175,15 @@ export default function InpaintPage() {
 
   const paramsPanel = (
     <>
-      <div>
-        <label className="mb-1.5 block text-sm font-medium text-foreground">原始图片</label>
-        <input ref={fileRef} type="file" accept="image/*" onChange={handleUpload} className="hidden" />
-        {!imageUrl ? (
-          <button
-            onClick={() => fileRef.current?.click()}
-            className="flex w-full flex-col items-center gap-2 rounded-lg border border-dashed border-border py-8 text-muted-foreground hover:border-primary/50 hover:text-foreground transition-all"
-          >
-            <Upload className="h-6 w-6" />
-            <span className="text-sm">点击上传图片</span>
-          </button>
-        ) : (
-          <button
-            onClick={() => fileRef.current?.click()}
-            className="text-xs text-primary hover:underline"
-          >
-            更换图片
-          </button>
-        )}
-      </div>
+      <ImageSourceSelector
+        projectId={String(projectId)}
+        imageUrl={imageUrl || null}
+        onImageChange={(url) => {
+          setImageUrl(url || '');
+          if (url) loadImage(url);
+        }}
+        label="原始图片"
+      />
       <div>
         <label className="mb-1.5 block text-sm font-medium text-foreground">画笔大小: {brushSize}px</label>
         <input

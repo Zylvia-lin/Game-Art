@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { Sparkles, Loader2, Film, Upload } from 'lucide-react';
+import { Sparkles, Loader2, Film } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
+import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { generateApi } from '@/lib/api';
 
 const ACTIONS = ['idle', 'walk', 'run', 'attack', 'jump', 'death', 'custom'] as const;
@@ -16,7 +17,6 @@ const SUB_TOOLS = [
 export default function AnimationPage() {
   const params = useParams();
   const projectId = Number(params.id);
-  const fileRef = useRef<HTMLInputElement>(null);
   const [subTool, setSubTool] = useState<string>('text');
   const [imageUrl, setImageUrl] = useState('');
   const [action, setAction] = useState('walk');
@@ -25,21 +25,19 @@ export default function AnimationPage() {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<string[]>([]);
 
+  // Check for pre-selected image from sessionStorage
+  useEffect(() => {
+    const sourceImage = sessionStorage.getItem('animation_source_image');
+    if (sourceImage) {
+      setImageUrl(sourceImage);
+      sessionStorage.removeItem('animation_source_image');
+    }
+  }, []);
+
   const toolKeyMap: Record<string, string> = {
     text: 'animation_text',
     skeleton: 'animation_skeleton',
     frame_extract: 'animation_frame_extract',
-  };
-
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const res = await generateApi.upload(file);
-      setImageUrl(res.url);
-    } catch (err) {
-      console.error('Upload failed:', err);
-    }
   };
 
   const handleGenerate = async () => {
@@ -83,23 +81,12 @@ export default function AnimationPage() {
           ))}
         </div>
       </div>
-      <div>
-        <label className="mb-1.5 block text-sm font-medium text-foreground">角色图片</label>
-        <input ref={fileRef} type="file" accept="image/*" onChange={handleUpload} className="hidden" />
-        {imageUrl ? (
-          <div className="relative overflow-hidden rounded-lg border border-border">
-            <img src={imageUrl} alt="Character" className="w-full object-contain max-h-40" />
-            <button onClick={() => fileRef.current?.click()} className="absolute bottom-2 right-2 rounded-md bg-card/80 px-2 py-1 text-xs text-foreground backdrop-blur-sm">
-              更换
-            </button>
-          </div>
-        ) : (
-          <button onClick={() => fileRef.current?.click()} className="flex w-full flex-col items-center gap-2 rounded-lg border border-dashed border-border py-6 text-muted-foreground hover:border-primary/50 hover:text-foreground transition-all">
-            <Upload className="h-5 w-5" />
-            <span className="text-sm">上传角色图片</span>
-          </button>
-        )}
-      </div>
+      <ImageSourceSelector
+        projectId={String(projectId)}
+        imageUrl={imageUrl || null}
+        onImageChange={(url) => setImageUrl(url || '')}
+        label="角色图片"
+      />
       <div>
         <label className="mb-1.5 block text-sm font-medium text-foreground">动作类型</label>
         <div className="flex flex-wrap gap-1.5">

@@ -1,31 +1,20 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Upload, Sparkles, Loader2, Download } from 'lucide-react';
+import { Sparkles, Loader2, Download, ImageIcon } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
+import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { generateApi } from '@/lib/api';
 
 export default function ImageToImagePage() {
   const params = useParams();
   const projectId = Number(params.id);
-  const fileRef = useRef<HTMLInputElement>(null);
   const [imageUrl, setImageUrl] = useState('');
   const [prompt, setPrompt] = useState('');
   const [strength, setStrength] = useState(0.7);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<string[]>([]);
-
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const res = await generateApi.upload(file);
-      setImageUrl(res.url);
-    } catch (err) {
-      console.error('Upload failed:', err);
-    }
-  };
 
   const handleGenerate = async () => {
     if (!imageUrl || !prompt.trim()) return;
@@ -47,29 +36,12 @@ export default function ImageToImagePage() {
 
   const paramsPanel = (
     <>
-      <div>
-        <label className="mb-1.5 block text-sm font-medium text-foreground">参考图片</label>
-        <input ref={fileRef} type="file" accept="image/*" onChange={handleUpload} className="hidden" />
-        {imageUrl ? (
-          <div className="relative overflow-hidden rounded-lg border border-border">
-            <img src={imageUrl} alt="Reference" className="w-full object-contain max-h-48" />
-            <button
-              onClick={() => fileRef.current?.click()}
-              className="absolute bottom-2 right-2 rounded-md bg-card/80 px-2 py-1 text-xs text-foreground backdrop-blur-sm hover:bg-card transition-colors"
-            >
-              更换
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => fileRef.current?.click()}
-            className="flex w-full flex-col items-center gap-2 rounded-lg border border-dashed border-border py-8 text-muted-foreground hover:border-primary/50 hover:text-foreground transition-all"
-          >
-            <Upload className="h-6 w-6" />
-            <span className="text-sm">点击上传参考图片</span>
-          </button>
-        )}
-      </div>
+      <ImageSourceSelector
+        projectId={String(projectId)}
+        imageUrl={imageUrl || null}
+        onImageChange={(url) => setImageUrl(url || '')}
+        label="参考图片"
+      />
       <div>
         <label className="mb-1.5 block text-sm font-medium text-foreground">编辑描述</label>
         <textarea
@@ -134,9 +106,9 @@ export default function ImageToImagePage() {
         <div className="flex flex-1 items-center justify-center">
           <div className="text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-accent">
-              <Upload className="h-8 w-8 text-muted-foreground" />
+              <ImageIcon className="h-8 w-8 text-muted-foreground" />
             </div>
-            <p className="text-sm text-muted-foreground">上传参考图片并描述修改内容</p>
+            <p className="text-sm text-muted-foreground">上传或选择参考图片并描述修改内容</p>
           </div>
         </div>
       )}

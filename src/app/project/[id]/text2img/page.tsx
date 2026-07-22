@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, Download } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
+import { GenerationResultActions } from '@/components/tools/generation-result-actions';
 import { generateApi } from '@/lib/api';
 
 export default function TextToImagePage() {
@@ -106,6 +107,9 @@ export default function TextToImagePage() {
                 >
                   <Download className="h-4 w-4" />
                 </a>
+              </div>
+              <div className="p-3 border-t border-border">
+                <GenerationResultActions projectId={String(projectId)} imageUrl={url} />
               </div>
             </div>
           ))}
