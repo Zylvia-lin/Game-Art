@@ -7,59 +7,83 @@
 - **Language**: TypeScript 5
 - **UI 组件**: shadcn/ui (基于 Radix UI)
 - **Styling**: Tailwind CSS 4
+- **Backend**: Python FastAPI (独立服务，端口 8000)
+- **Database**: PostgreSQL
 
 ## 目录结构
 
 ```
 ├── public/                 # 静态资源
+├── backend/                # Python FastAPI 后端
+│   ├── main.py             # 后端入口
+│   ├── config.py           # 配置
+│   ├── database.py         # 数据库连接
+│   ├── models/             # SQLAlchemy 模型
+│   ├── routers/            # API 路由
+│   ├── services/           # 业务服务（LLM、图片生成、提示词管线）
+│   ├── seed_data.py        # 初始数据（17个系统提示词）
+│   └── requirements.txt    # Python 依赖
 ├── scripts/                # 构建与启动脚本
-│   ├── build.sh            # 构建脚本
-│   ├── dev.sh              # 开发环境启动脚本
-│   ├── prepare.sh          # 预处理脚本
-│   └── start.sh            # 生产环境启动脚本
 ├── src/
 │   ├── app/                # 页面路由与布局
-│   ├── components/ui/      # Shadcn UI 组件库
-│   ├── hooks/              # 自定义 Hooks
-│   ├── lib/                # 工具库
-│   │   └── utils.ts        # 通用工具函数 (cn)
+│   │   ├── page.tsx        # 首页（项目列表 Dashboard）
+│   │   ├── project/
+│   │   │   ├── new/        # 新建项目
+│   │   │   └── [id]/       # 项目工作台 + 各工具页
+│   │   │       ├── text2img    # 文生图
+│   │   │       ├── img2img     # 图生图
+│   │   │       ├── inpaint     # 局部重绘（Canvas遮罩）
+│   │   │       ├── character   # 角色生成（T-pose/多方向/部件拆分）
+│   │   │       ├── animation   # 动画生成
+│   │   │       ├── prop        # 道具生成（含变体衍生）
+│   │   │       ├── ui          # UI生成（含拖拽组件编辑器）
+│   │   │       ├── scene       # 场景/地图生成
+│   │   │       └── assets      # 项目资产库
+│   │   └── settings/
+│   │       ├── models/     # 模型配置页
+│   │       └── prompts/    # 系统提示词管理页（17个功能）
+│   ├── components/
+│   │   ├── layout/         # 全局布局（侧边栏、面包屑）
+│   │   ├── tools/          # 工具页通用组件（ToolLayout、PromptEditor、Selectors）
+│   │   └── ui/             # shadcn/ui 组件库
+│   ├── lib/
+│   │   ├── api.ts          # API 客户端（调用后端 FastAPI）
+│   │   ├── types.ts        # TypeScript 类型定义
+│   │   └── utils.ts        # 通用工具函数
 │   └── server.ts           # 自定义服务端入口
-├── next.config.ts          # Next.js 配置
-├── package.json            # 项目依赖管理
-└── tsconfig.json           # TypeScript 配置
+├── next.config.ts
+├── package.json
+└── tsconfig.json
 ```
 
-- 项目文件（如 app 目录、pages 目录、components 等）默认初始化到 `src/` 目录下。
+## 核心架构
+
+### 项目驱动工作流
+用户必须先创建/选择项目，然后在项目内使用各工具。所有生成结果归属当前项目。
+
+### 提示词管线 (Prompt Pipeline)
+每个工具功能有独立的系统提示词（共17个），存储在 PostgreSQL 中。
+流程：用户输入 → 加载系统提示词 → LLM 增强 → 图片模型生成
+用户可在前端实时编辑每个提示词，保存后立即生效。
+
+### 17个功能提示词 (tool_key)
+- 基础: text_to_image, image_to_image, inpaint
+- 角色: character_tpose, character_directions, character_part_split
+- 动画: animation_text, animation_skeleton, animation_frame_extract
+- 道具: prop_generate, prop_variant
+- UI: ui_layout_generate, ui_component_place, ui_component_split
+- 场景: scene_map_generate, scene_map_split
+
+### 模型配置
+用户自行配置文本模型（DeepSeek/OpenAI）和图片模型（火山引擎 Seeddream）的 API 信息。
 
 ## 包管理规范
 
-**仅允许使用 pnpm** 作为包管理器，**严禁使用 npm 或 yarn**。
-**常用命令**：
-- 安装依赖：`pnpm add <package>`
-- 安装开发依赖：`pnpm add -D <package>`
-- 安装所有依赖：`pnpm install`
-- 移除依赖：`pnpm remove <package>`
+**仅允许使用 pnpm** 作为包管理器。
 
 ## 开发规范
 
-### 编码规范
-
-- 默认按 TypeScript `strict` 心智写代码；优先复用当前作用域已声明的变量、函数、类型和导入，禁止引用未声明标识符或拼错变量名。
-- 禁止隐式 `any` 和 `as any`；函数参数、返回值、解构项、事件对象、`catch` 错误在使用前应有明确类型或先完成类型收窄，并清理未使用的变量和导入。
-
-### next.config 配置规范
-
-- 配置的路径不要写死绝对路径，必须使用 path.resolve(__dirname, ...)、import.meta.dirname 或 process.cwd() 动态拼接。
-
-### Hydration 问题防范
-
-1. 严禁在 JSX 渲染逻辑中直接使用 typeof window、Date.now()、Math.random() 等动态数据。**必须使用 'use client' 并配合 useEffect + useState 确保动态内容仅在客户端挂载后渲染**；同时严禁非法 HTML 嵌套（如 <p> 嵌套 <div>）。
-2. **禁止使用 head 标签**，优先使用 metadata，详见文档：https://nextjs.org/docs/app/api-reference/functions/generate-metadata
-   1. 三方 CSS、字体等资源可在 `globals.css` 中顶部通过 `@import` 引入或使用 next/font
-   2. preload, preconnect, dns-prefetch 通过 ReactDOM 的 preload、preconnect、dns-prefetch 方法引入
-   3. json-ld 可阅读 https://nextjs.org/docs/app/guides/json-ld
-
-## UI 设计与组件规范 (UI & Styling Standards)
-
-- 模板默认预装核心组件库 `shadcn/ui`，位于`src/components/ui/`目录下
-- Next.js 项目**必须默认**采用 shadcn/ui 组件、风格和规范，**除非用户指定用其他的组件和规范。**
+- 默认按 TypeScript strict 模式编写
+- 禁止隐式 any，函数参数必须有类型标注
+- 使用 'use client' 配合 useEffect + useState 处理客户端动态内容
+- API 调用统一通过 src/lib/api.ts 客户端
