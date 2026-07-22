@@ -11,9 +11,10 @@ interface ImageSourceSelectorProps {
   imageUrl: string | null;
   onImageChange: (url: string | null) => void;
   label?: string;
+  assetType?: string; // Filter assets by type (e.g., 'character', 'ui', 'scene')
 }
 
-export function ImageSourceSelector({ projectId, imageUrl, onImageChange, label = '输入图片' }: ImageSourceSelectorProps) {
+export function ImageSourceSelector({ projectId, imageUrl, onImageChange, label = '输入图片', assetType }: ImageSourceSelectorProps) {
   const [showAssetSelector, setShowAssetSelector] = useState(false);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -71,6 +72,7 @@ export function ImageSourceSelector({ projectId, imageUrl, onImageChange, label 
       {showAssetSelector && (
         <ProjectAssetSelector
           projectId={projectId}
+          filterType={assetType}
           onSelect={handleAssetSelect}
           onClose={() => setShowAssetSelector(false)}
         />

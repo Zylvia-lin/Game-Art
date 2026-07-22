@@ -1,10 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, User } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { StyleSelector } from '@/components/tools/selectors';
+import { ImageSourceSelector } from '@/components/tools/image-source-selector';
+import { GenerationResultActions } from '@/components/tools/generation-result-actions';
 import { generateApi } from '@/lib/api';
 
 const SUB_TOOLS = [
@@ -15,11 +17,22 @@ const SUB_TOOLS = [
 
 export default function CharacterPage() {
   const params = useParams();
-  const projectId = Number(params.id);
+  const projectId = String(params.id);
+
+  // Check sessionStorage for pre-selected image
+  useEffect(() => {
+    const saved = sessionStorage.getItem('preselect_image');
+    if (saved) {
+      setSourceImage(saved);
+      sessionStorage.removeItem('preselect_image');
+    }
+  }, []);
+
   const [subTool, setSubTool] = useState<string>('tpose');
   const [prompt, setPrompt] = useState('');
   const [style, setStyle] = useState('anime');
   const [directions, setDirections] = useState(8);
+  const [sourceImage, setSourceImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<string[]>([]);
 
@@ -35,23 +48,36 @@ export default function CharacterPage() {
   };
 
   const handleGenerate = async () => {
-    if (!prompt.trim()) return;
+    if (subTool === 'tpose' && !prompt.trim()) return;
+    if ((subTool === 'directions' || subTool === 'part_split') && !sourceImage) return;
     setLoading(true);
     try {
-      const res = await generateApi.character({
-        project_id: projectId,
-        prompt,
-        sub_tool: subTool,
-        directions,
-        style,
+      const res = await fetch(`/api/generate/${toolKeyMap[subTool]}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: Number(projectId),
+          prompt: prompt || '基于输入图片生成',
+          image_url: sourceImage || undefined,
+          directions,
+          style,
+        }),
       });
-      setResults(res.output_urls);
+      const data = await res.json();
+      if (data.data?.urls?.length) {
+        setResults(data.data.urls);
+      } else if (data.data?.enhanced_prompt) {
+        setResults([]);
+        alert(`图片模型未配置。增强后的提示词：\n${data.data.enhanced_prompt}`);
+      }
     } catch (err) {
       console.error('Generation failed:', err);
     } finally {
       setLoading(false);
     }
   };
+
+  const needsImage = subTool === 'directions' || subTool === 'part_split';
 
   const paramsPanel = (
     <>
@@ -74,13 +100,26 @@ export default function CharacterPage() {
           ))}
         </div>
       </div>
+
+      {needsImage && (
+        <ImageSourceSelector
+          projectId={projectId}
+          imageUrl={sourceImage}
+          onImageChange={setSourceImage}
+          label="角色图片"
+          assetType="character"
+        />
+      )}
+
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-foreground">角色描述</label>
+        <label className="mb-1.5 block text-sm font-medium text-foreground">
+          {needsImage ? '补充描述（可选）' : '角色描述'}
+        </label>
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          rows={4}
-          placeholder="描述角色外观，如：身穿银色铠甲的女骑士，手持长剑..."
+          rows={3}
+          placeholder={needsImage ? '描述需要调整的内容...' : '描述角色外观，如：身穿银色铠甲的女骑士，手持长剑...'}
           className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors resize-none"
         />
       </div>
@@ -107,7 +146,7 @@ export default function CharacterPage() {
       )}
       <button
         onClick={handleGenerate}
-        disabled={loading || !prompt.trim()}
+        disabled={loading || (subTool === 'tpose' ? !prompt.trim() : !sourceImage)}
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-0.5"
       >
         {loading ? <><Loader2 className="h-4 w-4 animate-spin" />生成中...</> : <><Sparkles className="h-4 w-4" />生成角色</>}
@@ -125,10 +164,11 @@ export default function CharacterPage() {
           </div>
         </div>
       ) : results.length > 0 ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="space-y-4">
           {results.map((url, i) => (
             <div key={i} className="overflow-hidden rounded-xl border border-border bg-card">
               <img src={url} alt={`Character ${i + 1}`} className="w-full object-contain" />
+              <GenerationResultActions imageUrl={url} projectId={projectId} />
             </div>
           ))}
         </div>
@@ -138,7 +178,9 @@ export default function CharacterPage() {
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-accent">
               <User className="h-8 w-8 text-muted-foreground" />
             </div>
-            <p className="text-sm text-muted-foreground">描述你的角色，选择功能开始生成</p>
+            <p className="text-sm text-muted-foreground">
+              {needsImage ? '请先选择或上传角色图片' : '描述你的角色，开始生成'}
+            </p>
           </div>
         </div>
       )}

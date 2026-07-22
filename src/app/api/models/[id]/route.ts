@@ -1,57 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getModelConfigs, updateModelConfig, deleteModelConfig } from '@/lib/store';
 
-// In-memory storage
-const modelConfigs: Map<number, any> = new Map();
-
-// PUT /api/models/[id] - Update model config
-export async function PUT(
+// GET /api/models/[id] - Get a specific model config
+export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const modelId = parseInt(id);
-  const config = modelConfigs.get(modelId);
-  
+  const configs = getModelConfigs();
+  const config = configs.find((c) => c.id === parseInt(id));
   if (!config) {
     return NextResponse.json({ error: 'Model config not found' }, { status: 404 });
   }
-  
+  return NextResponse.json(config);
+}
+
+// PUT /api/models/[id] - Update a model config
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
+    const { id } = await params;
     const body = await request.json();
-    const updated = {
-      ...config,
-      ...body,
-      updated_at: new Date().toISOString(),
-    };
-    
-    // If this is set as default, unset other defaults of the same type
-    if (updated.is_default) {
-      modelConfigs.forEach((c) => {
-        if (c.type === updated.type && c.id !== modelId) {
-          c.is_default = false;
-        }
-      });
+    const updated = updateModelConfig(parseInt(id), body);
+    if (!updated) {
+      return NextResponse.json({ error: 'Model config not found' }, { status: 404 });
     }
-    
-    modelConfigs.set(modelId, updated);
     return NextResponse.json(updated);
   } catch (error) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 }
 
-// DELETE /api/models/[id] - Delete model config
+// DELETE /api/models/[id] - Delete a model config
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const modelId = parseInt(id);
-  
-  if (!modelConfigs.has(modelId)) {
+  const deleted = deleteModelConfig(parseInt(id));
+  if (!deleted) {
     return NextResponse.json({ error: 'Model config not found' }, { status: 404 });
   }
-  
-  modelConfigs.delete(modelId);
   return NextResponse.json({ success: true });
 }

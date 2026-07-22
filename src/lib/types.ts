@@ -7,10 +7,12 @@ export interface ModelConfig {
   api_key: string;
   model_name: string;
   is_default: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface ModelConfigCreate {
-  type: 'text' | 'image';
+  type: 'text' | 'image' | 'video';
   name: string;
   provider: string;
   api_base_url: string;
@@ -23,9 +25,10 @@ export interface SystemPrompt {
   id: number;
   tool_key: string;
   tool_name: string;
-  category: string;
-  prompt_content: string;
   description: string | null;
+  prompt_content: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Project {
@@ -56,6 +59,7 @@ export interface Asset {
   type: 'character' | 'prop' | 'ui' | 'scene' | 'animation_frame' | 'image';
   url: string;
   metadata_: Record<string, unknown> | null;
+  finalized: boolean;
   created_at: string;
 }
 
