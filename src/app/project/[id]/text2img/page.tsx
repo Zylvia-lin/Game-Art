@@ -109,7 +109,7 @@ export default function TextToImagePage() {
                 </a>
               </div>
               <div className="p-3 border-t border-border">
-                <GenerationResultActions projectId={String(projectId)} imageUrl={url} />
+                <GenerationResultActions projectId={String(projectId)} imageUrl={url} showAddToLibrary />
               </div>
             </div>
           ))}

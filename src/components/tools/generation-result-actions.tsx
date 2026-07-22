@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Paintbrush, Film, Scissors, Rotate3D, Layers, Check, X, Download } from 'lucide-react';
+import { Paintbrush, Film, Scissors, Rotate3D, Layers, Check, X, Download, FolderPlus } from 'lucide-react';
+import { projectsApi } from '@/lib/api';
 
 interface GenerationResultActionsProps {
   projectId: string;
@@ -11,6 +12,8 @@ interface GenerationResultActionsProps {
   assetId?: number;
   finalized?: boolean;
   onFinalizeChange?: (finalized: boolean) => void;
+  showAddToLibrary?: boolean;
+  onAddedToLibrary?: (assetId: number) => void;
 }
 
 export function GenerationResultActions({
@@ -20,9 +23,13 @@ export function GenerationResultActions({
   assetId,
   finalized = false,
   onFinalizeChange,
+  showAddToLibrary = false,
+  onAddedToLibrary,
 }: GenerationResultActionsProps) {
   const router = useRouter();
   const [finalizing, setFinalizing] = useState(false);
+  const [addingToLibrary, setAddingToLibrary] = useState(false);
+  const [added, setAdded] = useState(false);
 
   const handleToggleFinalize = async () => {
     if (!assetId) return;
@@ -40,6 +47,32 @@ export function GenerationResultActions({
       console.error('Failed to toggle finalize:', err);
     } finally {
       setFinalizing(false);
+    }
+  };
+
+  const handleAddToLibrary = async () => {
+    setAddingToLibrary(true);
+    try {
+      const res = await fetch('/api/assets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: Number(projectId),
+          name: `生成图片 ${new Date().toLocaleString()}`,
+          type: imageType === 'general' ? 'prop' : imageType,
+          url: imageUrl,
+          metadata: { source: 'toolbox' },
+        }),
+      });
+      if (res.ok) {
+        const asset = await res.json();
+        setAdded(true);
+        onAddedToLibrary?.(asset.id);
+      }
+    } catch (err) {
+      console.error('Failed to add to library:', err);
+    } finally {
+      setAddingToLibrary(false);
     }
   };
 
@@ -135,6 +168,22 @@ export function GenerationResultActions({
           <Download className="w-3 h-3" />
           <span>下载</span>
         </button>
+
+        {showAddToLibrary && (
+          <button
+            onClick={handleAddToLibrary}
+            disabled={addingToLibrary || added}
+            className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition-all ${
+              added
+                ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'
+                : 'border-[#27272a] bg-[#16161f] text-zinc-400 hover:border-primary/50 hover:text-primary'
+            }`}
+            title="添加到资产库"
+          >
+            {added ? <Check className="w-3 h-3" /> : <FolderPlus className="w-3 h-3" />}
+            <span>{added ? '已添加' : '添加到资产库'}</span>
+          </button>
+        )}
 
         {assetId && (
           <button

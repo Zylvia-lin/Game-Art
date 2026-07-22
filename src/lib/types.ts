@@ -105,15 +105,23 @@ export const RESOLUTIONS = [
   { value: '2048x2048', label: '2048 x 2048' },
 ] as const;
 
-export const TOOL_NAV_ITEMS = [
+export const TOOLBOX_ITEMS = [
   { key: 'text2img', label: '文生图', href: '/text2img', icon: 'Image' },
   { key: 'img2img', label: '图生图', href: '/img2img', icon: 'ImagePlus' },
   { key: 'inpaint', label: '局部重绘', href: '/inpaint', icon: 'Paintbrush' },
+] as const;
+
+export const CREATION_ITEMS = [
   { key: 'character', label: '角色生成', href: '/character', icon: 'User' },
   { key: 'animation', label: '动画生成', href: '/animation', icon: 'Film' },
   { key: 'prop', label: '道具生成', href: '/prop', icon: 'Sword' },
   { key: 'ui', label: 'UI生成', href: '/ui', icon: 'Layout' },
   { key: 'scene', label: '场景生成', href: '/scene', icon: 'Map' },
+] as const;
+
+export const TOOL_NAV_ITEMS = [
+  ...TOOLBOX_ITEMS,
+  ...CREATION_ITEMS,
   { key: 'assets', label: '资产库', href: '/assets', icon: 'FolderOpen' },
 ] as const;
 

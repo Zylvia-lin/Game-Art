@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, Download, ImageIcon } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
+import { GenerationResultActions } from '@/components/tools/generation-result-actions';
 import { generateApi } from '@/lib/api';
 
 export default function ImageToImagePage() {
@@ -94,10 +95,8 @@ export default function ImageToImagePage() {
           {results.map((url, i) => (
             <div key={i} className="group relative overflow-hidden rounded-xl border border-border bg-card">
               <img src={url} alt={`Result ${i + 1}`} className="w-full object-contain" />
-              <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <a href={url} download target="_blank" className="rounded-lg bg-card/80 p-2 text-foreground backdrop-blur-sm hover:bg-card transition-colors">
-                  <Download className="h-4 w-4" />
-                </a>
+              <div className="p-3 border-t border-border">
+                <GenerationResultActions projectId={String(projectId)} imageUrl={url} showAddToLibrary />
               </div>
             </div>
           ))}

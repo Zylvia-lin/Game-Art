@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, Undo2, Redo2, Eraser, Paintbrush } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
+import { GenerationResultActions } from '@/components/tools/generation-result-actions';
 import { generateApi } from '@/lib/api';
 
 export default function InpaintPage() {
@@ -260,6 +261,9 @@ export default function InpaintPage() {
           {results.map((url, i) => (
             <div key={i} className="overflow-hidden rounded-xl border border-border bg-card">
               <img src={url} alt={`Result ${i + 1}`} className="w-full object-contain" />
+              <div className="p-3 border-t border-border">
+                <GenerationResultActions projectId={String(projectId)} imageUrl={url} showAddToLibrary />
+              </div>
             </div>
           ))}
         </div>
