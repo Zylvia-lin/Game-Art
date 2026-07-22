@@ -70,13 +70,13 @@ export function Sidebar({ projectId }: SidebarProps) {
       <nav className="flex-1 overflow-y-auto px-2 py-3">
         {projectId ? (
           <>
-            {/* Toolbox Section */}
+            {/* Creation Tools Section */}
             <div className={cn('mb-2 px-2', collapsed && 'hidden')}>
               <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                工具箱
+                创作工具
               </span>
             </div>
-            {TOOLBOX_ITEMS.map((item) => {
+            {CREATION_ITEMS.map((item) => {
               const Icon = iconMap[item.icon];
               const isActive = pathname.includes(item.href);
               return (
@@ -96,13 +96,13 @@ export function Sidebar({ projectId }: SidebarProps) {
               );
             })}
 
-            {/* Creation Tools Section */}
+            {/* Toolbox Section */}
             <div className={cn('mb-2 mt-4 px-2', collapsed && 'hidden')}>
               <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                创作工具
+                工具箱
               </span>
             </div>
-            {CREATION_ITEMS.map((item) => {
+            {TOOLBOX_ITEMS.map((item) => {
               const Icon = iconMap[item.icon];
               const isActive = pathname.includes(item.href);
               return (
