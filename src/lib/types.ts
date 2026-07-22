@@ -1,6 +1,6 @@
 export interface ModelConfig {
   id: number;
-  type: 'text' | 'image';
+  type: 'text' | 'image' | 'video';
   name: string;
   provider: string;
   api_base_url: string;

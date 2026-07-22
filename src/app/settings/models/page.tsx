@@ -17,6 +17,13 @@ const PROVIDER_CONFIG = {
     fal: { name: 'fal.ai', apiUrl: 'https://fal.run', defaultModel: 'fal-ai/flux-pro' },
     custom: { name: '自定义', apiUrl: '', defaultModel: '' },
   },
+  video: {
+    runway: { name: 'Runway', apiUrl: 'https://api.runwayml.com/v1', defaultModel: 'gen-3-alpha' },
+    pika: { name: 'Pika', apiUrl: 'https://api.pika.art/v1', defaultModel: 'pika-1.0' },
+    kling: { name: '可灵(Kling)', apiUrl: 'https://api.klingai.com/v1', defaultModel: 'kling-v1' },
+    luma: { name: 'Luma AI', apiUrl: 'https://api.lumalabs.ai/v1', defaultModel: 'dream-machine' },
+    custom: { name: '自定义', apiUrl: '', defaultModel: '' },
+  },
 } as const;
 
 type ModelType = keyof typeof PROVIDER_CONFIG;

@@ -7,7 +7,7 @@ class ModelConfig(Base):
     __tablename__ = "model_configs"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    type = Column(String(20), nullable=False)  # 'text' or 'image'
+    type = Column(String(20), nullable=False)  # 'text', 'image', or 'video'
     name = Column(String(100), nullable=False)
     provider = Column(String(50), nullable=False)  # deepseek, openai, volcengine, custom
     api_base_url = Column(Text, nullable=False)
