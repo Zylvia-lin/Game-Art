@@ -1,19 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getModelConfigs, addModelConfig } from '@/lib/store';
+import { getModelConfigs, createModelConfig } from '@/lib/store';
 
-// GET /api/models - List all model configs
 export async function GET() {
-  const list = getModelConfigs();
-  return NextResponse.json(list);
+  const configs = await getModelConfigs();
+  return NextResponse.json(configs);
 }
 
-// POST /api/models - Add a new model config
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const config = addModelConfig(body);
+    const config = await createModelConfig(body);
     return NextResponse.json(config, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+    return NextResponse.json({ error: 'Failed to create model config' }, { status: 500 });
   }
 }

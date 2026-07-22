@@ -1,33 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { updateAsset, deleteAsset, getAssets } from '@/lib/store';
+import { getAsset, updateAsset, deleteAsset } from '@/lib/store';
 
-// PUT /api/assets/[id] - Update asset (e.g., toggle finalized)
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const asset = await getAsset(parseInt(id));
+  if (!asset) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+  return NextResponse.json(asset);
+}
+
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const body = await request.json();
-    const updated = updateAsset(parseInt(id), body);
-    if (!updated) {
-      return NextResponse.json({ error: 'Asset not found' }, { status: 404 });
+    const asset = await updateAsset(parseInt(id), body);
+    if (!asset) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
-    return NextResponse.json(updated);
+    return NextResponse.json(asset);
   } catch (error) {
-    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+    return NextResponse.json({ error: 'Failed to update asset' }, { status: 500 });
   }
 }
 
-// DELETE /api/assets/[id] - Delete asset
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const deleted = deleteAsset(parseInt(id));
+  const deleted = await deleteAsset(parseInt(id));
   if (!deleted) {
-    return NextResponse.json({ error: 'Asset not found' }, { status: 404 });
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
   return NextResponse.json({ success: true });
 }

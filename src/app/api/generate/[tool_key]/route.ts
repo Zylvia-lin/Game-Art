@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getModelConfig, getPromptByToolKey } from '@/lib/store';
+import { getModelConfig, getDefaultModelConfig, getSystemPrompt, createGeneration } from '@/lib/store';
 
 // Generic generate handler for all tools
 export async function POST(
@@ -9,10 +9,16 @@ export async function POST(
   try {
     const { tool_key } = await params;
     const body = await request.json();
-    const { prompt, image_url, mask_url, model_id, ...extra } = body;
+    const { prompt, image_url, mask_url, model_id, project_id, ...extra } = body;
 
     // Get model config
-    const modelConfig = getModelConfig(model_id);
+    let modelConfig;
+    if (model_id) {
+      modelConfig = await getModelConfig(model_id);
+    } else {
+      modelConfig = await getDefaultModelConfig('text');
+    }
+    
     if (!modelConfig) {
       return NextResponse.json(
         { error: '未找到模型配置，请先在模型配置页面添加模型' },
@@ -21,7 +27,7 @@ export async function POST(
     }
 
     // Get system prompt
-    const systemPrompt = getPromptByToolKey(tool_key);
+    const systemPrompt = await getSystemPrompt(tool_key);
     if (!systemPrompt) {
       return NextResponse.json(
         { error: `未找到工具 ${tool_key} 的系统提示词` },
@@ -41,9 +47,19 @@ export async function POST(
     }
 
     // Step 2: Generate image with image model
-    const imageModelConfig = getModelConfig(undefined, 'image');
+    const imageModelConfig = await getDefaultModelConfig('image');
     if (!imageModelConfig) {
       // If no image model configured, return the enhanced prompt as a placeholder
+      // Still save the generation record
+      if (project_id) {
+        await createGeneration({
+          project_id,
+          tool_key,
+          input_params: { prompt, ...extra },
+          output_urls: [],
+          status: 'completed',
+        });
+      }
       return NextResponse.json({
         success: true,
         data: {
@@ -59,6 +75,17 @@ export async function POST(
       mask_url,
       ...extra
     });
+
+    // Save generation record
+    if (project_id) {
+      await createGeneration({
+        project_id,
+        tool_key,
+        input_params: { prompt, ...extra },
+        output_urls: imageUrls,
+        status: 'completed',
+      });
+    }
 
     return NextResponse.json({
       success: true,
@@ -98,59 +125,45 @@ async function callLLM(modelConfig: { api_base_url: string; api_key: string; mod
 
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(`LLM API error (${response.status}): ${errText}`);
+    throw new Error(`LLM API error: ${response.status} - ${errText}`);
   }
 
   const data = await response.json();
-  return data.choices?.[0]?.message?.content || '';
+  return data.choices?.[0]?.message?.content || userPrompt;
 }
 
-// Call image generation model
+// Call image model to generate image
 async function callImageModel(
   modelConfig: { api_base_url: string; api_key: string; model_name: string },
   prompt: string,
   options: { image_url?: string; mask_url?: string; [key: string]: unknown }
 ): Promise<string[]> {
-  const baseUrl = modelConfig.api_base_url.replace(/\/$/, '');
-  
-  // Volcengine Seeddream API format
-  const requestBody: Record<string, unknown> = {
+  const url = modelConfig.api_base_url;
+
+  const body: Record<string, unknown> = {
     model: modelConfig.model_name,
-    prompt: prompt,
+    prompt,
   };
 
-  // Add image reference if provided (img2img or inpaint)
-  if (options.image_url) {
-    requestBody.image = options.image_url;
-  }
-  if (options.mask_url) {
-    requestBody.mask = options.mask_url;
-  }
+  if (options.image_url) body.image = options.image_url;
+  if (options.mask_url) body.mask = options.mask_url;
+  if (options.size) body.size = options.size;
+  if (options.n) body.n = options.n;
 
-  const response = await fetch(baseUrl, {
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${modelConfig.api_key}`,
     },
-    body: JSON.stringify(requestBody),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(`Image API error (${response.status}): ${errText}`);
+    throw new Error(`Image model API error: ${response.status} - ${errText}`);
   }
 
   const data = await response.json();
-  
-  // Extract image URLs from response (format varies by provider)
-  const urls: string[] = [];
-  if (data.data) {
-    for (const item of data.data) {
-      if (item.url) urls.push(item.url);
-      else if (item.b64_json) urls.push(`data:image/png;base64,${item.b64_json}`);
-    }
-  }
-  
-  return urls;
+  return data.data?.map((item: { url?: string; b64_json?: string }) => item.url || `data:image/png;base64,${item.b64_json}`) || [];
 }
