@@ -1,47 +1,24 @@
-// Shared in-memory data store for all API routes
+// File-based persistent data store for all API routes
 import type { ModelConfig, SystemPrompt, Project, Generation, Asset } from '@/lib/types';
+import fs from 'fs';
+import path from 'path';
 
-// ============ Model Configs ============
-const modelConfigs: Map<number, ModelConfig> = new Map();
-let modelConfigIdCounter = 1;
+const DATA_DIR = path.join(process.cwd(), 'data');
+const DATA_FILE = path.join(DATA_DIR, 'store.json');
 
-export function getModelConfigs(): ModelConfig[] {
-  return Array.from(modelConfigs.values());
+interface StoreData {
+  modelConfigs: ModelConfig[];
+  modelConfigIdCounter: number;
+  prompts: SystemPrompt[];
+  projects: Project[];
+  projectIdCounter: number;
+  generations: Generation[];
+  generationIdCounter: number;
+  assets: Asset[];
+  assetIdCounter: number;
 }
 
-export function getModelConfig(id?: number, type?: string): ModelConfig | undefined {
-  if (id) return modelConfigs.get(id);
-  // Find default model of given type
-  return Array.from(modelConfigs.values()).find(
-    (m) => m.is_default && (!type || m.type === type)
-  );
-}
-
-export function addModelConfig(data: Omit<ModelConfig, 'id' | 'created_at' | 'updated_at'>): ModelConfig {
-  const now = new Date().toISOString();
-  const config: ModelConfig = {
-    ...data,
-    id: modelConfigIdCounter++,
-    created_at: now,
-    updated_at: now,
-  };
-  modelConfigs.set(config.id, config);
-  return config;
-}
-
-export function updateModelConfig(id: number, data: Partial<ModelConfig>): ModelConfig | undefined {
-  const existing = modelConfigs.get(id);
-  if (!existing) return undefined;
-  const updated = { ...existing, ...data, updated_at: new Date().toISOString() };
-  modelConfigs.set(id, updated);
-  return updated;
-}
-
-export function deleteModelConfig(id: number): boolean {
-  return modelConfigs.delete(id);
-}
-
-// ============ System Prompts ============
+// Default prompts
 const defaultPrompts: SystemPrompt[] = [
   { id: 1, tool_key: 'text_to_image', tool_name: '文生图', description: '将用户描述转化为专业的图片生成提示词', prompt_content: '你是游戏美术提示词工程师。将用户的简短描述转化为专业的图片生成提示词。要求：1) 补充细节描述（光影、材质、构图）2) 保持风格一致性 3) 纯色背景，保留主体大小20%的空白边缘 4) 输出中文提示词。用户描述：{user_prompt}', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
   { id: 2, tool_key: 'image_to_image', tool_name: '图生图', description: '分析编辑意图，生成保持整体风格的修改提示词', prompt_content: '你是游戏美术编辑专家。分析用户的编辑意图，生成精确的图片修改提示词。要求：1) 保持原图整体风格和色调 2) 只修改用户指定的部分 3) 纯色背景，保留主体大小20%的空白边缘 4) 输出中文提示词。用户编辑需求：{user_prompt}', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
@@ -61,128 +38,187 @@ const defaultPrompts: SystemPrompt[] = [
   { id: 16, tool_key: 'scene_map_split', tool_name: '地图组件拆分', description: '将地图拆分为tileset组件', prompt_content: '你是游戏场景设计师。将地图拆分为可复用的tileset组件（地形、建筑、装饰等）。要求：1) 每个组件独立可用 2) 可无缝拼接 3) 风格一致 4) 纯色背景，保留主体大小20%的空白边缘 5) 输出中文提示词。用户描述：{user_prompt}', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
 ];
 
-const prompts: Map<string, SystemPrompt> = new Map();
-defaultPrompts.forEach((p) => prompts.set(p.tool_key, p));
+function getInitialData(): StoreData {
+  return {
+    modelConfigs: [],
+    modelConfigIdCounter: 1,
+    prompts: defaultPrompts,
+    projects: [],
+    projectIdCounter: 1,
+    generations: [],
+    generationIdCounter: 1,
+    assets: [],
+    assetIdCounter: 1,
+  };
+}
 
+function loadData(): StoreData {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    if (fs.existsSync(DATA_FILE)) {
+      const raw = fs.readFileSync(DATA_FILE, 'utf-8');
+      return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.error('Failed to load data from file:', e);
+  }
+  return getInitialData();
+}
+
+function saveData(data: StoreData): void {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('Failed to save data to file:', e);
+  }
+}
+
+// In-memory cache, synced with file
+let data: StoreData = loadData();
+
+function persist(): void {
+  saveData(data);
+}
+
+// ============ Model Configs ============
+export function getModelConfigs(): ModelConfig[] {
+  return [...data.modelConfigs];
+}
+
+export function getModelConfig(id?: number, type?: string): ModelConfig | undefined {
+  if (id) return data.modelConfigs.find((m) => m.id === id);
+  return data.modelConfigs.find((m) => m.is_default && (!type || m.type === type));
+}
+
+export function addModelConfig(cfg: Omit<ModelConfig, 'id' | 'created_at' | 'updated_at'>): ModelConfig {
+  const now = new Date().toISOString();
+  const config: ModelConfig = { ...cfg, id: data.modelConfigIdCounter++, created_at: now, updated_at: now };
+  data.modelConfigs.push(config);
+  persist();
+  return config;
+}
+
+export function updateModelConfig(id: number, updates: Partial<ModelConfig>): ModelConfig | undefined {
+  const idx = data.modelConfigs.findIndex((m) => m.id === id);
+  if (idx === -1) return undefined;
+  data.modelConfigs[idx] = { ...data.modelConfigs[idx], ...updates, updated_at: new Date().toISOString() };
+  persist();
+  return data.modelConfigs[idx];
+}
+
+export function deleteModelConfig(id: number): boolean {
+  const len = data.modelConfigs.length;
+  data.modelConfigs = data.modelConfigs.filter((m) => m.id !== id);
+  if (data.modelConfigs.length < len) { persist(); return true; }
+  return false;
+}
+
+// ============ System Prompts ============
 export function getAllPrompts(): SystemPrompt[] {
-  return Array.from(prompts.values());
+  return [...data.prompts];
 }
 
 export function getPromptByToolKey(toolKey: string): SystemPrompt | undefined {
-  return prompts.get(toolKey);
+  return data.prompts.find((p) => p.tool_key === toolKey);
 }
 
 export function updatePrompt(toolKey: string, content: string): SystemPrompt | undefined {
-  const existing = prompts.get(toolKey);
-  if (!existing) return undefined;
-  const updated = { ...existing, prompt_content: content, updated_at: new Date().toISOString() };
-  prompts.set(toolKey, updated);
-  return updated;
+  const idx = data.prompts.findIndex((p) => p.tool_key === toolKey);
+  if (idx === -1) return undefined;
+  data.prompts[idx] = { ...data.prompts[idx], prompt_content: content, updated_at: new Date().toISOString() };
+  persist();
+  return data.prompts[idx];
 }
 
 // ============ Projects ============
-const projects: Map<number, Project> = new Map();
-let projectIdCounter = 1;
-
 export function getProjects(): Project[] {
-  return Array.from(projects.values()).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  return [...data.projects].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
 }
 
 export function getProject(id: number): Project | undefined {
-  return projects.get(id);
+  return data.projects.find((p) => p.id === id);
 }
 
-export function createProject(data: { name: string; description?: string }): Project {
+export function createProject(input: { name: string; description?: string }): Project {
   const now = new Date().toISOString();
-  const project: Project = {
-    id: projectIdCounter++,
-    name: data.name,
-    description: data.description || null,
-    cover_url: null,
-    created_at: now,
-    updated_at: now,
-  };
-  projects.set(project.id, project);
+  const project: Project = { id: data.projectIdCounter++, name: input.name, description: input.description || null, cover_url: null, created_at: now, updated_at: now };
+  data.projects.push(project);
+  persist();
   return project;
 }
 
-export function updateProject(id: number, data: Partial<Project>): Project | undefined {
-  const existing = projects.get(id);
-  if (!existing) return undefined;
-  const updated = { ...existing, ...data, updated_at: new Date().toISOString() };
-  projects.set(id, updated);
-  return updated;
+export function updateProject(id: number, updates: Partial<Project>): Project | undefined {
+  const idx = data.projects.findIndex((p) => p.id === id);
+  if (idx === -1) return undefined;
+  data.projects[idx] = { ...data.projects[idx], ...updates, updated_at: new Date().toISOString() };
+  persist();
+  return data.projects[idx];
 }
 
 export function deleteProject(id: number): boolean {
-  // Also delete related generations and assets
-  generations.forEach((g, key) => { if (g.project_id === id) generations.delete(key); });
-  assets.forEach((a, key) => { if (a.project_id === id) assets.delete(key); });
-  return projects.delete(id);
+  const len = data.projects.length;
+  data.projects = data.projects.filter((p) => p.id !== id);
+  data.generations = data.generations.filter((g) => g.project_id !== id);
+  data.assets = data.assets.filter((a) => a.project_id !== id);
+  if (data.projects.length < len) { persist(); return true; }
+  return false;
 }
 
 // ============ Generations ============
-const generations: Map<number, Generation> = new Map();
-let generationIdCounter = 1;
-
 export function getGenerations(projectId?: number): Generation[] {
-  let list = Array.from(generations.values());
+  let list = [...data.generations];
   if (projectId) list = list.filter((g) => g.project_id === projectId);
   return list.sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
-export function createGeneration(data: Omit<Generation, 'id' | 'created_at'>): Generation {
-  const gen: Generation = {
-    ...data,
-    id: generationIdCounter++,
-    created_at: new Date().toISOString(),
-  };
-  generations.set(gen.id, gen);
-  // Update project updated_at
-  const project = projects.get(data.project_id);
-  if (project) {
-    project.updated_at = new Date().toISOString();
-  }
+export function createGeneration(input: Omit<Generation, 'id' | 'created_at'>): Generation {
+  const gen: Generation = { ...input, id: data.generationIdCounter++, created_at: new Date().toISOString() };
+  data.generations.push(gen);
+  const proj = data.projects.find((p) => p.id === input.project_id);
+  if (proj) proj.updated_at = new Date().toISOString();
+  persist();
   return gen;
 }
 
-export function updateGeneration(id: number, data: Partial<Generation>): Generation | undefined {
-  const existing = generations.get(id);
-  if (!existing) return undefined;
-  const updated = { ...existing, ...data };
-  generations.set(id, updated);
-  return updated;
+export function updateGeneration(id: number, updates: Partial<Generation>): Generation | undefined {
+  const idx = data.generations.findIndex((g) => g.id === id);
+  if (idx === -1) return undefined;
+  data.generations[idx] = { ...data.generations[idx], ...updates };
+  persist();
+  return data.generations[idx];
 }
 
 // ============ Assets ============
-const assets: Map<number, Asset> = new Map();
-let assetIdCounter = 1;
-
 export function getAssets(projectId?: number, type?: string): Asset[] {
-  let list = Array.from(assets.values());
+  let list = [...data.assets];
   if (projectId) list = list.filter((a) => a.project_id === projectId);
   if (type) list = list.filter((a) => a.type === type);
   return list.sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
-export function createAsset(data: Omit<Asset, 'id' | 'created_at'>): Asset {
-  const asset: Asset = {
-    ...data,
-    id: assetIdCounter++,
-    created_at: new Date().toISOString(),
-  };
-  assets.set(asset.id, asset);
+export function createAsset(input: Omit<Asset, 'id' | 'created_at'>): Asset {
+  const asset: Asset = { ...input, id: data.assetIdCounter++, created_at: new Date().toISOString() };
+  data.assets.push(asset);
+  persist();
   return asset;
 }
 
-export function updateAsset(id: number, data: Partial<Asset>): Asset | undefined {
-  const existing = assets.get(id);
-  if (!existing) return undefined;
-  const updated = { ...existing, ...data };
-  assets.set(id, updated);
-  return updated;
+export function updateAsset(id: number, updates: Partial<Asset>): Asset | undefined {
+  const idx = data.assets.findIndex((a) => a.id === id);
+  if (idx === -1) return undefined;
+  data.assets[idx] = { ...data.assets[idx], ...updates };
+  persist();
+  return data.assets[idx];
 }
 
 export function deleteAsset(id: number): boolean {
-  return assets.delete(id);
+  const len = data.assets.length;
+  data.assets = data.assets.filter((a) => a.id !== id);
+  if (data.assets.length < len) { persist(); return true; }
+  return false;
 }
