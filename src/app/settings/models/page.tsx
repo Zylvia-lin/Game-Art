@@ -5,18 +5,42 @@ import { Plus, Trash2, Star, Loader2, Settings, Key, Server } from 'lucide-react
 import { modelsApi } from '@/lib/api';
 import type { ModelConfig, ModelConfigCreate } from '@/lib/types';
 
+// 提供商配置：根据模型类型提供不同的提供商和默认API地址
+const PROVIDER_CONFIG = {
+  text: {
+    deepseek: { name: 'DeepSeek', apiUrl: 'https://api.deepseek.com/v1', defaultModel: 'deepseek-chat' },
+    openai: { name: 'OpenAI', apiUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-4o' },
+    custom: { name: '自定义', apiUrl: '', defaultModel: '' },
+  },
+  image: {
+    volcengine: { name: '火山引擎', apiUrl: 'https://ark.cn-beijing.volces.com/api/v3/images/generations', defaultModel: 'seeddream-5.0-pro' },
+    fal: { name: 'fal.ai', apiUrl: 'https://fal.run', defaultModel: 'fal-ai/flux-pro' },
+    custom: { name: '自定义', apiUrl: '', defaultModel: '' },
+  },
+} as const;
+
+type ModelType = keyof typeof PROVIDER_CONFIG;
+
 export default function ModelsSettingsPage() {
   const [configs, setConfigs] = useState<ModelConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState<ModelConfigCreate>({
+  const [form, setForm] = useState<{
+    type: ModelType;
+    name: string;
+    provider: string;
+    api_base_url: string;
+    api_key: string;
+    model_name: string;
+    is_default: boolean;
+  }>({
     type: 'text',
     name: '',
     provider: 'deepseek',
-    api_base_url: '',
+    api_base_url: 'https://api.deepseek.com/v1',
     api_key: '',
-    model_name: '',
+    model_name: 'deepseek-chat',
     is_default: false,
   });
   const [saving, setSaving] = useState(false);
@@ -35,18 +59,57 @@ export default function ModelsSettingsPage() {
   useEffect(() => { fetchConfigs(); }, []);
 
   const resetForm = () => {
-    setForm({ type: 'text', name: '', provider: 'deepseek', api_base_url: '', api_key: '', model_name: '', is_default: false });
+    setForm({ type: 'text', name: '', provider: 'deepseek', api_base_url: 'https://api.deepseek.com/v1', api_key: '', model_name: 'deepseek-chat', is_default: false });
     setEditingId(null);
     setShowForm(false);
+  };
+
+  // 切换模型类型时，重置提供商和API地址
+  const handleTypeChange = (type: ModelType) => {
+    const providers = PROVIDER_CONFIG[type];
+    const firstProvider = Object.keys(providers)[0] as string;
+    const config = providers[firstProvider as keyof typeof providers];
+    setForm({
+      ...form,
+      type,
+      provider: firstProvider,
+      api_base_url: config.apiUrl,
+      model_name: config.defaultModel,
+    });
+  };
+
+  // 切换提供商时，自动填充API地址和默认模型
+  const handleProviderChange = (provider: string) => {
+    const type = form.type as ModelType;
+    const config = PROVIDER_CONFIG[type][provider as keyof typeof PROVIDER_CONFIG[typeof type]];
+    if (config) {
+      setForm({
+        ...form,
+        provider,
+        api_base_url: config.apiUrl,
+        model_name: config.defaultModel,
+      });
+    } else {
+      setForm({ ...form, provider });
+    }
   };
 
   const handleSave = async () => {
     setSaving(true);
     try {
+      const data: ModelConfigCreate = {
+        type: form.type as 'text' | 'image',
+        name: form.name,
+        provider: form.provider,
+        api_base_url: form.api_base_url,
+        api_key: form.api_key,
+        model_name: form.model_name,
+        is_default: form.is_default,
+      };
       if (editingId) {
-        await modelsApi.update(editingId, form);
+        await modelsApi.update(editingId, data);
       } else {
-        await modelsApi.create(form);
+        await modelsApi.create(data);
       }
       resetForm();
       fetchConfigs();
@@ -78,7 +141,7 @@ export default function ModelsSettingsPage() {
 
   const handleEdit = (config: ModelConfig) => {
     setForm({
-      type: config.type,
+      type: config.type as ModelType,
       name: config.name,
       provider: config.provider,
       api_base_url: config.api_base_url,
@@ -121,7 +184,7 @@ export default function ModelsSettingsPage() {
                   {(['text', 'image'] as const).map((t) => (
                     <button
                       key={t}
-                      onClick={() => setForm({ ...form, type: t })}
+                      onClick={() => handleTypeChange(t)}
                       className={`flex-1 rounded-lg border py-2 text-sm font-medium transition-all ${
                         form.type === t ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-primary/50'
                       }`}
@@ -136,7 +199,7 @@ export default function ModelsSettingsPage() {
                 <input
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="如：DeepSeek-V3"
+                  placeholder={form.type === 'text' ? '如：DeepSeek-V3' : '如：SeedDream 5.0'}
                   className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
                 />
               </div>
@@ -144,13 +207,12 @@ export default function ModelsSettingsPage() {
                 <label className="mb-1.5 block text-sm font-medium text-foreground">提供商</label>
                 <select
                   value={form.provider}
-                  onChange={(e) => setForm({ ...form, provider: e.target.value })}
+                  onChange={(e) => handleProviderChange(e.target.value)}
                   className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
                 >
-                  <option value="deepseek">DeepSeek</option>
-                  <option value="openai">OpenAI</option>
-                  <option value="volcengine">火山引擎</option>
-                  <option value="custom">自定义</option>
+                  {Object.entries(PROVIDER_CONFIG[form.type as ModelType]).map(([key, config]) => (
+                    <option key={key} value={key}>{config.name}</option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -158,9 +220,10 @@ export default function ModelsSettingsPage() {
                 <input
                   value={form.api_base_url}
                   onChange={(e) => setForm({ ...form, api_base_url: e.target.value })}
-                  placeholder="https://api.deepseek.com/v1"
+                  placeholder={form.type === 'text' ? 'https://api.deepseek.com/v1' : 'https://ark.cn-beijing.volces.com/api/v3/images/generations'}
                   className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
                 />
+                <p className="mt-1 text-xs text-muted-foreground">切换提供商时会自动填充默认地址，选择"自定义"可手动输入</p>
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-foreground">API Key</label>
@@ -177,9 +240,10 @@ export default function ModelsSettingsPage() {
                 <input
                   value={form.model_name}
                   onChange={(e) => setForm({ ...form, model_name: e.target.value })}
-                  placeholder="deepseek-chat"
+                  placeholder={form.type === 'text' ? 'deepseek-chat' : 'seeddream-5.0-pro'}
                   className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
                 />
+                <p className="mt-1 text-xs text-muted-foreground">切换提供商时会自动填充默认模型名</p>
               </div>
               <div className="flex items-center gap-2">
                 <input
