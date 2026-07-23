@@ -163,6 +163,9 @@ async function enhancePrompt(
   if (context.resolution) {
     finalPrompt += `\n分辨率：${context.resolution}`;
   }
+  if (context.pose) {
+    finalPrompt += `\n角色姿势：${context.pose}`;
+  }
 
   try {
     const response = await fetch(`${model.api_base_url}/chat/completions`, {

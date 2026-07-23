@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, User } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
@@ -13,10 +14,17 @@ import { useTaskQueue } from '@/hooks/use-task-queue';
 import type { Task } from '@/lib/types';
 
 const SUB_TOOLS = [
-  { key: 'tpose', label: 'T-pose 生成', desc: '生成标准站姿角色' },
+  { key: 'tpose', label: '基础角色生成', desc: '生成标准站姿角色' },
   { key: 'three_view', label: '三视图生成', desc: '生成正面/侧面/背面三视图' },
   { key: 'directions', label: '多方向生成', desc: '生成四/八方向视图' },
   { key: 'part_split', label: '部件拆分', desc: '拆分为独立部件层' },
+] as const;
+
+const POSE_OPTIONS = [
+  { key: 'tpose', label: 'T-pose', desc: '双臂平伸' },
+  { key: 'apose', label: 'A-pose', desc: '双臂微张' },
+  { key: 'free', label: '无限制', desc: 'AI自由发挥' },
+  { key: 'custom', label: '自定义', desc: '手动输入姿势' },
 ] as const;
 
 const TOOL_KEY_MAP: Record<string, string> = {
@@ -54,6 +62,8 @@ export default function CharacterPage() {
   const [prompt, setPrompt] = useState('');
   const [style, setStyle] = useState(projectStyle);
   const [directions, setDirections] = useState(8);
+  const [pose, setPose] = useState<string>('tpose');
+  const [customPose, setCustomPose] = useState('');
   const [ratio, setRatio] = useState('1:1');
   const [resolution, setResolution] = useState('1024x1024');
   const [sourceImage, setSourceImage] = useState<string | null>(null);
@@ -75,11 +85,17 @@ export default function CharacterPage() {
     if ((subTool === 'directions' || subTool === 'part_split') && !sourceImage) return;
     if (subTool === 'three_view' && !prompt.trim() && !sourceImage) return;
 
+    // Resolve pose text
+    const poseText = subTool === 'tpose'
+      ? pose === 'custom' ? customPose : POSE_OPTIONS.find(p => p.key === pose)?.label || 'T-pose'
+      : undefined;
+
     try {
       await submitTask(TOOL_KEY_MAP[subTool], {
         prompt: prompt || '基于输入图片生成',
         image_url: sourceImage || undefined,
         directions,
+        pose: poseText,
         style,
         ratio,
         resolution,
@@ -137,6 +153,38 @@ export default function CharacterPage() {
         />
       </div>
       <StyleSelector value={style} onChange={setStyle} />
+      {subTool === 'tpose' && (
+        <div className="space-y-3">
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">角色姿势</label>
+            <div className="grid grid-cols-2 gap-2">
+              {POSE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => setPose(opt.key)}
+                  className={`p-2.5 rounded-lg border text-left transition-all ${
+                    pose === opt.key
+                      ? 'border-primary bg-primary/10'
+                      : 'border-zinc-800 bg-[#1a1a24] hover:border-zinc-600'
+                  }`}
+                >
+                  <div className="text-sm font-medium">{opt.label}</div>
+                  <div className="text-[11px] text-zinc-500">{opt.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+          {pose === 'custom' && (
+            <Input
+              value={customPose}
+              onChange={(e) => setCustomPose(e.target.value)}
+              placeholder="输入自定义姿势描述，如：双手叉腰、单手持剑..."
+              className="bg-[#1a1a24] border-zinc-800"
+            />
+          )}
+        </div>
+      )}
+
       {subTool === 'directions' && (
         <div>
           <label className="mb-1.5 block text-sm font-medium text-foreground">方向数</label>
@@ -161,7 +209,7 @@ export default function CharacterPage() {
       <ResolutionSelector ratio={ratio} value={resolution} onChange={setResolution} />
       <button
         onClick={handleGenerate}
-        disabled={submitting || (subTool === 'directions' || subTool === 'part_split' ? !sourceImage : !prompt.trim())}
+        disabled={submitting || (subTool === 'directions' || subTool === 'part_split' ? !sourceImage : !prompt.trim()) || (subTool === 'tpose' && pose === 'custom' && !customPose.trim())}
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-0.5"
       >
         {submitting ? <><Loader2 className="h-4 w-4 animate-spin" />提交中...</> : <><Sparkles className="h-4 w-4" />生成角色</>}
