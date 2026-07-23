@@ -30,6 +30,10 @@ export function resolveImageUrl(path: string): string {
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  // Validate path doesn't contain NaN
+  if (path.includes('NaN')) {
+    throw new Error(`Invalid API path: ${path}`);
+  }
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     ...options,
@@ -70,27 +74,48 @@ export const projectsApi = {
   list: () => request<Project[]>('/api/projects'),
   create: (data: { name: string; description?: string; style?: string }) =>
     request<Project>('/api/projects', { method: 'POST', body: JSON.stringify(data) }),
-  get: (id: number) => request<Project>(`/api/projects/${id}`),
-  update: (id: number, data: Partial<Project>) =>
-    request<Project>(`/api/projects/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  delete: (id: number) =>
-    request<{ message: string }>(`/api/projects/${id}`, { method: 'DELETE' }),
-  generations: (id: number) => request<Generation[]>(`/api/projects/${id}/generations`),
-  assets: (id: number, type?: string) =>
-    request<Asset[]>(`/api/projects/${id}/assets${type ? `?asset_type=${type}` : ''}`),
+  get: (id: number) => {
+    if (!id || isNaN(id)) throw new Error('Invalid project ID');
+    return request<Project>(`/api/projects/${id}`);
+  },
+  update: (id: number, data: Partial<Project>) => {
+    if (!id || isNaN(id)) throw new Error('Invalid project ID');
+    return request<Project>(`/api/projects/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  delete: (id: number) => {
+    if (!id || isNaN(id)) throw new Error('Invalid project ID');
+    return request<{ message: string }>(`/api/projects/${id}`, { method: 'DELETE' });
+  },
+  generations: (id: number) => {
+    if (!id || isNaN(id)) throw new Error('Invalid project ID');
+    return request<Generation[]>(`/api/projects/${id}/generations`);
+  },
+  assets: (id: number, type?: string) => {
+    if (!id || isNaN(id)) throw new Error('Invalid project ID');
+    return request<Asset[]>(`/api/projects/${id}/assets${type ? `?asset_type=${type}` : ''}`);
+  },
   createAsset: (data: { project_id: number; name: string; type: string; url: string; description?: string }) =>
     request<Asset>('/api/assets', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // Assets (standalone)
 export const assetsApi = {
-  get: (id: number) => request<Asset>(`/api/assets/${id}`),
-  update: (id: number, data: { finalized?: boolean; name?: string; type?: string }) =>
-    request<Asset>(`/api/assets/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  delete: (id: number) =>
-    request<{ success: boolean }>(`/api/assets/${id}`, { method: 'DELETE' }),
-  finalize: (id: number, finalized: boolean) =>
-    request<Asset>(`/api/assets/${id}`, { method: 'PUT', body: JSON.stringify({ finalized }) }),
+  get: (id: number) => {
+    if (!id || isNaN(id)) throw new Error('Invalid asset ID');
+    return request<Asset>(`/api/assets/${id}`);
+  },
+  update: (id: number, data: { finalized?: boolean; name?: string; type?: string }) => {
+    if (!id || isNaN(id)) throw new Error('Invalid asset ID');
+    return request<Asset>(`/api/assets/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  delete: (id: number) => {
+    if (!id || isNaN(id)) throw new Error('Invalid asset ID');
+    return request<{ success: boolean }>(`/api/assets/${id}`, { method: 'DELETE' });
+  },
+  finalize: (id: number, finalized: boolean) => {
+    if (!id || isNaN(id)) throw new Error('Invalid asset ID');
+    return request<Asset>(`/api/assets/${id}`, { method: 'PUT', body: JSON.stringify({ finalized }) });
+  },
 };
 
 // Generate — submit tasks to the queue
