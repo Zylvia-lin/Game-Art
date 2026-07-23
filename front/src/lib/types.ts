@@ -193,6 +193,32 @@ export const TOOL_KEY_MAP: Record<string, string> = {
   animation_action: 'animation_action',
 };
 
+// 面包屑导航 - 工具项
+export const TOOL_NAV_ITEMS = [
+  { label: '文生图', href: '/text2img' },
+  { label: '图生图', href: '/img2img' },
+  { label: '局部重绘', href: '/inpaint' },
+  { label: '角色生成', href: '/character' },
+  { label: '动画生成', href: '/animation' },
+  { label: '道具生成', href: '/prop' },
+  { label: 'UI生成', href: '/ui' },
+  { label: '场景生成', href: '/scene' },
+] as const;
+
+// 兼容别名
+export const IMAGE_RATIOS = RATIO_OPTIONS;
+
+// 获取指定比例下的分辨率选项
+export function getResolutionOptions(ratio: string) {
+  return RESOLUTION_MAP[ratio] || RESOLUTION_MAP['1:1'];
+}
+
+// 获取指定比例下的默认分辨率
+export function getDefaultResolution(ratio: string) {
+  const options = getResolutionOptions(ratio);
+  return options[0]?.value || '1024x1024';
+}
+
 // 工具名称映射
 export const TOOL_NAME_MAP: Record<string, string> = {
   text2img: '文生图',

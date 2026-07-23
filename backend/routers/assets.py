@@ -63,7 +63,7 @@ async def create_asset(data: AssetCreate):
 
 
 @router.get("/{asset_id}")
-async def get_asset(asset_id: int):
+async def get_asset(asset_id: str):
     row = await fetch_one("SELECT * FROM assets WHERE id = $1", asset_id)
     if not row:
         raise HTTPException(status_code=404, detail="Asset not found")
@@ -71,7 +71,7 @@ async def get_asset(asset_id: int):
 
 
 @router.put("/{asset_id}")
-async def update_asset(asset_id: int, data: AssetUpdate):
+async def update_asset(asset_id: str, data: AssetUpdate):
     update_data = data.model_dump(exclude_unset=True)
 
     pool = await get_pool()
@@ -125,7 +125,7 @@ async def update_asset(asset_id: int, data: AssetUpdate):
 
 
 @router.delete("/{asset_id}")
-async def delete_asset(asset_id: int):
+async def delete_asset(asset_id: str):
     result = await execute("DELETE FROM assets WHERE id = $1", asset_id)
     if "DELETE 0" in result:
         raise HTTPException(status_code=404, detail="Asset not found")
