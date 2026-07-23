@@ -1,8 +1,9 @@
 """
 LLM service for prompt enhancement.
-Calls text generation models (DeepSeek, OpenAI, etc.) to enhance user prompts.
+Uses LangChain to call text generation models (DeepSeek, OpenAI, etc.).
 """
-import httpx
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
 
 
 async def enhance_prompt(
@@ -12,8 +13,8 @@ async def enhance_prompt(
     context: dict,
 ) -> str:
     """
-    Enhance a user prompt using an LLM.
-    Replaces placeholders in system prompt, adds context, calls LLM API.
+    Enhance a user prompt using an LLM via LangChain.
+    Replaces placeholders in system prompt, adds context, calls LLM.
     """
     # Replace placeholders
     final_prompt = system_prompt_content.replace("{user_prompt}", user_prompt)
@@ -28,30 +29,23 @@ async def enhance_prompt(
     if context.get("pose"):
         final_prompt += f"\n角色姿势：{context['pose']}"
 
-    url = model["api_base_url"].rstrip("/") + "/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {model['api_key']}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": model["model_name"],
-        "messages": [
-            {
-                "role": "system",
-                "content": "你是专业的游戏美术提示词工程师。请根据用户描述生成详细的图片生成提示词。直接输出提示词，不要解释。",
-            },
-            {"role": "user", "content": final_prompt},
-        ],
-        "temperature": 0.7,
-        "max_tokens": 500,
-    }
-
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(url, json=payload, headers=headers)
-            response.raise_for_status()
-            data = response.json()
-            return data["choices"][0]["message"]["content"]
+        # Initialize LangChain ChatOpenAI (works with any OpenAI-compatible API)
+        llm = ChatOpenAI(
+            model=model["model_name"],
+            openai_api_key=model["api_key"],
+            openai_api_base=model["api_base_url"].rstrip("/"),
+            temperature=0.7,
+            max_tokens=500,
+        )
+
+        messages = [
+            SystemMessage(content="你是专业的游戏美术提示词工程师。请根据用户描述生成详细的图片生成提示词。直接输出提示词，不要解释。"),
+            HumanMessage(content=final_prompt),
+        ]
+
+        response = await llm.ainvoke(messages)
+        return response.content
     except Exception as e:
         print(f"Prompt enhancement failed: {e}")
         return user_prompt

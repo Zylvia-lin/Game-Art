@@ -22,7 +22,7 @@ from routers.upload import router as upload_router
 from routers.tools import router as tools_router
 
 
-UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
+UPLOAD_DIR = settings.UPLOAD_DIR
 
 
 @asynccontextmanager
@@ -49,7 +49,7 @@ app = FastAPI(
 # CORS - allow frontend to call this backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
