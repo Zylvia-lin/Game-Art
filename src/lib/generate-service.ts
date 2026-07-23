@@ -199,40 +199,32 @@ async function enhancePrompt(
 }
 
 /**
- * Resolve width/height from ratio + resolution params
+ * Resolve size string from ratio + resolution params
+ * Seedream 5.0 Pro expects "WxH" format (e.g. "1920x1080")
+ * Resolution options are pre-mapped per ratio in RESOLUTION_MAP
  */
-function resolveDimensions(inputParams: Record<string, unknown>): { width: number; height: number } {
+function resolveSize(inputParams: Record<string, unknown>): string {
   const resolution = (inputParams.resolution as string) || '1024x1024';
-  const ratio = (inputParams.ratio as string) || '1:1';
-
-  // Parse resolution for the base size
-  const [resW, resH] = resolution.split('x').map(Number);
-  const baseSize = Math.max(resW || 1024, resH || 1024);
-
-  // Parse ratio
-  const [ratioW, ratioH] = ratio.split(':').map(Number);
-  if (!ratioW || !ratioH) {
-    return { width: resW || 1024, height: resH || 1024 };
+  // Resolution string is already ratio-correct (e.g. "1920x1080" for 16:9)
+  // Just validate format
+  const parts = resolution.split('x').map(Number);
+  if (parts.length === 2 && parts[0] > 0 && parts[1] > 0) {
+    return resolution;
   }
-
-  // Calculate dimensions based on ratio and base size
-  if (ratioW >= ratioH) {
-    return { width: baseSize, height: Math.round(baseSize * ratioH / ratioW) };
-  } else {
-    return { width: Math.round(baseSize * ratioW / ratioH), height: baseSize };
-  }
+  return '1024x1024';
 }
 
 /**
  * Generate image using image model
  * Supports text-to-image, image-to-image, and inpainting
+ * Seedream 5.0 Pro API format: { model, prompt, size, image?, mask? }
  */
 async function generateImage(
   prompt: string,
   model: { api_base_url: string; api_key: string; model_name: string; provider: string },
   inputParams: Record<string, unknown>
 ): Promise<string[]> {
-  const { width, height } = resolveDimensions(inputParams);
+  const size = resolveSize(inputParams);
 
   // Build request body based on whether we have an input image
   const imageUrl = inputParams.image_url as string | undefined;
@@ -241,8 +233,7 @@ async function generateImage(
   const body: Record<string, unknown> = {
     model: model.model_name,
     prompt: prompt,
-    width,
-    height,
+    size,
     n: 1,
   };
 
