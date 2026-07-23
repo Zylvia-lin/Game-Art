@@ -5,10 +5,9 @@ import { useParams } from 'next/navigation';
 import { Sparkles, Loader2 } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
-import { PromptEditor } from '@/components/tools/prompt-editor';
 import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
 import { useTaskQueue } from '@/hooks/use-task-queue';
-import { generateApi, projectsApi } from '@/lib/api';
+import { projectsApi } from '@/lib/api';
 
 export default function TextToImagePage() {
   const params = useParams();
@@ -89,7 +88,6 @@ export default function TextToImagePage() {
           </>
         )}
       </button>
-      <PromptEditor toolKey="text_to_image" toolName="文生图" />
     </>
   );
 

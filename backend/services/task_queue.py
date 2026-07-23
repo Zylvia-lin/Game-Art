@@ -14,13 +14,31 @@ _process_task: asyncio.Task | None = None
 
 def _to_task(row: dict) -> dict:
     """Convert database row to task dict."""
+    raw_params = row.get("input_params")
+    if isinstance(raw_params, str):
+        try:
+            raw_params = json.loads(raw_params)
+        except (json.JSONDecodeError, TypeError):
+            raw_params = {}
+    if not isinstance(raw_params, dict):
+        raw_params = {}
+
+    raw_urls = row.get("output_urls")
+    if isinstance(raw_urls, str):
+        try:
+            raw_urls = json.loads(raw_urls)
+        except (json.JSONDecodeError, TypeError):
+            raw_urls = []
+    if not isinstance(raw_urls, list):
+        raw_urls = []
+
     return {
         "id": row["id"],
         "project_id": row["project_id"],
         "tool_key": row["tool_key"],
-        "input_params": row.get("input_params") or {},
+        "input_params": raw_params,
         "status": row["status"],
-        "output_urls": row.get("output_urls") or [],
+        "output_urls": raw_urls,
         "error_message": row.get("error_message"),
         "progress": row.get("progress", 0),
         "created_at": row["created_at"].isoformat() if row.get("created_at") else None,

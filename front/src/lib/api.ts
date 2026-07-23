@@ -30,7 +30,8 @@ export interface SystemPrompt {
   id: string;
   tool_key: string;
   tool_name: string;
-  prompt_text: string;
+  description: string | null;
+  prompt_content: string;
   created_at: string;
   updated_at: string;
 }
@@ -181,21 +182,14 @@ export const modelsApi = {
 export const promptsApi = {
   list: () => request<SystemPrompt[]>('/api/prompts'),
 
-  get: (id: string) => {
-    if (!isValidId(id)) throw new Error('Invalid prompt ID');
-    return request<SystemPrompt>(`/api/prompts/${id}`);
-  },
+  get: (toolKey: string) =>
+    request<SystemPrompt>(`/api/prompts/${toolKey}`),
 
-  getByToolKey: (toolKey: string) =>
-    request<SystemPrompt>(`/api/prompts/tool/${toolKey}`),
-
-  update: (id: string, data: { prompt_text: string; tool_name?: string }) => {
-    if (!isValidId(id)) throw new Error('Invalid prompt ID');
-    return request<SystemPrompt>(`/api/prompts/${id}`, {
+  update: (toolKey: string, data: { prompt_content: string; description?: string }) =>
+    request<SystemPrompt>(`/api/prompts/${toolKey}`, {
       method: 'PUT',
       body: JSON.stringify(data),
-    });
-  },
+    }),
 };
 
 // ============================================

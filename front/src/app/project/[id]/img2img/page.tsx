@@ -142,6 +142,8 @@ export default function ImageToImagePage() {
     <ToolLayout
       title="图生图"
       description="基于参考图片进行风格转换或内容编辑"
+      toolKey="image_to_image"
+      toolName="图生图"
       paramsPanel={paramsPanel}
       canvas={canvas}
       queuePanel={<TaskQueuePanel projectId={projectId} />}

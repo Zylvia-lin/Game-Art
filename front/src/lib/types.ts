@@ -160,9 +160,6 @@ export const RESOLUTION_MAP: Record<string, { value: string; label: string; desc
 
 // 侧边栏 - 创作工具
 export const CREATION_ITEMS = [
-  { key: 'text2img', label: '文生图', href: '/text2img', icon: 'Image' },
-  { key: 'img2img', label: '图生图', href: '/img2img', icon: 'ImagePlus' },
-  { key: 'inpaint', label: '局部重绘', href: '/inpaint', icon: 'Paintbrush' },
   { key: 'character', label: '角色生成', href: '/character', icon: 'User' },
   { key: 'animation', label: '动画生成', href: '/animation', icon: 'Film' },
   { key: 'prop', label: '道具生成', href: '/prop', icon: 'Sword' },
@@ -172,6 +169,9 @@ export const CREATION_ITEMS = [
 
 // 侧边栏 - 工具箱
 export const TOOLBOX_ITEMS = [
+  { key: 'text2img', label: '文生图', href: '/text2img', icon: 'Image' },
+  { key: 'img2img', label: '图生图', href: '/img2img', icon: 'ImagePlus' },
+  { key: 'inpaint', label: '局部重绘', href: '/inpaint', icon: 'Paintbrush' },
   { key: 'animation', label: '帧提取', href: '/animation', icon: 'Film' },
 ] as const;
 
@@ -195,14 +195,14 @@ export const TOOL_KEY_MAP: Record<string, string> = {
 
 // 面包屑导航 - 工具项
 export const TOOL_NAV_ITEMS = [
-  { label: '文生图', href: '/text2img' },
-  { label: '图生图', href: '/img2img' },
-  { label: '局部重绘', href: '/inpaint' },
   { label: '角色生成', href: '/character' },
   { label: '动画生成', href: '/animation' },
   { label: '道具生成', href: '/prop' },
   { label: 'UI生成', href: '/ui' },
   { label: '场景生成', href: '/scene' },
+  { label: '文生图', href: '/text2img' },
+  { label: '图生图', href: '/img2img' },
+  { label: '局部重绘', href: '/inpaint' },
 ] as const;
 
 // 兼容别名

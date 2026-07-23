@@ -3,6 +3,7 @@ Database connection using asyncpg with raw SQL.
 Provides a connection pool and helper functions.
 Auto-creates tables on startup.
 """
+import json
 import asyncpg
 from config import settings
 
@@ -96,6 +97,22 @@ CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 """
 
 
+async def _init_connection(conn):
+    """Set up JSONB codec for each connection so JSONB columns are returned as Python dicts."""
+    await conn.set_type_codec(
+        "jsonb",
+        encoder=json.dumps,
+        decoder=json.loads,
+        schema="pg_catalog",
+    )
+    await conn.set_type_codec(
+        "json",
+        encoder=json.dumps,
+        decoder=json.loads,
+        schema="pg_catalog",
+    )
+
+
 async def get_pool() -> asyncpg.Pool:
     global _pool
     if _pool is None:
@@ -107,6 +124,7 @@ async def get_pool() -> asyncpg.Pool:
             database=settings.DB_NAME,
             min_size=2,
             max_size=10,
+            init=_init_connection,
         )
     return _pool
 

@@ -1,0 +1,10 @@
+[project]
+requires = ["nodejs-24"]
+
+[dev]
+build = ["sh", "-c", "cd front && pnpm install"]
+run = ["sh", "-c", "cd front && pnpm dev --port ${DEPLOY_RUN_PORT}"]
+
+[deploy]
+build = ["sh", "-c", "cd front && pnpm install && pnpm build"]
+run = ["sh", "-c", "cd front && pnpm start --port ${DEPLOY_RUN_PORT}"]
