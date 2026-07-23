@@ -69,17 +69,25 @@ async def get_task(task_id: str) -> dict | None:
     return _to_task(row) if row else None
 
 
-async def get_project_tasks(project_id: str, status: str | None = None) -> list[dict]:
+async def get_project_tasks(
+    project_id: str, status: str | None = None, tool_key: str | None = None,
+) -> list[dict]:
+    conditions = ["project_id = $1"]
+    params: list = [project_id]
+    idx = 2
     if status:
-        rows = await fetch_all(
-            "SELECT * FROM tasks WHERE project_id = $1 AND status = $2 ORDER BY created_at DESC",
-            project_id, status,
-        )
-    else:
-        rows = await fetch_all(
-            "SELECT * FROM tasks WHERE project_id = $1 ORDER BY created_at DESC",
-            project_id,
-        )
+        conditions.append(f"status = ${idx}")
+        params.append(status)
+        idx += 1
+    if tool_key:
+        conditions.append(f"tool_key = ${idx}")
+        params.append(tool_key)
+        idx += 1
+    where = " AND ".join(conditions)
+    rows = await fetch_all(
+        f"SELECT * FROM tasks WHERE {where} ORDER BY created_at DESC",
+        *params,
+    )
     return [_to_task(r) for r in rows]
 
 

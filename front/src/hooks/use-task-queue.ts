@@ -17,6 +17,7 @@ interface UseTaskQueueReturn {
   submitTask: (toolKey: string, params: Record<string, unknown>) => Promise<Task>;
   cancelTask: (taskId: string) => Promise<void>;
   clearCompleted: () => Promise<void>;
+  refreshTasks: () => Promise<void>;
   isLoading: boolean;
   submitting: boolean;
 }
@@ -26,42 +27,54 @@ export function useTaskQueue({ projectId, onTaskComplete, onTaskError }: UseTask
   const [isLoading, setIsLoading] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Use refs to avoid re-triggering the polling effect when callbacks change
+  const onCompleteRef = useRef(onTaskComplete);
+  const onErrorRef = useRef(onTaskError);
+  useEffect(() => { onCompleteRef.current = onTaskComplete; }, [onTaskComplete]);
+  useEffect(() => { onErrorRef.current = onTaskError; }, [onTaskError]);
+
   // Initial load: fetch existing tasks for this project
-  useEffect(() => {
+  const refreshTasks = useCallback(async () => {
     if (!projectId) return;
-    generateApi.getProjectTasks(projectId).then(setTasks).catch(() => {});
+    try {
+      const fetched = await generateApi.getProjectTasks(projectId);
+      setTasks(fetched);
+    } catch (e) {
+      console.error('Failed to fetch tasks:', e);
+    }
   }, [projectId]);
 
-  // Poll for task status updates
+  useEffect(() => {
+    refreshTasks();
+  }, [refreshTasks]);
+
+  // Poll for task status updates — stable interval, not dependent on `tasks`
   useEffect(() => {
     if (!projectId) return;
-    const pollTaskStatus = async () => {
-      const activeTasks = tasks.filter(t => t.status === 'pending' || t.status === 'processing');
-      if (activeTasks.length === 0) {
-        if (pollingRef.current) {
-          clearInterval(pollingRef.current);
-          pollingRef.current = null;
-        }
-        return;
-      }
 
+    const pollTaskStatus = async () => {
       try {
         const updatedTasks = await generateApi.getProjectTasks(projectId);
         setTasks(prev => {
           const taskMap = new Map(updatedTasks.map(t => [t.id, t]));
-          const merged = prev.map(t => taskMap.get(t.id) || t);
-
-          // Check for newly completed/failed tasks
-          merged.forEach(task => {
-            const prevTask = prev.find(t => t.id === task.id);
-            if (prevTask && prevTask.status !== task.status) {
-              if (task.status === 'completed') {
-                onTaskComplete?.(task);
-              } else if (task.status === 'failed') {
-                onTaskError?.(task);
+          const merged = prev.map(t => {
+            const updated = taskMap.get(t.id);
+            if (!updated) return t;
+            // Check for status transitions
+            if (prev.find(pt => pt.id === t.id)?.status !== updated.status) {
+              if (updated.status === 'completed') {
+                onCompleteRef.current?.(updated);
+              } else if (updated.status === 'failed') {
+                onErrorRef.current?.(updated);
               }
             }
+            return updated;
           });
+
+          // Add any new tasks from server that we don't have locally
+          for (const t of updatedTasks) {
+            if (!merged.find(m => m.id === t.id)) merged.push(t);
+          }
 
           return merged;
         });
@@ -70,14 +83,7 @@ export function useTaskQueue({ projectId, onTaskComplete, onTaskError }: UseTask
       }
     };
 
-    // Start polling if there are active tasks
-    const hasActiveTasks = tasks.some(t => t.status === 'pending' || t.status === 'processing');
-    if (hasActiveTasks && !pollingRef.current) {
-      pollingRef.current = setInterval(pollTaskStatus, 1000);
-    } else if (!hasActiveTasks && pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
-    }
+    pollingRef.current = setInterval(pollTaskStatus, 1500);
 
     return () => {
       if (pollingRef.current) {
@@ -85,7 +91,7 @@ export function useTaskQueue({ projectId, onTaskComplete, onTaskError }: UseTask
         pollingRef.current = null;
       }
     };
-  }, [tasks, projectId, onTaskComplete, onTaskError]);
+  }, [projectId]);
 
   const submitTask = useCallback(async (toolKey: string, params: Record<string, unknown>): Promise<Task> => {
     if (!projectId) {
@@ -96,7 +102,12 @@ export function useTaskQueue({ projectId, onTaskComplete, onTaskError }: UseTask
       const result = await generateApi.submit(toolKey, { project_id: projectId, ...params });
       // The API returns { status, task_id, message }, fetch the full task
       const task = await generateApi.getTask(result.task_id);
-      setTasks(prev => [...prev, task]);
+      // Immediately insert into local state so the queue updates instantly
+      setTasks(prev => {
+        // Avoid duplicates
+        if (prev.find(t => t.id === task.id)) return prev;
+        return [task, ...prev];
+      });
       return task;
     } finally {
       setIsLoading(false);
@@ -137,6 +148,7 @@ export function useTaskQueue({ projectId, onTaskComplete, onTaskError }: UseTask
     submitTask,
     cancelTask,
     clearCompleted,
+    refreshTasks,
     isLoading,
     submitting: isLoading,
   };

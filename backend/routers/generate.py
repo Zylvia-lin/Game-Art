@@ -90,6 +90,7 @@ async def get_task_info(
     task_id: Optional[str] = Query(None),
     project_id: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
+    tool_key: Optional[str] = Query(None),
     stats: Optional[bool] = Query(None),
 ):
     """Get task info, project tasks, or queue stats."""
@@ -103,7 +104,7 @@ async def get_task_info(
         return task
 
     if project_id:
-        return await get_project_tasks(project_id, status)
+        return await get_project_tasks(project_id, status, tool_key)
 
     raise HTTPException(status_code=400, detail="task_id, project_id, or stats required")
 

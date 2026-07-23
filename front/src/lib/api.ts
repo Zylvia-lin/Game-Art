@@ -66,6 +66,7 @@ export interface Task {
   status: string;
   progress: number;
   result_url?: string;
+  output_urls?: string[];
   error?: string;
   created_at: string;
   updated_at: string;
@@ -263,6 +264,10 @@ export const generateApi = {
   getProjectTasks: (projectId: string, status?: string) => {
     if (!isValidId(projectId)) return Promise.resolve([]);
     return request<Task[]>(`/api/generate/task?project_id=${projectId}${status ? `&status=${status}` : ''}`);
+  },
+  getTasks: (projectId: string, toolKey?: string) => {
+    if (!isValidId(projectId)) return Promise.resolve([]);
+    return request<Task[]>(`/api/generate/task?project_id=${projectId}${toolKey ? `&tool_key=${toolKey}` : ''}`);
   },
   getQueueStats: (projectId?: string) =>
     request<{ pending: number; processing: number; completed: number; failed: number }>(
