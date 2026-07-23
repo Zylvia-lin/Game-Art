@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createTask, getTask, getProjectTasks, getQueueStats } from '@/lib/task-queue';
+import { getDefaultModelConfig } from '@/lib/store';
 
 /**
  * POST /api/generate/[tool_key]
@@ -20,6 +21,30 @@ export async function POST(
         { error: 'project_id is required' },
         { status: 400 }
       );
+    }
+
+    // Check if required models are configured before submitting task
+    const needsImageModel = !['animation_frame_extract', 'ui_component_place', 'ui_component_split', 'scene_map_split'].includes(tool_key);
+    const needsTextModel = !['animation_frame_extract', 'ui_component_place', 'ui_component_split', 'scene_map_split'].includes(tool_key);
+    
+    if (needsImageModel) {
+      const imageModel = await getDefaultModelConfig('image');
+      if (!imageModel) {
+        return NextResponse.json(
+          { error: '未配置图片模型，请先在「模型配置」页面添加图片模型API密钥' },
+          { status: 400 }
+        );
+      }
+    }
+    
+    if (needsTextModel) {
+      const textModel = await getDefaultModelConfig('text');
+      if (!textModel) {
+        return NextResponse.json(
+          { error: '未配置文本模型，请先在「模型配置」页面添加文本模型（如DeepSeek）API密钥' },
+          { status: 400 }
+        );
+      }
     }
     
     // Create task in queue

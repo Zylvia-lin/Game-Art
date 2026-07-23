@@ -93,7 +93,8 @@ export function useTaskQueue({ projectId, onTaskComplete, onTaskError }: UseTask
       });
 
       if (!response.ok) {
-        throw new Error('Failed to submit task');
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.error || 'Failed to submit task');
       }
 
       const task: Task = await response.json();

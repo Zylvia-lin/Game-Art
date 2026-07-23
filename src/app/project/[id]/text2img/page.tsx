@@ -17,16 +17,22 @@ export default function TextToImagePage() {
   const [style, setStyle] = useState('anime');
   const [ratio, setRatio] = useState('1:1');
   const [resolution, setResolution] = useState('1024x1024');
+  const [error, setError] = useState<string | null>(null);
   const { submitting, submitTask } = useTaskQueue({ projectId });
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
-    await submitTask('text_to_image', {
-      prompt,
-      style,
-      ratio,
-      resolution,
-    });
+    setError(null);
+    try {
+      await submitTask('text_to_image', {
+        prompt,
+        style,
+        ratio,
+        resolution,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '生成失败，请重试');
+    }
   };
 
   const paramsPanel = (
@@ -44,6 +50,11 @@ export default function TextToImagePage() {
       <StyleSelector value={style} onChange={setStyle} />
       <RatioSelector value={ratio} onChange={setRatio} />
       <ResolutionSelector value={resolution} onChange={setResolution} />
+      {error && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+          {error}
+        </div>
+      )}
       <button
         onClick={handleGenerate}
         disabled={submitting || !prompt.trim()}
