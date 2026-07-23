@@ -247,13 +247,26 @@ SEED_PROMPTS = [
 
 
 async def seed_system_prompts():
-    """Insert default system prompts if they don't exist."""
+    """Insert or update default system prompts."""
     for prompt_data in SEED_PROMPTS:
         existing = await fetch_one(
             "SELECT id FROM system_prompts WHERE tool_key = $1",
             prompt_data["tool_key"]
         )
-        if not existing:
+        if existing:
+            # Update existing prompt
+            await execute(
+                """UPDATE system_prompts 
+                   SET tool_name = $2, description = $3, prompt_content = $4, updated_at = NOW()
+                   WHERE tool_key = $1""",
+                prompt_data["tool_key"],
+                prompt_data["tool_name"],
+                prompt_data["description"],
+                prompt_data["prompt_content"],
+            )
+            print(f"[Seed] Updated prompt: {prompt_data['tool_name']}")
+        else:
+            # Insert new prompt
             await execute(
                 """INSERT INTO system_prompts (tool_key, tool_name, description, prompt_content)
                    VALUES ($1, $2, $3, $4)""",
