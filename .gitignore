@@ -66,3 +66,4 @@ front/public/uploads/
 .preview
 .cozeproj/reduction
 .codegraph
+backend/uv.lock
