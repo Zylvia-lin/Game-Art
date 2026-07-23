@@ -44,17 +44,25 @@ const toProject = (row: Record<string, unknown>): Project => ({
   updated_at: (row.updated_at as Date).toISOString(),
 });
 
-const toAsset = (row: Record<string, unknown>): Asset => ({
-  id: row.id as number,
-  project_id: row.project_id as number,
-  generation_id: (row.generation_id as number) ?? null,
-  name: row.name as string,
-  type: row.type as Asset['type'],
-  url: row.url as string,
-  finalized: row.finalized as boolean,
-  metadata_: (row.metadata_ as Record<string, unknown>) ?? null,
-  created_at: (row.created_at as Date).toISOString(),
-});
+const toAsset = (row: Record<string, unknown>): Asset => {
+  let metadata: Record<string, unknown> | null = (row.metadata as Record<string, unknown>) ?? null;
+  // postgres.js may return jsonb as string, parse it
+  if (typeof metadata === 'string') {
+    try { metadata = JSON.parse(metadata as unknown as string); } catch { metadata = null; }
+  }
+  return {
+    id: row.id as number,
+    project_id: row.project_id as number,
+    generation_id: (row.generation_id as number) ?? null,
+    name: row.name as string,
+    description: (metadata?.description as string) ?? '',
+    type: row.type as Asset['type'],
+    url: row.url as string,
+    finalized: row.finalized as boolean,
+    metadata_: metadata,
+    created_at: (row.created_at as Date)?.toISOString?.() ?? (row.created_at as string),
+  };
+};
 
 const toGeneration = (row: Record<string, unknown>): Generation => ({
   id: row.id as number,
@@ -192,8 +200,8 @@ export async function getAsset(id: number): Promise<Asset | undefined> {
 
 export async function createAsset(data: { project_id: number; name: string; type: string; url: string; metadata_?: Record<string, unknown>; generation_id?: number }): Promise<Asset> {
   const rows = await sql`
-    INSERT INTO assets (project_id, generation_id, name, type, url, metadata_)
-    VALUES (${data.project_id}, ${data.generation_id || null}, ${data.name}, ${data.type}, ${data.url}, ${JSON.stringify(data.metadata_ || {})}::jsonb)
+    INSERT INTO assets (project_id, name, type, url, metadata)
+    VALUES (${data.project_id}, ${data.name}, ${data.type}, ${data.url}, ${JSON.stringify(data.metadata_ || {})}::jsonb)
     RETURNING *
   `;
   return toAsset(rows[0] as unknown as Record<string, unknown>);
@@ -206,7 +214,7 @@ export async function updateAsset(id: number, data: Partial<Asset>): Promise<Ass
       type = COALESCE(${data.type ?? null}, type),
       url = COALESCE(${data.url ?? null}, url),
       finalized = COALESCE(${data.finalized ?? null}, finalized),
-      metadata_ = COALESCE(${data.metadata_ ? JSON.stringify(data.metadata_) : null}::jsonb, metadata_),
+      metadata = COALESCE(${data.metadata_ ? JSON.stringify(data.metadata_) : null}::jsonb, metadata),
       updated_at = CURRENT_TIMESTAMP
     WHERE id = ${id}
     RETURNING *

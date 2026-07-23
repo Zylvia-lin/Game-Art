@@ -60,6 +60,8 @@ export const projectsApi = {
     request<Asset[]>(`/api/projects/${id}/assets${type ? `?asset_type=${type}` : ''}`),
   deleteAsset: (id: number) =>
     request<{ message: string }>(`/api/projects/assets/${id}`, { method: 'DELETE' }),
+  createAsset: (data: { project_id: number; name: string; type: string; url: string; description?: string }) =>
+    request<Asset>('/api/assets', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // Generate
@@ -107,7 +109,7 @@ export const generateApi = {
   upload: async (file: File): Promise<{ url: string }> => {
     const formData = new FormData();
     formData.append('file', file);
-    const res = await fetch(`${API_BASE}/api/generate/upload`, {
+    const res = await fetch(`${API_BASE}/api/upload`, {
       method: 'POST',
       body: formData,
     });

@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { FolderOpen, Trash2, Download, Filter, Check, CheckSquare, Square } from 'lucide-react';
-import { projectsApi } from '@/lib/api';
+import { FolderOpen, Trash2, Download, Filter, Check, CheckSquare, Square, Upload, X } from 'lucide-react';
+import { projectsApi, generateApi } from '@/lib/api';
 import type { Asset } from '@/lib/types';
 
 const ASSET_TYPES = [
@@ -16,6 +16,15 @@ const ASSET_TYPES = [
   { value: 'animation_frame', label: '动画帧' },
 ] as const;
 
+const UPLOAD_CATEGORIES = [
+  { value: 'character', label: '角色' },
+  { value: 'prop', label: '道具' },
+  { value: 'ui', label: 'UI' },
+  { value: 'scene', label: '场景' },
+  { value: 'animation_frame', label: '动画帧' },
+  { value: 'image', label: '其他图片' },
+] as const;
+
 export default function AssetsPage() {
   const params = useParams();
   const projectId = Number(params.id);
@@ -24,6 +33,16 @@ export default function AssetsPage() {
   const [filter, setFilter] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
+
+  // Upload dialog state
+  const [showUploadDialog, setShowUploadDialog] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadPreview, setUploadPreview] = useState<string>('');
+  const [uploadName, setUploadName] = useState('');
+  const [uploadDescription, setUploadDescription] = useState('');
+  const [uploadCategory, setUploadCategory] = useState<string>('character');
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchAssets = async () => {
     setLoading(true);
@@ -123,6 +142,59 @@ export default function AssetsPage() {
 
   const finalizedCount = assets.filter(a => a.finalized).length;
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('请选择图片文件');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert('文件大小不能超过 10MB');
+      return;
+    }
+    setUploadFile(file);
+    setUploadPreview(URL.createObjectURL(file));
+    if (!uploadName) {
+      setUploadName(file.name.replace(/\.[^.]+$/, ''));
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!uploadFile || !uploadName.trim()) return;
+    setUploading(true);
+    try {
+      // 1. Upload file to server
+      const { url } = await generateApi.upload(uploadFile);
+      // 2. Create asset record
+      const asset = await projectsApi.createAsset({
+        project_id: projectId,
+        name: uploadName.trim(),
+        type: uploadCategory,
+        url,
+        description: uploadDescription.trim(),
+      });
+      // 3. Add to list and close dialog
+      setAssets(prev => [asset, ...prev]);
+      resetUploadDialog();
+    } catch (err) {
+      console.error('Upload failed:', err);
+      alert('上传失败，请重试');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const resetUploadDialog = () => {
+    setShowUploadDialog(false);
+    setUploadFile(null);
+    setUploadPreview('');
+    setUploadName('');
+    setUploadDescription('');
+    setUploadCategory('character');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   return (
     <div className="flex h-full">
       {/* Filter sidebar */}
@@ -204,6 +276,13 @@ export default function AssetsPage() {
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-foreground">项目资产</h2>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowUploadDialog(true)}
+              className="flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 transition-all"
+            >
+              <Upload className="h-3.5 w-3.5" />
+              上传资产
+            </button>
             <span className="text-xs text-emerald-400">{finalizedCount} 个已定稿</span>
             <span className="text-sm text-muted-foreground">{assets.length} 个资产</span>
           </div>
@@ -255,8 +334,13 @@ export default function AssetsPage() {
                   <img src={asset.url} alt={asset.name} className="h-full w-full object-contain p-2" />
                 </div>
                 <div className="border-t border-border p-2">
-                  <p className="truncate text-xs text-foreground">{asset.name}</p>
-                  <p className="text-xs text-muted-foreground">{asset.type}</p>
+                  <p className="truncate text-xs font-medium text-foreground">{asset.name}</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-[10px] text-muted-foreground">{ASSET_TYPES.find(t => t.value === asset.type)?.label || asset.type}</span>
+                    {asset.description && (
+                      <span className="truncate text-[10px] text-muted-foreground/60">· {asset.description}</span>
+                    )}
+                  </div>
                 </div>
                 {/* Actions overlay */}
                 {!selectMode && (
@@ -294,6 +378,117 @@ export default function AssetsPage() {
           </div>
         )}
       </div>
+
+      {/* Upload Dialog */}
+      {showUploadDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="relative w-full max-w-md rounded-2xl border border-border bg-[#16161f] p-6 shadow-2xl">
+            <button
+              onClick={resetUploadDialog}
+              className="absolute right-4 top-4 rounded-md p-1 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <h3 className="mb-5 text-lg font-semibold text-foreground">上传资产</h3>
+
+            {/* File upload area */}
+            <div className="mb-4">
+              {uploadPreview ? (
+                <div className="relative group">
+                  <div className="aspect-square max-h-[200px] rounded-lg overflow-hidden border border-border bg-[#0a0a0f] flex items-center justify-center">
+                    <img src={uploadPreview} alt="Preview" className="max-w-full max-h-full object-contain" />
+                  </div>
+                  <button
+                    onClick={() => { setUploadFile(null); setUploadPreview(''); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                    className="absolute top-2 right-2 rounded-md bg-black/60 p-1.5 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-[#0a0a0f]/50 px-4 py-10 transition-colors hover:border-primary/50">
+                  <Upload className="h-8 w-8 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">点击选择图片</span>
+                  <span className="text-xs text-muted-foreground/60">支持 JPG、PNG、WebP，最大 10MB</span>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={handleFileSelect}
+                  />
+                </label>
+              )}
+            </div>
+
+            {/* Category */}
+            <div className="mb-4">
+              <label className="mb-1.5 block text-sm font-medium text-foreground">分类</label>
+              <div className="grid grid-cols-3 gap-2">
+                {UPLOAD_CATEGORIES.map((cat) => (
+                  <button
+                    key={cat.value}
+                    onClick={() => setUploadCategory(cat.value)}
+                    className={`rounded-lg border px-3 py-2 text-xs font-medium transition-all ${
+                      uploadCategory === cat.value
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border text-muted-foreground hover:border-primary/50'
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Name */}
+            <div className="mb-4">
+              <label className="mb-1.5 block text-sm font-medium text-foreground">名称</label>
+              <input
+                type="text"
+                value={uploadName}
+                onChange={(e) => setUploadName(e.target.value)}
+                placeholder="输入资产名称..."
+                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+              />
+            </div>
+
+            {/* Description */}
+            <div className="mb-5">
+              <label className="mb-1.5 block text-sm font-medium text-foreground">描述</label>
+              <textarea
+                value={uploadDescription}
+                onChange={(e) => setUploadDescription(e.target.value)}
+                rows={2}
+                placeholder="可选，描述资产内容..."
+                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors resize-none"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3">
+              <button
+                onClick={resetUploadDialog}
+                className="flex-1 rounded-lg border border-border py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:border-primary/50 transition-all"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleUpload}
+                disabled={!uploadFile || !uploadName.trim() || uploading}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                {uploading ? (
+                  <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />上传中...</>
+                ) : (
+                  <><Upload className="h-4 w-4" />上传</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -57,6 +57,7 @@ export interface Asset {
   project_id: number;
   generation_id: number | null;
   name: string;
+  description: string;
   type: 'character' | 'prop' | 'ui' | 'scene' | 'animation_frame' | 'image';
   url: string;
   metadata_: Record<string, unknown> | null;

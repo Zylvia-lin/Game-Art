@@ -16,9 +16,13 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const asset = await createAsset(body);
+    // Extract description and put it into metadata_
+    const { description, ...rest } = body;
+    const metadata_ = { ...(rest.metadata_ || {}), ...(description ? { description } : {}) };
+    const asset = await createAsset({ ...rest, metadata_ });
     return NextResponse.json(asset, { status: 201 });
   } catch (error) {
+    console.error('Failed to create asset:', error);
     return NextResponse.json({ error: 'Failed to create asset' }, { status: 500 });
   }
 }
