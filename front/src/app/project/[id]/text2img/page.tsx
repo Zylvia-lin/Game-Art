@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Loader2 } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { PromptEditor } from '@/components/tools/prompt-editor';
@@ -27,6 +27,15 @@ export default function TextToImagePage() {
       if (project.style) setStyle(project.style);
     }).catch(() => {});
   }, [projectId]);
+
+  // Wait for params to load
+  if (!params.id || isNaN(projectId)) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;

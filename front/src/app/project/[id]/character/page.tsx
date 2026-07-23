@@ -51,6 +51,15 @@ export default function CharacterPage() {
     }).catch(() => {});
   }, [projectId]);
 
+  // Wait for params to load
+  if (!params.id || isNaN(projectId)) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   // Check sessionStorage for pre-selected image
   useEffect(() => {
     const saved = sessionStorage.getItem('preselect_image');

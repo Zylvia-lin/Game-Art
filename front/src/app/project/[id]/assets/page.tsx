@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback, DragEvent } from 'react';
 import { useParams } from 'next/navigation';
-import { FolderOpen, Trash2, Download, Filter, Check, CheckSquare, Square, Upload, X } from 'lucide-react';
+import { FolderOpen, Trash2, Download, Filter, Check, CheckSquare, Square, Upload, X, Loader2 } from 'lucide-react';
 import { projectsApi, assetsApi, generateApi, resolveImageUrl } from '@/lib/api';
 import type { Asset } from '@/lib/types';
 
@@ -46,6 +46,15 @@ export default function AssetsPage() {
   const [uploadDragging, setUploadDragging] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Wait for params to load
+  if (!params.id || isNaN(projectId)) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   const fetchAssets = async () => {
     setLoading(true);

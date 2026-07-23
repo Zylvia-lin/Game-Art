@@ -29,6 +29,15 @@ export default function ImageToImagePage() {
     projectsApi.get(projectId).catch(() => {});
   }, [projectId]);
 
+  // Wait for params to load
+  if (!params.id || isNaN(projectId)) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   const handleTaskComplete = useCallback((task: Task) => {
     if (task.output_urls && task.output_urls.length > 0) {
       setResults(prev => [...task.output_urls, ...prev]);

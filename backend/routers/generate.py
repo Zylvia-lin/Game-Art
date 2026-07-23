@@ -45,6 +45,11 @@ async def submit_generation(tool_key: str, data: GenerateRequest):
     if not data.project_id:
         raise HTTPException(status_code=400, detail="project_id is required")
 
+    # Validate project exists
+    project = await fetch_one("SELECT id FROM projects WHERE id = $1", data.project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail=f"项目 {data.project_id} 不存在")
+
     # Check model configuration for AI-dependent tools
     if tool_key not in LOCAL_ONLY_TOOLS:
         image_model = await fetch_one(

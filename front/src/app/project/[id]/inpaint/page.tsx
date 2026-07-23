@@ -28,6 +28,15 @@ export default function InpaintPage() {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const { submitting, submitTask } = useTaskQueue({ projectId });
 
+  // Wait for params to load
+  if (!params.id || isNaN(projectId)) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   // Check for pre-selected image from sessionStorage (navigated from another tool)
   useEffect(() => {
     const sourceImage = sessionStorage.getItem('inpaint_source_image');

@@ -35,6 +35,15 @@ export default function PropPage() {
     if (project?.style) setStyle(project.style);
   }, [project]);
 
+  // Wait for params to load
+  if (!params.id || isNaN(projectId)) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   // Check sessionStorage for pre-selected image
   useEffect(() => {
     const saved = sessionStorage.getItem('prop_source_image');

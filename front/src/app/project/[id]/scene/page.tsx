@@ -40,6 +40,15 @@ export default function ScenePage() {
   const handleTaskComplete = useCallback((_task: Task) => {}, []);
   const { submitting, submitTask } = useTaskQueue({ projectId, onTaskComplete: handleTaskComplete });
 
+  // Wait for params to load
+  if (!params.id || isNaN(projectId)) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   // Check sessionStorage for pre-selected image
   useEffect(() => {
     const saved = sessionStorage.getItem('scene_source_image');
