@@ -25,6 +25,7 @@ export default function ImageToImagePage() {
 
   // Load project style (for potential future use in img2img prompts)
   useEffect(() => {
+    if (!projectId || isNaN(projectId)) return;
     projectsApi.get(projectId).catch(() => {});
   }, [projectId]);
 

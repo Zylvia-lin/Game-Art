@@ -27,6 +27,7 @@ export default function PropPage() {
   const [project, setProject] = useState<Project | null>(null);
 
   useEffect(() => {
+    if (!projectId || isNaN(projectId)) return;
     projectsApi.get(projectId).then(setProject).catch(() => {});
   }, [projectId]);
 

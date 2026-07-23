@@ -42,6 +42,7 @@ export default function CharacterPage() {
 
   // Load project to get default style
   useEffect(() => {
+    if (!projectId || isNaN(projectId)) return;
     projectsApi.get(projectId).then(p => {
       if (p?.style) {
         setProjectStyle(p.style);

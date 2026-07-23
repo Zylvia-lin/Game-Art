@@ -60,6 +60,7 @@ export default function AssetsPage() {
   };
 
   useEffect(() => {
+    if (!projectId || isNaN(projectId)) return;
     fetchAssets();
   }, [projectId, filter]);
 

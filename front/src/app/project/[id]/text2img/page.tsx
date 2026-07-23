@@ -22,6 +22,7 @@ export default function TextToImagePage() {
 
   // Load project style as default
   useEffect(() => {
+    if (!projectId || isNaN(projectId)) return;
     projectsApi.get(projectId).then((project) => {
       if (project.style) setStyle(project.style);
     }).catch(() => {});
