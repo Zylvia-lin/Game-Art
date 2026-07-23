@@ -1,14 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { Sparkles, Map } from 'lucide-react';
+import { Sparkles, Loader2, Map } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
-import { generateApi } from '@/lib/api';
+import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
 import { PromptEditor } from '@/components/tools/prompt-editor';
+import type { Task } from '@/lib/types';
 
 const SUB_TOOLS = [
   { key: 'map_generate', label: '地图生成', desc: '根据描述生成游戏地图' },
@@ -34,13 +35,29 @@ export default function ScenePage() {
   const [tileSize, setTileSize] = useState(32);
   const [ratio, setRatio] = useState('16:9');
   const [resolution, setResolution] = useState('1920x1080');
-  const { submitting, submitTask } = useTaskQueue({ projectId });
+  const [sourceImage, setSourceImage] = useState<string | null>(null);
+
+  const handleTaskComplete = useCallback((_task: Task) => {}, []);
+  const { submitting, submitTask } = useTaskQueue({ projectId, onTaskComplete: handleTaskComplete });
+
+  // Check sessionStorage for pre-selected image
+  useEffect(() => {
+    const saved = sessionStorage.getItem('scene_source_image');
+    if (saved) {
+      setSourceImage(saved);
+      sessionStorage.removeItem('scene_source_image');
+    }
+  }, []);
+
+  const needsImage = subTool === 'map_split';
 
   const handleGenerate = async () => {
-    if (!prompt.trim()) return;
+    if (subTool === 'map_generate' && !prompt.trim()) return;
+    if (subTool === 'map_split' && !sourceImage) return;
     await submitTask(toolKeyMap[subTool], {
-      prompt,
+      prompt: prompt || '基于参考图拆分',
       sub_tool: subTool,
+      image_url: sourceImage || undefined,
       map_type: mapType,
       tile_size: tileSize,
       ratio,
@@ -69,6 +86,15 @@ export default function ScenePage() {
           ))}
         </div>
       </div>
+      {needsImage && (
+        <ImageSourceSelector
+          label="参考地图"
+          projectId={String(projectId)}
+          imageUrl={sourceImage}
+          onImageChange={setSourceImage}
+          assetType="scene"
+        />
+      )}
       <div>
         <label className="mb-1.5 block text-sm font-medium text-foreground">场景描述</label>
         <textarea
@@ -115,18 +141,18 @@ export default function ScenePage() {
           ))}
         </div>
       </div>
-      <PromptEditor toolKey={toolKeyMap[subTool]} toolName={subTool === 'map_generate' ? '地图生成' : '组件拆分'} />
+      <PromptEditor toolKey={toolKeyMap[subTool]} toolName={subTool === 'map_generate' ? '地图生成' : '地图拆分'} />
       <RatioSelector value={ratio} onChange={setRatio} />
       <ResolutionSelector value={resolution} onChange={setResolution} />
       <button
         onClick={handleGenerate}
-        disabled={submitting || !prompt.trim()}
+        disabled={submitting || (subTool === 'map_generate' ? !prompt.trim() : !sourceImage)}
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-primary to-accent px-4 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:opacity-90 disabled:opacity-50"
       >
         {submitting ? (
           <>
             <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
-            生成中...
+            已提交任务...
           </>
         ) : (
           <>

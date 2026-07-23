@@ -1,13 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, Layout, Plus, Trash2, GripHorizontal } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
-import { generateApi } from '@/lib/api';
+import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
 import { useTaskQueue } from '@/hooks/use-task-queue';
+import type { Task } from '@/lib/types';
 
 interface UIComponent {
   id: string;
@@ -34,10 +35,22 @@ export default function UIPage() {
   const [prompt, setPrompt] = useState('');
   const [ratio, setRatio] = useState('16:9');
   const [resolution, setResolution] = useState('1920x1080');
+  const [sourceImage, setSourceImage] = useState<string | null>(null);
   const [components, setComponents] = useState<UIComponent[]>([]);
   const [dragging, setDragging] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const { submitting, submitTask } = useTaskQueue({ projectId });
+
+  const handleTaskComplete = useCallback((_task: Task) => {}, []);
+  const { submitting, submitTask } = useTaskQueue({ projectId, onTaskComplete: handleTaskComplete });
+
+  // Check sessionStorage for pre-selected image
+  useEffect(() => {
+    const saved = sessionStorage.getItem('ui_source_image');
+    if (saved) {
+      setSourceImage(saved);
+      sessionStorage.removeItem('ui_source_image');
+    }
+  }, []);
 
   const toolKeyMap: Record<string, string> = {
     layout_generate: 'ui_layout_generate',
@@ -45,11 +58,16 @@ export default function UIPage() {
     component_split: 'ui_component_split',
   };
 
+  const needsImage = subTool === 'component_split' || subTool === 'component_place';
+
   const handleGenerate = async () => {
-    if (!prompt.trim()) return;
+    if (subTool === 'layout_generate' && !prompt.trim()) return;
+    if (subTool === 'component_split' && !sourceImage) return;
+    if (subTool === 'component_place' && !sourceImage) return;
     await submitTask(toolKeyMap[subTool], {
-      prompt,
+      prompt: prompt || '基于参考图生成',
       sub_tool: subTool,
+      image_url: sourceImage || undefined,
       ratio,
       resolution,
       components: components.length > 0 ? components : undefined,
@@ -118,12 +136,22 @@ export default function UIPage() {
         </div>
       </div>
 
+      {needsImage && (
+        <ImageSourceSelector
+          projectId={String(projectId)}
+          imageUrl={sourceImage}
+          onImageChange={setSourceImage}
+          label="UI 参考图片"
+          assetType="ui"
+        />
+      )}
+
       <div>
         <label className="text-sm font-medium text-foreground">描述</label>
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="描述UI类型，如：RPG游戏背包界面，包含物品格子、金币显示、关闭按钮..."
+          placeholder={subTool === 'layout_generate' ? '描述UI类型，如：RPG游戏背包界面，包含物品格子、金币显示、关闭按钮...' : subTool === 'component_split' ? '描述需要拆分的组件类型...' : '描述组件摆放需求...'}
           className="mt-2 h-24 w-full rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
         />
       </div>
@@ -133,7 +161,7 @@ export default function UIPage() {
 
       <button
         onClick={handleGenerate}
-        disabled={!prompt.trim() || submitting}
+        disabled={submitting || (subTool === 'layout_generate' ? !prompt.trim() : !sourceImage)}
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-50"
       >
         {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
