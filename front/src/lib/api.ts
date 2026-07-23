@@ -82,8 +82,11 @@ function isValidId(id: unknown): id is string {
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${url}`, {
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options?.headers,
+    },
   });
   if (!res.ok) {
     let message = `Request failed: ${res.status}`;
