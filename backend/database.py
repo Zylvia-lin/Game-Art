@@ -118,8 +118,35 @@ async def close_pool():
         _pool = None
 
 
+async def ensure_database_exists():
+    """Check if database exists, create it if not."""
+    # Connect to default 'postgres' database to check/create our database
+    conn = await asyncpg.connect(
+        host=settings.DB_HOST,
+        port=settings.DB_PORT,
+        user=settings.DB_USER,
+        password=settings.DB_PASSWORD,
+        database="postgres",
+    )
+    try:
+        db_exists = await conn.fetchval(
+            "SELECT 1 FROM pg_database WHERE datname = $1",
+            settings.DB_NAME
+        )
+        if not db_exists:
+            await conn.execute(f'CREATE DATABASE {settings.DB_NAME}')
+            print(f"[DB] Database '{settings.DB_NAME}' created")
+        return True
+    finally:
+        await conn.close()
+
+
 async def init_db():
-    """Create all tables if they don't exist. Called on startup."""
+    """Create database if needed, then create all tables. Called on startup."""
+    # First ensure the database exists
+    await ensure_database_exists()
+    
+    # Now connect to our database and create tables
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.execute(SCHEMA_SQL)
