@@ -300,6 +300,7 @@ export const generateApi = {
   optimizePrompt: (prompt: string, toolKey?: string) =>
     request<{ optimized_prompt: string }>('/api/generate/optimize-prompt', {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt, tool_key: toolKey }),
     }),
 };
