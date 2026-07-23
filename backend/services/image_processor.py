@@ -1,39 +1,21 @@
 """
 Image processing service using Pillow.
-Handles green screen removal and sprite frame extraction.
+Handles white background removal (flood fill from borders) and mask-based background fill.
 """
 import os
+import io
 import time
+import base64
 import random
 import string
-from PIL import Image
+import numpy as np
+from PIL import Image, ImageDraw
 
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
 
 
 def ensure_upload_dir():
     os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-
-def _rgb_to_hsv(r: int, g: int, b: int) -> tuple[float, float, float]:
-    """Convert RGB (0-255) to HSV (h: 0-360, s: 0-100, v: 0-100)."""
-    rn, gn, bn = r / 255.0, g / 255.0, b / 255.0
-    mx = max(rn, gn, bn)
-    mn = min(rn, gn, bn)
-    diff = mx - mn
-
-    h = 0.0
-    if diff != 0:
-        if mx == rn:
-            h = ((gn - bn) / diff + (6 if gn < bn else 0)) * 60
-        elif mx == gn:
-            h = ((bn - rn) / diff + 2) * 60
-        else:
-            h = ((rn - gn) / diff + 4) * 60
-
-    s = 0.0 if mx == 0 else (diff / mx) * 100
-    v = mx * 100
-    return h, s, v
 
 
 def _resolve_path(path: str) -> str:
@@ -45,10 +27,12 @@ def _resolve_path(path: str) -> str:
     return os.path.join(UPLOAD_DIR, path)
 
 
-def remove_green_background(input_path: str, tolerance: int = 30) -> str:
+def remove_background(input_path: str, tolerance: int = 15) -> str:
     """
-    Remove green background from image, output transparent PNG.
-    Returns the /uploads/ relative URL.
+    Remove white/near-white background from image using flood fill from borders.
+    Only removes white pixels that are CONNECTED to the image border —
+    interior white areas (e.g. white clothing, white eyes) are preserved.
+    Output is a transparent PNG.
     """
     abs_input = _resolve_path(input_path)
     if not os.path.exists(abs_input):
@@ -57,47 +41,131 @@ def remove_green_background(input_path: str, tolerance: int = 30) -> str:
     ensure_upload_dir()
 
     img = Image.open(abs_input).convert("RGBA")
-    pixels = img.load()
-    width, height = img.size
+    arr = np.array(img, dtype=np.uint8)
 
-    # Green HSV range
-    green_min_h, green_max_h = 60, 180
-    green_min_s, green_min_v = 40, 20
+    r, g, b = arr[:, :, 0], arr[:, :, 1], arr[:, :, 2]
 
-    for y in range(height):
-        for x in range(width):
-            r, g, b, a = pixels[x, y]
-            h, s, v = _rgb_to_hsv(r, g, b)
+    # White mask: all channels close to 255
+    white_mask = (
+        (r >= 255 - tolerance)
+        & (g >= 255 - tolerance)
+        & (b >= 255 - tolerance)
+    ).astype(bool)
 
-            is_green = (
-                green_min_h - tolerance <= h <= green_max_h + tolerance
-                and s >= green_min_s
-                and v >= green_min_v
-            )
-            if is_green:
-                pixels[x, y] = (r, g, b, 0)
+    # Flood fill from all border white pixels
+    # Start with border pixels that are white
+    bg = np.zeros_like(white_mask, dtype=bool)
+    bg[0, :] = white_mask[0, :]
+    bg[-1, :] = white_mask[-1, :]
+    bg[:, 0] = white_mask[:, 0]
+    bg[:, -1] = white_mask[:, -1]
 
-    # Feather edges: soften 1px boundary between opaque and transparent
-    for y in range(1, height - 1):
-        for x in range(1, width - 1):
-            r, g, b, a = pixels[x, y]
-            if a == 255:
-                has_transparent_neighbor = False
-                for dy in (-1, 0, 1):
-                    for dx in (-1, 0, 1):
-                        if pixels[x + dx, y + dy][3] == 0:
-                            has_transparent_neighbor = True
-                            break
-                    if has_transparent_neighbor:
-                        break
-                if has_transparent_neighbor:
-                    pixels[x, y] = (r, g, b, 128)
+    # Iteratively expand background region through white pixels
+    while True:
+        new_bg = bg.copy()
+        new_bg[1:, :] |= bg[:-1, :] & white_mask[1:, :]
+        new_bg[:-1, :] |= bg[1:, :] & white_mask[:-1, :]
+        new_bg[:, 1:] |= bg[:, :-1] & white_mask[:, 1:]
+        new_bg[:, :-1] |= bg[:, 1:] & white_mask[:, :-1]
+        if np.array_equal(new_bg, bg):
+            break
+        bg = new_bg
 
-    # Save output
+    # Set background pixels to transparent
+    arr[bg, 3] = 0
+
+    # Edge feathering: semi-transparent pixels at the boundary
+    # Find boundary pixels (opaque but adjacent to transparent)
+    alpha = arr[:, :, 3]
+    transparent = alpha == 0
+    # Dilate transparent mask by 1px
+    neighbor_transparent = np.zeros_like(transparent)
+    neighbor_transparent[1:, :] |= transparent[:-1, :]
+    neighbor_transparent[:-1, :] |= transparent[1:, :]
+    neighbor_transparent[:, 1:] |= transparent[:, :-1]
+    neighbor_transparent[:, :-1] |= transparent[:, 1:]
+    # Pixels that are opaque but next to transparent = boundary
+    boundary = (~transparent) & neighbor_transparent
+    arr[boundary, 3] = 128
+
+    result = Image.fromarray(arr, mode="RGBA")
+
     base = os.path.splitext(os.path.basename(abs_input))[0]
     output_name = f"{base}_transparent.png"
     abs_output = os.path.join(UPLOAD_DIR, output_name)
-    img.save(abs_output, "PNG")
+    result.save(abs_output, "PNG")
+
+    return f"/uploads/{output_name}"
+
+
+def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
+    """Convert hex color string to (R, G, B) tuple."""
+    hex_color = hex_color.lstrip("#")
+    return tuple(int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def apply_background_mask(
+    input_path: str,
+    mask_data_url: str,
+    bg_color: str = "#FFFFFF",
+) -> str:
+    """
+    Apply user-brushed mask to remove background.
+    Brushed (non-transparent) areas in the mask are KEPT from the original image.
+    Non-brushed areas are filled with the specified solid background color.
+
+    Args:
+        input_path: Path or /uploads/ URL of the original image
+        mask_data_url: Base64 data URL of the mask canvas (RGBA, brushed = alpha > 0)
+        bg_color: Hex color string for the fill background (default white)
+    Returns:
+        /uploads/ relative URL of the processed image
+    """
+    abs_input = _resolve_path(input_path)
+    if not os.path.exists(abs_input):
+        raise FileNotFoundError(f"Input file not found: {abs_input}")
+
+    ensure_upload_dir()
+
+    # Load original image
+    img = Image.open(abs_input).convert("RGBA")
+    orig_arr = np.array(img, dtype=np.uint8)
+    height, width = orig_arr.shape[:2]
+
+    # Decode mask from data URL
+    if mask_data_url.startswith("data:image/"):
+        b64_data = mask_data_url.split(",", 1)[1]
+        mask_bytes = base64.b64decode(b64_data)
+        mask_img = Image.open(io.BytesIO(mask_bytes)).convert("RGBA")
+    else:
+        # Treat as file path
+        mask_img = Image.open(_resolve_path(mask_data_url)).convert("RGBA")
+
+    # Resize mask to match original image
+    if mask_img.size != (width, height):
+        mask_img = mask_img.resize((width, height), Image.LANCZOS)
+
+    mask_arr = np.array(mask_img, dtype=np.uint8)
+    mask_alpha = mask_arr[:, :, 3]  # Brushed areas have alpha > 0
+
+    # Build result: keep original where mask is brushed, fill bg_color elsewhere
+    fill_rgb = _hex_to_rgb(bg_color)
+    result_arr = orig_arr.copy()
+    # Non-brushed pixels: fill with bg color, fully opaque
+    non_brushed = mask_alpha == 0
+    result_arr[non_brushed, 0] = fill_rgb[0]
+    result_arr[non_brushed, 1] = fill_rgb[1]
+    result_arr[non_brushed, 2] = fill_rgb[2]
+    result_arr[non_brushed, 3] = 255
+    # Brushed pixels: keep original (alpha 255)
+    result_arr[mask_alpha > 0, 3] = 255
+
+    result = Image.fromarray(result_arr, mode="RGBA")
+
+    unique = "".join(random.choices(string.ascii_lowercase + string.digits, k=6))
+    output_name = f"bgremoved_{int(time.time())}_{unique}.png"
+    abs_output = os.path.join(UPLOAD_DIR, output_name)
+    result.save(abs_output, "PNG")
 
     return f"/uploads/{output_name}"
 

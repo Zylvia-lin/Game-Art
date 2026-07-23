@@ -20,6 +20,7 @@ from routers.generate import router as generate_router
 from routers.assets import router as assets_router
 from routers.upload import router as upload_router
 from routers.tools import router as tools_router
+from routers.download import router as download_router
 
 
 UPLOAD_DIR = settings.UPLOAD_DIR
@@ -63,6 +64,7 @@ app.include_router(generate_router)
 app.include_router(assets_router)
 app.include_router(upload_router)
 app.include_router(tools_router)
+app.include_router(download_router)
 
 # Serve uploaded files
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")

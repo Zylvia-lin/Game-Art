@@ -11,7 +11,25 @@ import base64
 import httpx
 from database import fetch_one
 from services.image_service import generate_image
-from services.image_processor import remove_green_background, ensure_upload_dir, UPLOAD_DIR
+from services.image_processor import remove_background, ensure_upload_dir, UPLOAD_DIR
+
+# Tool keys that require background removal (white bg → transparent)
+# Only creation tools (character/animation/prop/scene/ui) get post-processed.
+# Toolbox tools (text_to_image, image_to_image, inpaint) skip this step.
+_BG_REMOVAL_TOOLS = frozenset({
+    "character_tpose",
+    "character_three_view",
+    "character_directions",
+    "character_part_split",
+    "animation_action",
+    "prop_original",
+    "prop_variant",
+    "ui_layout_generate",
+    "ui_component_place",
+    "ui_component_split",
+    "scene_map_generate",
+    "scene_map_split",
+})
 
 
 async def execute_generation(
@@ -62,8 +80,12 @@ async def execute_generation(
 
     await report(70)
 
-    # Post-process: download images and remove green background
-    processed_urls = await _post_process_images(output_urls)
+    # Post-process: only for creation tools — download + remove white background
+    if tool_key in _BG_REMOVAL_TOOLS:
+        processed_urls = await _post_process_images(output_urls)
+    else:
+        # Toolbox tools: download images locally but skip background removal
+        processed_urls = await _download_images_only(output_urls)
 
     await report(90)
 
@@ -113,7 +135,7 @@ def _build_final_prompt(system_prompt: str, user_prompt: str, input_params: dict
 
 
 async def _post_process_images(urls: list[str]) -> list[str]:
-    """Download generated images and remove green background."""
+    """Download generated images and remove white background (creation tools only)."""
     ensure_upload_dir()
     processed = []
 
@@ -121,15 +143,31 @@ async def _post_process_images(urls: list[str]) -> list[str]:
         try:
             local_path = await _download_image(url)
             try:
-                transparent_url = remove_green_background(local_path)
+                transparent_url = remove_background(local_path)
                 processed.append(transparent_url)
             except Exception as e:
-                print(f"Green background removal failed for {local_path}: {e}")
+                print(f"Background removal failed for {local_path}: {e}")
                 # Image is already downloaded locally, use it as-is
                 processed.append(local_path)
         except Exception as e:
             print(f"Download failed for image {url}: {e}")
             # Last resort: use original URL (may expire)
+            processed.append(url)
+
+    return processed
+
+
+async def _download_images_only(urls: list[str]) -> list[str]:
+    """Download images to local storage without background removal (toolbox tools)."""
+    ensure_upload_dir()
+    processed = []
+
+    for url in urls:
+        try:
+            local_path = await _download_image(url)
+            processed.append(local_path)
+        except Exception as e:
+            print(f"Download failed for image {url}: {e}")
             processed.append(url)
 
     return processed

@@ -190,7 +190,7 @@ export const CREATION_ITEMS = [
 export const TOOLBOX_ITEMS = [
   { key: 'text2img', label: '文生图', href: '/text2img', icon: 'Image' },
   { key: 'img2img', label: '图生图', href: '/img2img', icon: 'ImagePlus' },
-  { key: 'inpaint', label: '局部重绘', href: '/inpaint', icon: 'Paintbrush' },
+  { key: 'image-edit', label: '图片编辑', href: '/image-edit', icon: 'Paintbrush' },
   { key: 'animation', label: '帧提取', href: '/animation', icon: 'Film' },
 ] as const;
 
@@ -221,7 +221,7 @@ export const TOOL_NAV_ITEMS = [
   { label: '场景生成', href: '/scene' },
   { label: '文生图', href: '/text2img' },
   { label: '图生图', href: '/img2img' },
-  { label: '局部重绘', href: '/inpaint' },
+  { label: '图片编辑', href: '/image-edit' },
 ] as const;
 
 // 兼容别名

@@ -7,7 +7,7 @@ import { ToolLayout } from '@/components/tools/tool-layout';
 import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { PromptInput } from '@/components/tools/prompt-input';
 import { useTaskQueue } from '@/hooks/use-task-queue';
-import { projectsApi, generateApi, resolveImageUrl, type Task } from '@/lib/api';
+import { projectsApi, generateApi, resolveImageUrl, downloadImage, type Task } from '@/lib/api';
 import { computeSize } from '@/lib/types';
 
 interface ImageItem {
@@ -113,25 +113,8 @@ export default function TextToImagePage() {
     }
   };
 
-  const handleDownload = async (url: string, filename: string) => {
-    try {
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = filename;
-      link.click();
-      window.URL.revokeObjectURL(blobUrl);
-    } catch {
-      // Fallback: open in new tab for direct download
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      link.target = '_blank';
-      link.click();
-    }
+  const handleDownload = (url: string, filename: string) => {
+    downloadImage(url, filename);
   };
 
   const paramsPanel = (

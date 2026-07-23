@@ -2,7 +2,7 @@
 Seed system prompts into the database on startup.
 Uses raw SQL with asyncpg (no ORM).
 """
-from database import fetch_one, execute
+from database import execute
 
 SEED_PROMPTS = [
     {
@@ -63,7 +63,7 @@ SEED_PROMPTS = [
 2. 正面视角，对称姿势
 3. 包含详细描述：身体比例、服装、盔甲、武器、配饰
 4. 明确指定美术风格
-5. 包含：清晰线条、游戏就绪精灵图、纯绿色背景（#00FF00）
+5. 包含：清晰线条、游戏就绪精灵图、纯白色背景（#FFFFFF）
 6. 添加材质和纹理细节
 7. 只输出增强后的提示词
 """
@@ -80,7 +80,7 @@ SEED_PROMPTS = [
 3. 一致的比例、颜色和细节
 4. 精灵图表布局描述
 5. 每个方向应清晰定义
-6. 包含：纯绿色背景（#00FF00）
+6. 包含：纯白色背景（#FFFFFF）
 7. 只输出增强后的提示词
 """
     },
@@ -94,7 +94,7 @@ SEED_PROMPTS = [
 1. 三个视图水平排列：正面视图、侧面视图、背面视图
 2. 所有视图保持完全相同的角色设计、比例和颜色
 3. 视图之间有清晰分隔
-4. 包含纯绿色背景（#00FF00）
+4. 包含纯白色背景（#FFFFFF）
 5. 只输出增强后的提示词
 """
     },
@@ -108,7 +108,7 @@ SEED_PROMPTS = [
 1. 识别角色的主要部件：头部、身体、手臂、腿部、武器、配饰等
 2. 每个部件单独生成，保持与原角色一致的设计风格
 3. 部件之间保持比例一致
-4. 每个部件使用纯绿色背景（#00FF00）
+4. 每个部件使用纯白色背景（#FFFFFF）
 5. 标注每个部件的名称
 6. 只输出增强后的提示词
 """
@@ -124,7 +124,7 @@ SEED_PROMPTS = [
 2. 保持角色设计在所有帧中一致
 3. 动作流畅自然，符合物理规律
 4. 指定帧数和动画节奏
-5. 包含纯绿色背景（#00FF00）
+5. 包含纯白色背景（#FFFFFF）
 6. 只输出增强后的提示词
 """
     },
@@ -139,7 +139,7 @@ SEED_PROMPTS = [
 2. 指定美术风格（像素风、卡通风、写实风等）
 3. 包含光影效果
 4. 道具应适合游戏使用
-5. 包含纯绿色背景（#00FF00）
+5. 包含纯白色背景（#FFFFFF）
 6. 只输出增强后的提示词
 """
     },
@@ -154,7 +154,7 @@ SEED_PROMPTS = [
 2. 在保持核心设计的基础上进行变化
 3. 可以变化颜色、材质、装饰细节
 4. 保持比例和尺寸一致
-5. 包含纯绿色背景（#00FF00）
+5. 包含纯白色背景（#FFFFFF）
 6. 只输出增强后的提示词
 """
     },
@@ -169,7 +169,7 @@ SEED_PROMPTS = [
 2. 指定UI风格（科幻、奇幻、简约等）
 3. 包含按钮、图标、文本框等元素细节
 4. 考虑可用性和视觉层次
-5. 包含纯绿色背景（#00FF00）
+5. 包含纯白色背景（#FFFFFF）
 6. 只输出增强后的提示词
 """
     },
@@ -211,7 +211,7 @@ SEED_PROMPTS = [
 2. 指定地形类型（草地、沙漠、雪地等）
 3. 包含道路、建筑、障碍物等元素
 4. 考虑游戏玩法和可探索性
-5. 包含纯绿色背景（#00FF00）
+5. 包含纯白色背景（#FFFFFF）
 6. 只输出增强后的提示词
 """
     },
@@ -247,32 +247,16 @@ SEED_PROMPTS = [
 
 
 async def seed_system_prompts():
-    """Insert or update default system prompts."""
+    """Insert default system prompts only if they don't already exist.
+    Existing records are NEVER overwritten — user modifications are preserved."""
     for prompt_data in SEED_PROMPTS:
-        existing = await fetch_one(
-            "SELECT id FROM system_prompts WHERE tool_key = $1",
-            prompt_data["tool_key"]
+        await execute(
+            """INSERT INTO system_prompts (tool_key, tool_name, description, prompt_content)
+               VALUES ($1, $2, $3, $4)
+               ON CONFLICT (tool_key) DO NOTHING""",
+            prompt_data["tool_key"],
+            prompt_data["tool_name"],
+            prompt_data["description"],
+            prompt_data["prompt_content"],
         )
-        if existing:
-            # Update existing prompt
-            await execute(
-                """UPDATE system_prompts 
-                   SET tool_name = $2, description = $3, prompt_content = $4, updated_at = NOW()
-                   WHERE tool_key = $1""",
-                prompt_data["tool_key"],
-                prompt_data["tool_name"],
-                prompt_data["description"],
-                prompt_data["prompt_content"],
-            )
-            print(f"[Seed] Updated prompt: {prompt_data['tool_name']}")
-        else:
-            # Insert new prompt
-            await execute(
-                """INSERT INTO system_prompts (tool_key, tool_name, description, prompt_content)
-                   VALUES ($1, $2, $3, $4)""",
-                prompt_data["tool_key"],
-                prompt_data["tool_name"],
-                prompt_data["description"],
-                prompt_data["prompt_content"],
-            )
-            print(f"[Seed] Added prompt: {prompt_data['tool_name']}")
+    print(f"[Seed] System prompts checked ({len(SEED_PROMPTS)} entries). Existing records preserved.")

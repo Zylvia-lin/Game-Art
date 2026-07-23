@@ -316,6 +316,11 @@ export const toolsApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  removeBgMask: (data: { image_url: string; mask_url: string; bg_color?: string }) =>
+    request<{ url: string }>('/api/tools/remove-bg-mask', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
 
 // ============================================
@@ -326,4 +331,28 @@ export function resolveImageUrl(url: string | undefined | null): string {
   if (!url) return '';
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
   return `${API_BASE}${url.startsWith('/') ? '' : '/'}${url}`;
+}
+
+// ============================================
+// Download helper (uses backend proxy for forced download)
+// ============================================
+
+export function downloadImage(url: string, filename?: string): void {
+  let path = url;
+  // Extract path portion from full URL
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    try {
+      const urlObj = new URL(path);
+      path = urlObj.pathname;
+    } catch {
+      // keep as-is
+    }
+  }
+  const downloadUrl = `${API_BASE}/api/download?path=${encodeURIComponent(path)}`;
+  const link = document.createElement('a');
+  link.href = downloadUrl;
+  link.download = filename || path.split('/').pop() || 'download.png';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }

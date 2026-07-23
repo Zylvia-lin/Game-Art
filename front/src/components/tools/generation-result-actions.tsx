@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Paintbrush, Film, Scissors, Rotate3D, Layers, Check, X, Download, FolderPlus } from 'lucide-react';
-import { projectsApi, assetsApi } from '@/lib/api';
+import { projectsApi, assetsApi, downloadImage } from '@/lib/api';
 
 interface GenerationResultActionsProps {
   projectId: string;
@@ -64,26 +64,8 @@ export function GenerationResultActions({
     }
   };
 
-  const handleDownload = async () => {
-    try {
-      const response = await fetch(imageUrl, { mode: 'cors' });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = `asset_${assetId || 'untitled'}.png`;
-      link.click();
-      window.URL.revokeObjectURL(blobUrl);
-    } catch (err) {
-      console.error('Download failed, falling back to direct link:', err);
-      // Fallback: open in new tab for manual download
-      const link = document.createElement('a');
-      link.href = imageUrl;
-      link.target = '_blank';
-      link.download = `asset_${assetId || 'untitled'}.png`;
-      link.click();
-    }
+  const handleDownload = () => {
+    downloadImage(imageUrl, `asset_${assetId || 'untitled'}.png`);
   };
 
   const actions = [
@@ -92,8 +74,8 @@ export function GenerationResultActions({
       label: '局部重绘',
       desc: '修改局部区域',
       onClick: () => {
-        sessionStorage.setItem('preselect_image', imageUrl);
-        router.push(`/project/${projectId}/inpaint`);
+        sessionStorage.setItem('inpaint_source_image', imageUrl);
+        router.push(`/project/${projectId}/image-edit`);
       },
     },
     {

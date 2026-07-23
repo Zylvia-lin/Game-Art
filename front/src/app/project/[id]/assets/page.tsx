@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback, DragEvent } from 'react';
 import { useParams } from 'next/navigation';
 import { FolderOpen, Trash2, Download, Filter, Check, CheckSquare, Square, Upload, X, Loader2 } from 'lucide-react';
-import { projectsApi, assetsApi, generateApi, resolveImageUrl } from '@/lib/api';
+import { projectsApi, assetsApi, generateApi, resolveImageUrl, downloadImage } from '@/lib/api';
 import type { Asset } from '@/lib/types';
 
 const ASSET_TYPES = [
@@ -123,20 +123,9 @@ export default function AssetsPage() {
   const handleBatchDownload = async () => {
     const selectedAssets = assets.filter(a => selectedIds.has(a.id));
     for (const asset of selectedAssets) {
-      try {
-        const response = await fetch(asset.url);
-        const blob = await response.blob();
-        const blobUrl = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = blobUrl;
-        link.download = `${asset.name || `asset_${asset.id}`}.png`;
-        link.click();
-        window.URL.revokeObjectURL(blobUrl);
-        // Small delay between downloads
-        await new Promise(r => setTimeout(r, 300));
-      } catch (err) {
-        console.error(`Failed to download ${asset.name}:`, err);
-      }
+      downloadImage(asset.url, `${asset.name || `asset_${asset.id}`}.png`);
+      // Small delay between downloads
+      await new Promise(r => setTimeout(r, 300));
     }
   };
 
