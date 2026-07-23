@@ -42,6 +42,36 @@ class GenerateRequest(BaseModel):
 LOCAL_ONLY_TOOLS = {"animation_frame_extract", "ui_component_place", "ui_component_split", "scene_map_split"}
 
 
+class OptimizePromptRequest(BaseModel):
+    prompt: str
+    tool_key: Optional[str] = None
+
+
+@router.post("/optimize-prompt")
+async def optimize_user_prompt(data: OptimizePromptRequest):
+    """On-demand prompt optimization using LLM (DeepSeek etc.).
+    Called when user clicks the optimize button next to the prompt input."""
+    if not data.prompt or not data.prompt.strip():
+        raise HTTPException(status_code=400, detail="提示词不能为空")
+
+    # Load default text model config
+    model = await fetch_one(
+        "SELECT model_name, api_key, api_base_url FROM model_configs WHERE type = 'text' AND is_default = true LIMIT 1"
+    )
+    if not model:
+        raise HTTPException(
+            status_code=400,
+            detail="未配置文本模型，请先在「模型配置」页面添加文本模型API密钥",
+        )
+
+    optimized = await optimize_prompt(
+        user_prompt=data.prompt,
+        model=model,
+        tool_key=data.tool_key,
+    )
+    return {"optimized_prompt": optimized}
+
+
 @router.post("/{tool_key}", status_code=201)
 async def submit_generation(tool_key: str, data: GenerateRequest):
     """Submit a new generation task to the queue."""
@@ -127,33 +157,3 @@ async def delete_tasks(
     If no status, delete all completed and failed tasks."""
     deleted = await delete_project_tasks(project_id, status)
     return {"deleted": deleted}
-
-
-class OptimizePromptRequest(BaseModel):
-    prompt: str
-    tool_key: Optional[str] = None
-
-
-@router.post("/optimize-prompt")
-async def optimize_user_prompt(data: OptimizePromptRequest):
-    """On-demand prompt optimization using LLM (DeepSeek etc.).
-    Called when user clicks the optimize button next to the prompt input."""
-    if not data.prompt or not data.prompt.strip():
-        raise HTTPException(status_code=400, detail="提示词不能为空")
-
-    # Load default text model config
-    model = await fetch_one(
-        "SELECT model_name, api_key, api_base_url FROM model_configs WHERE type = 'text' AND is_default = true LIMIT 1"
-    )
-    if not model:
-        raise HTTPException(
-            status_code=400,
-            detail="未配置文本模型，请先在「模型配置」页面添加文本模型API密钥",
-        )
-
-    optimized = await optimize_prompt(
-        user_prompt=data.prompt,
-        model=model,
-        tool_key=data.tool_key,
-    )
-    return {"optimized_prompt": optimized}
