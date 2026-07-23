@@ -95,18 +95,23 @@ export function TaskQueuePanel({ projectId, onTaskComplete }: TaskQueuePanelProp
     }
   }, [projectId, onTaskComplete]);
 
+  // Fetch on mount
   useEffect(() => {
     fetchTasks();
   }, [fetchTasks]);
 
+  // Fetch immediately when panel is opened
+  useEffect(() => {
+    if (open) {
+      fetchTasks();
+    }
+  }, [open, fetchTasks]);
+
+  // Always poll: 2s when there are active tasks, 5s otherwise
   useEffect(() => {
     const hasActive = tasks.some(t => t.status === 'pending' || t.status === 'processing');
-    if (hasActive && !pollingRef.current) {
-      pollingRef.current = setInterval(fetchTasks, 2000);
-    } else if (!hasActive && pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
-    }
+    const interval = hasActive ? 2000 : 5000;
+    pollingRef.current = setInterval(fetchTasks, interval);
     return () => {
       if (pollingRef.current) {
         clearInterval(pollingRef.current);
