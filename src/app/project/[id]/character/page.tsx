@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, User } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
-import { StyleSelector } from '@/components/tools/selectors';
+import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { GenerationResultActions } from '@/components/tools/generation-result-actions';
 import { generateApi, projectsApi } from '@/lib/api';
@@ -41,6 +41,8 @@ export default function CharacterPage() {
   const [prompt, setPrompt] = useState('');
   const [style, setStyle] = useState(projectStyle);
   const [directions, setDirections] = useState(8);
+  const [ratio, setRatio] = useState('1:1');
+  const [resolution, setResolution] = useState('1024x1024');
   const [sourceImage, setSourceImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<string[]>([]);
@@ -73,6 +75,8 @@ export default function CharacterPage() {
           image_url: sourceImage || undefined,
           directions,
           style,
+          ratio,
+          resolution,
         }),
       });
       const data = await res.json();
@@ -157,6 +161,8 @@ export default function CharacterPage() {
           </div>
         </div>
       )}
+      <RatioSelector value={ratio} onChange={setRatio} />
+      <ResolutionSelector value={resolution} onChange={setResolution} />
       <button
         onClick={handleGenerate}
         disabled={loading || (subTool === 'tpose' ? !prompt.trim() : !sourceImage)}

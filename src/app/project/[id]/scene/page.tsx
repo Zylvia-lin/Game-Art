@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Sparkles, Map } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
+import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { generateApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
@@ -31,6 +32,8 @@ export default function ScenePage() {
   const [prompt, setPrompt] = useState('');
   const [mapType, setMapType] = useState('top');
   const [tileSize, setTileSize] = useState(32);
+  const [ratio, setRatio] = useState('16:9');
+  const [resolution, setResolution] = useState('1920x1080');
   const { submitting, submitTask } = useTaskQueue({ projectId });
 
   const handleGenerate = async () => {
@@ -40,6 +43,8 @@ export default function ScenePage() {
       sub_tool: subTool,
       map_type: mapType,
       tile_size: tileSize,
+      ratio,
+      resolution,
     });
   };
 
@@ -111,6 +116,8 @@ export default function ScenePage() {
         </div>
       </div>
       <PromptEditor toolKey={toolKeyMap[subTool]} toolName={subTool === 'map_generate' ? '地图生成' : '组件拆分'} />
+      <RatioSelector value={ratio} onChange={setRatio} />
+      <ResolutionSelector value={resolution} onChange={setResolution} />
       <button
         onClick={handleGenerate}
         disabled={submitting || !prompt.trim()}

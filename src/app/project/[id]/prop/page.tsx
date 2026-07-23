@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, Sword, Copy } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
-import { StyleSelector } from '@/components/tools/selectors';
+import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
 import { projectsApi } from '@/lib/api';
@@ -16,6 +16,8 @@ export default function PropPage() {
   const [subTool, setSubTool] = useState<string>('generate');
   const [prompt, setPrompt] = useState('');
   const [style, setStyle] = useState('pixel');
+  const [ratio, setRatio] = useState('1:1');
+  const [resolution, setResolution] = useState('1024x1024');
   const [variantCount, setVariantCount] = useState(4);
   const { tasks, submitting, submitTask } = useTaskQueue({ projectId });
   const [project, setProject] = useState<Project | null>(null);
@@ -39,6 +41,8 @@ export default function PropPage() {
       prompt,
       variant_count: variantCount,
       style,
+      ratio,
+      resolution,
     });
   };
 
@@ -98,6 +102,8 @@ export default function PropPage() {
           />
         </div>
       )}
+      <RatioSelector value={ratio} onChange={setRatio} />
+      <ResolutionSelector value={resolution} onChange={setResolution} />
       <button
         onClick={handleGenerate}
         disabled={submitting || !prompt.trim()}

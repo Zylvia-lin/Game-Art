@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, Download, ImageIcon } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
+import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { GenerationResultActions } from '@/components/tools/generation-result-actions';
 import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
 import { generateApi, projectsApi } from '@/lib/api';
@@ -16,6 +17,8 @@ export default function ImageToImagePage() {
   const [imageUrl, setImageUrl] = useState('');
   const [prompt, setPrompt] = useState('');
   const [strength, setStrength] = useState(0.7);
+  const [ratio, setRatio] = useState('1:1');
+  const [resolution, setResolution] = useState('1024x1024');
   const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<string[]>([]);
 
@@ -38,6 +41,8 @@ export default function ImageToImagePage() {
         project_id: projectId,
         image_url: imageUrl,
         prompt,
+        ratio,
+        resolution,
         strength,
       });
     } catch (err) {
@@ -82,6 +87,8 @@ export default function ImageToImagePage() {
           <span>大幅修改</span>
         </div>
       </div>
+      <RatioSelector value={ratio} onChange={setRatio} />
+      <ResolutionSelector value={resolution} onChange={setResolution} />
       <button
         onClick={handleGenerate}
         disabled={submitting || !imageUrl || !prompt.trim()}

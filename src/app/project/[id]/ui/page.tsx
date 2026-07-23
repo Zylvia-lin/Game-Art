@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, Layout, Plus, Trash2, GripHorizontal } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
+import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { generateApi } from '@/lib/api';
 import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
 import { useTaskQueue } from '@/hooks/use-task-queue';
@@ -31,6 +32,8 @@ export default function UIPage() {
   const projectId = Number(params.id);
   const [subTool, setSubTool] = useState<string>('layout_generate');
   const [prompt, setPrompt] = useState('');
+  const [ratio, setRatio] = useState('16:9');
+  const [resolution, setResolution] = useState('1920x1080');
   const [components, setComponents] = useState<UIComponent[]>([]);
   const [dragging, setDragging] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -47,6 +50,8 @@ export default function UIPage() {
     await submitTask(toolKeyMap[subTool], {
       prompt,
       sub_tool: subTool,
+      ratio,
+      resolution,
       components: components.length > 0 ? components : undefined,
     });
   };
@@ -122,6 +127,9 @@ export default function UIPage() {
           className="mt-2 h-24 w-full rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
         />
       </div>
+
+      <RatioSelector value={ratio} onChange={setRatio} />
+      <ResolutionSelector value={resolution} onChange={setResolution} />
 
       <button
         onClick={handleGenerate}

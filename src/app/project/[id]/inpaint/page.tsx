@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, Undo2, Redo2, Eraser, Paintbrush } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
+import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { GenerationResultActions } from '@/components/tools/generation-result-actions';
 import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
 import { useTaskQueue } from '@/hooks/use-task-queue';
@@ -18,6 +19,8 @@ export default function InpaintPage() {
   const [imageUrl, setImageUrl] = useState('');
   const [prompt, setPrompt] = useState('');
   const [brushSize, setBrushSize] = useState(20);
+  const [ratio, setRatio] = useState('1:1');
+  const [resolution, setResolution] = useState('1024x1024');
   const [results, setResults] = useState<string[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
   const [history, setHistory] = useState<ImageData[]>([]);
@@ -162,6 +165,8 @@ export default function InpaintPage() {
         image_url: imageUrl,
         mask_url: maskUrl,
         prompt,
+        ratio,
+        resolution,
       });
     } catch (err) {
       console.error('Inpaint failed:', err);
@@ -229,6 +234,8 @@ export default function InpaintPage() {
           className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors resize-none"
         />
       </div>
+      <RatioSelector value={ratio} onChange={setRatio} />
+      <ResolutionSelector value={resolution} onChange={setResolution} />
       <button
         onClick={handleGenerate}
         disabled={submitting || !imageUrl || !prompt.trim()}

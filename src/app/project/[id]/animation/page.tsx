@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, Film } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
+import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
 import { generateApi } from '@/lib/api';
 import type { Task } from '@/lib/types';
@@ -24,6 +25,8 @@ export default function AnimationPage() {
   const [action, setAction] = useState('walk');
   const [customAction, setCustomAction] = useState('');
   const [frameCount, setFrameCount] = useState(4);
+  const [ratio, setRatio] = useState('16:9');
+  const [resolution, setResolution] = useState('1280x720');
   const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<string[]>([]);
 
@@ -60,6 +63,8 @@ export default function AnimationPage() {
         action: finalAction,
         sub_tool: subTool,
         frame_count: frameCount,
+        ratio,
+        resolution,
       });
       // Task is now in queue, TaskQueuePanel will show progress
     } catch (err) {
@@ -133,6 +138,8 @@ export default function AnimationPage() {
           className="w-full accent-primary"
         />
       </div>
+      <RatioSelector value={ratio} onChange={setRatio} />
+      <ResolutionSelector value={resolution} onChange={setResolution} />
       <button
         onClick={handleGenerate}
         disabled={submitting || !imageUrl}
