@@ -4,6 +4,9 @@
  */
 
 import { getSystemPrompt, getDefaultModelConfig } from './store';
+import { removeGreenBackground, ensureUploadDir } from './image-processor';
+import path from 'path';
+import fs from 'fs';
 
 export interface GenerationResult {
   outputUrls: string[];
@@ -67,12 +70,75 @@ export async function executeGeneration(
     inputParams
   );
 
+  onProgress?.(80);
+
+  // Post-process: download images and remove green background
+  const processedUrls = await postProcessImages(outputUrls);
+
   onProgress?.(90);
 
   return {
-    outputUrls,
+    outputUrls: processedUrls,
     enhancedPrompt,
   };
+}
+
+/**
+ * Download generated images and remove green background
+ */
+async function postProcessImages(urls: string[]): Promise<string[]> {
+  ensureUploadDir();
+  const processed: string[] = [];
+
+  for (const url of urls) {
+    try {
+      // Download image to local if it's a remote URL
+      const localPath = await downloadImage(url);
+      // Remove green background
+      const transparentUrl = await removeGreenBackground(localPath);
+      processed.push(transparentUrl);
+    } catch (error) {
+      console.error('Post-processing failed for image:', url, error);
+      // Fall back to original URL if processing fails
+      processed.push(url);
+    }
+  }
+
+  return processed;
+}
+
+/**
+ * Download a remote image to local uploads directory
+ */
+async function downloadImage(url: string): Promise<string> {
+  const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+
+  // If already a local path, return as-is
+  if (url.startsWith('/uploads/')) {
+    return url;
+  }
+
+  // Handle base64 data URLs
+  if (url.startsWith('data:image/')) {
+    const base64Data = url.split(',')[1];
+    const buffer = Buffer.from(base64Data, 'base64');
+    const filename = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.png`;
+    const filePath = path.join(uploadDir, filename);
+    fs.writeFileSync(filePath, buffer);
+    return `/uploads/${filename}`;
+  }
+
+  // Download remote URL
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to download image: ${response.status}`);
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  const filename = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.png`;
+  const filePath = path.join(uploadDir, filename);
+  fs.writeFileSync(filePath, buffer);
+  return `/uploads/${filename}`;
 }
 
 /**

@@ -152,7 +152,6 @@ export const TOOL_KEY_MAP: Record<string, string> = {
   character_three_view: 'character_three_view',
   character_part_split: 'character_part_split',
   animation_text: 'animation_text',
-  animation_skeleton: 'animation_skeleton',
   animation_frame_extract: 'animation_frame_extract',
   prop_generate: 'prop_generate',
   prop_variant: 'prop_variant',

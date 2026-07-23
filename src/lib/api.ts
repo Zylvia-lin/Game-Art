@@ -99,8 +99,6 @@ export const generateApi = {
     generateApi.submit('character_part_split', data),
   animationText: (data: Record<string, unknown> & { project_id: number }) =>
     generateApi.submit('animation_text', data),
-  animationSkeleton: (data: Record<string, unknown> & { project_id: number }) =>
-    generateApi.submit('animation_skeleton', data),
   propGenerate: (data: Record<string, unknown> & { project_id: number }) =>
     generateApi.submit('prop_generate', data),
   propVariant: (data: Record<string, unknown> & { project_id: number }) =>
@@ -131,4 +129,18 @@ export const generateApi = {
     ),
   cancelTask: (taskId: number) =>
     request<Task>(`/api/generate/task/${taskId}/cancel`, { method: 'POST' }),
+};
+
+// 本地工具 API（不走 AI）
+export const toolsApi = {
+  extractFrames: (data: { image_url: string; rows: number; cols: number }) =>
+    request<{ frames: string[] }>('/api/tools/extract-frames', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  removeBackground: (data: { image_url: string }) =>
+    request<{ url: string }>('/api/tools/remove-bg', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
