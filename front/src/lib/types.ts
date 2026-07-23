@@ -108,55 +108,74 @@ export const ART_STYLES = [
   { value: 'chinese', label: '国风' },
 ] as const;
 
-// Seedream 5.0 Pro 支持的比例
+// Seedream 4.0/4.5 支持的宽高比
 export const RATIO_OPTIONS = [
-  { value: '1:1', label: '1:1', width: 1024, height: 1024 },
-  { value: '3:4', label: '3:4', width: 768, height: 1024 },
-  { value: '4:3', label: '4:3', width: 1024, height: 768 },
-  { value: '9:16', label: '9:16', width: 576, height: 1024 },
-  { value: '16:9', label: '16:9', width: 1024, height: 576 },
-  { value: '2:3', label: '2:3', width: 682, height: 1024 },
-  { value: '3:2', label: '3:2', width: 1024, height: 682 },
+  { value: '1:1', label: '1:1' },
+  { value: '4:3', label: '4:3' },
+  { value: '3:4', label: '3:4' },
+  { value: '16:9', label: '16:9' },
+  { value: '9:16', label: '9:16' },
+  { value: '3:2', label: '3:2' },
+  { value: '2:3', label: '2:3' },
+  { value: '21:9', label: '21:9' },
 ] as const;
 
-// Seedream 5.0 Pro 各比例下的分辨率档位
-export const RESOLUTION_MAP: Record<string, { value: string; label: string; desc: string }[]> = {
-  '1:1': [
-    { value: '1024x1024', label: '1K', desc: '1024×1024' },
-    { value: '960x960', label: '1K', desc: '960×960' },
-    { value: '1280x1280', label: '1.5K', desc: '1280×1280' },
-  ],
-  '3:4': [
-    { value: '768x1024', label: '1K', desc: '768×1024' },
-    { value: '864x1152', label: '1K', desc: '864×1152' },
-    { value: '960x1280', label: '1.2K', desc: '960×1280' },
-  ],
-  '4:3': [
-    { value: '1024x768', label: '1K', desc: '1024×768' },
-    { value: '1152x864', label: '1K', desc: '1152×864' },
-    { value: '1280x960', label: '1.2K', desc: '1280×960' },
-  ],
-  '9:16': [
-    { value: '576x1024', label: '1K', desc: '576×1024' },
-    { value: '648x1152', label: '1K', desc: '648×1152' },
-    { value: '720x1280', label: '1K', desc: '720×1280' },
-  ],
-  '16:9': [
-    { value: '1024x576', label: '1K', desc: '1024×576' },
-    { value: '1152x648', label: '1K', desc: '1152×648' },
-    { value: '1280x720', label: '1K', desc: '1280×720' },
-  ],
-  '2:3': [
-    { value: '682x1024', label: '1K', desc: '682×1024' },
-    { value: '768x1152', label: '1K', desc: '768×1152' },
-    { value: '852x1280', label: '1K', desc: '852×1280' },
-  ],
-  '3:2': [
-    { value: '1024x682', label: '1K', desc: '1024×682' },
-    { value: '1152x768', label: '1K', desc: '1152×768' },
-    { value: '1280x852', label: '1K', desc: '1280×852' },
-  ],
-};
+// 分辨率档位（总像素目标值）
+// API 约束: 总像素 [921600, 16777216], 宽高比 [1/16, 16]
+export const RESOLUTION_TIERS = [
+  { value: '720p', label: '720p', targetPixels: 921600 },
+  { value: '1080p', label: '1080p', targetPixels: 2073600 },
+  { value: '2K', label: '2K', targetPixels: 3686400 },
+  { value: '4K', label: '4K', targetPixels: 8294400 },
+] as const;
+
+const MIN_PIXELS = 921600;
+const MAX_PIXELS = 16777216;
+
+/**
+ * 根据宽高比和分辨率档位，计算实际的宽x高像素值。
+ * 使用 target_pixels / aspect_ratio 开方得到高度，再乘以比例得到宽度。
+ * 结果四舍五入到最近的 8 的倍数，并确保总像素在 API 允许范围内。
+ */
+export function computeSize(ratio: string, tier: string): string {
+  const tierConfig = RESOLUTION_TIERS.find((t) => t.value === tier);
+  const targetPixels = tierConfig?.targetPixels ?? 3686400;
+
+  const parts = ratio.split(':').map(Number);
+  if (parts.length !== 2 || parts[0] <= 0 || parts[1] <= 0) {
+    return '2048x2048';
+  }
+  const aspectRatio = parts[0] / parts[1];
+
+  let height = Math.round(Math.sqrt(targetPixels / aspectRatio));
+  let width = Math.round(height * aspectRatio);
+
+  // 四舍五入到最近的 8 的倍数
+  height = Math.round(height / 8) * 8;
+  width = Math.round(width / 8) * 8;
+
+  // 确保宽高比在 [1/16, 16] 范围内
+  const actualRatio = width / height;
+  if (actualRatio > 16) {
+    height = Math.round(width / 16 / 8) * 8;
+  } else if (actualRatio < 1 / 16) {
+    width = Math.round(height / 16 / 8) * 8;
+  }
+
+  // 确保总像素在 [MIN_PIXELS, MAX_PIXELS] 范围内
+  let totalPixels = width * height;
+  if (totalPixels < MIN_PIXELS) {
+    const scale = Math.sqrt(MIN_PIXELS / totalPixels);
+    height = Math.round((height * scale) / 8) * 8;
+    width = Math.round((height * aspectRatio) / 8) * 8;
+  } else if (totalPixels > MAX_PIXELS) {
+    const scale = Math.sqrt(MAX_PIXELS / totalPixels);
+    height = Math.round((height * scale) / 8) * 8;
+    width = Math.round((height * aspectRatio) / 8) * 8;
+  }
+
+  return `${width}x${height}`;
+}
 
 // 侧边栏 - 创作工具
 export const CREATION_ITEMS = [
@@ -208,15 +227,14 @@ export const TOOL_NAV_ITEMS = [
 // 兼容别名
 export const IMAGE_RATIOS = RATIO_OPTIONS;
 
-// 获取指定比例下的分辨率选项
-export function getResolutionOptions(ratio: string) {
-  return RESOLUTION_MAP[ratio] || RESOLUTION_MAP['1:1'];
+// 获取分辨率档位列表
+export function getResolutionOptions(_ratio: string) {
+  return RESOLUTION_TIERS;
 }
 
-// 获取指定比例下的默认分辨率
-export function getDefaultResolution(ratio: string) {
-  const options = getResolutionOptions(ratio);
-  return options[0]?.value || '1024x1024';
+// 获取默认分辨率档位
+export function getDefaultResolution(_ratio: string) {
+  return '2K';
 }
 
 // 工具名称映射

@@ -8,6 +8,7 @@ import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/t
 import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { projectsApi } from '@/lib/api';
+import { computeSize } from '@/lib/types';
 
 export default function TextToImagePage() {
   const params = useParams();
@@ -15,7 +16,7 @@ export default function TextToImagePage() {
   const [prompt, setPrompt] = useState('');
   const [style, setStyle] = useState('pixel');
   const [ratio, setRatio] = useState('1:1');
-  const [resolution, setResolution] = useState('1024x1024');
+  const [resolution, setResolution] = useState('2K');
   const [error, setError] = useState<string | null>(null);
   const { submitting, submitTask } = useTaskQueue({ projectId });
 
@@ -44,7 +45,7 @@ export default function TextToImagePage() {
         prompt,
         style,
         ratio,
-        resolution,
+        resolution: computeSize(ratio, resolution),
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : '生成失败，请重试');

@@ -11,6 +11,7 @@ import { resolveImageUrl } from '@/lib/api';
 import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { generateApi } from '@/lib/api';
+import { computeSize } from '@/lib/types';
 
 export default function InpaintPage() {
   const params = useParams();
@@ -21,7 +22,7 @@ export default function InpaintPage() {
   const [prompt, setPrompt] = useState('');
   const [brushSize, setBrushSize] = useState(20);
   const [ratio, setRatio] = useState('1:1');
-  const [resolution, setResolution] = useState('1024x1024');
+  const [resolution, setResolution] = useState('2K');
   const [results, setResults] = useState<string[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
   const [history, setHistory] = useState<ImageData[]>([]);
@@ -175,7 +176,7 @@ export default function InpaintPage() {
         mask_url: maskUrl,
         prompt,
         ratio,
-        resolution,
+        resolution: computeSize(ratio, resolution),
       });
     } catch (err) {
       console.error('Inpaint failed:', err);

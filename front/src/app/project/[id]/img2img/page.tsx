@@ -11,6 +11,7 @@ import { resolveImageUrl } from '@/lib/api';
 import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
 import { projectsApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
+import { computeSize } from '@/lib/types';
 import type { Task } from '@/lib/types';
 
 export default function ImageToImagePage() {
@@ -20,7 +21,7 @@ export default function ImageToImagePage() {
   const [prompt, setPrompt] = useState('');
   const [strength, setStrength] = useState(0.7);
   const [ratio, setRatio] = useState('1:1');
-  const [resolution, setResolution] = useState('1024x1024');
+  const [resolution, setResolution] = useState('2K');
   const [results, setResults] = useState<string[]>([]);
 
   // Load project style (for potential future use in img2img prompts)
@@ -56,7 +57,7 @@ export default function ImageToImagePage() {
         image_url: imageUrl,
         prompt,
         ratio,
-        resolution,
+        resolution: computeSize(ratio, resolution),
         strength,
       });
     } catch (err) {
