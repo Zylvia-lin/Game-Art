@@ -26,8 +26,15 @@ export function useTaskQueue({ projectId, onTaskComplete, onTaskError }: UseTask
   const [isLoading, setIsLoading] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Initial load: fetch existing tasks for this project
+  useEffect(() => {
+    if (!projectId || isNaN(projectId)) return;
+    generateApi.getProjectTasks(projectId).then(setTasks).catch(() => {});
+  }, [projectId]);
+
   // Poll for task status updates
   useEffect(() => {
+    if (!projectId || isNaN(projectId)) return;
     const pollTaskStatus = async () => {
       const activeTasks = tasks.filter(t => t.status === 'pending' || t.status === 'processing');
       if (activeTasks.length === 0) {
@@ -81,6 +88,9 @@ export function useTaskQueue({ projectId, onTaskComplete, onTaskError }: UseTask
   }, [tasks, projectId, onTaskComplete, onTaskError]);
 
   const submitTask = useCallback(async (toolKey: string, params: Record<string, unknown>): Promise<Task> => {
+    if (!projectId || isNaN(projectId)) {
+      throw new Error('Invalid project ID');
+    }
     setIsLoading(true);
     try {
       const result = await generateApi.submit(toolKey, { project_id: projectId, ...params });
