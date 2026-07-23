@@ -59,3 +59,4 @@ front/public/uploads/
 *.swp
 *.swo
 .pnpm-store
+.VSCodeCounter
