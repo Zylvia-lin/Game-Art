@@ -143,7 +143,7 @@ export default function ScenePage() {
       </div>
       <PromptEditor toolKey={toolKeyMap[subTool]} toolName={subTool === 'map_generate' ? '地图生成' : '地图拆分'} />
       <RatioSelector value={ratio} onChange={setRatio} />
-      <ResolutionSelector value={resolution} onChange={setResolution} />
+      <ResolutionSelector ratio={ratio} value={resolution} onChange={setResolution} />
       <button
         onClick={handleGenerate}
         disabled={submitting || (subTool === 'map_generate' ? !prompt.trim() : !sourceImage)}

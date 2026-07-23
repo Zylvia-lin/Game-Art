@@ -116,12 +116,63 @@ export const IMAGE_RATIOS = [
   { value: '3:4', label: '3:4', width: 1024, height: 1365 },
 ] as const;
 
-export const RESOLUTIONS = [
-  { value: '512x512', label: '512 x 512' },
-  { value: '1024x1024', label: '1024 x 1024' },
-  { value: '1920x1080', label: '1920 x 1080' },
-  { value: '2048x2048', label: '2048 x 2048' },
-] as const;
+export interface ResolutionOption {
+  value: string;
+  label: string;
+  width: number;
+  height: number;
+  quality: 'low' | 'medium' | 'high' | 'ultra';
+}
+
+export const RESOLUTION_MAP: Record<string, ResolutionOption[]> = {
+  '1:1': [
+    { value: '512x512', label: '512 × 512', width: 512, height: 512, quality: 'low' },
+    { value: '768x768', label: '768 × 768', width: 768, height: 768, quality: 'medium' },
+    { value: '1024x1024', label: '1024 × 1024', width: 1024, height: 1024, quality: 'high' },
+    { value: '1536x1536', label: '1536 × 1536', width: 1536, height: 1536, quality: 'high' },
+    { value: '2048x2048', label: '2048 × 2048', width: 2048, height: 2048, quality: 'ultra' },
+  ],
+  '16:9': [
+    { value: '640x360', label: '640 × 360', width: 640, height: 360, quality: 'low' },
+    { value: '854x480', label: '854 × 480', width: 854, height: 480, quality: 'low' },
+    { value: '1280x720', label: '1280 × 720 (HD)', width: 1280, height: 720, quality: 'medium' },
+    { value: '1920x1080', label: '1920 × 1080 (FHD)', width: 1920, height: 1080, quality: 'high' },
+    { value: '2560x1440', label: '2560 × 1440 (2K)', width: 2560, height: 1440, quality: 'ultra' },
+  ],
+  '9:16': [
+    { value: '360x640', label: '360 × 640', width: 360, height: 640, quality: 'low' },
+    { value: '480x854', label: '480 × 854', width: 480, height: 854, quality: 'low' },
+    { value: '720x1280', label: '720 × 1280 (HD)', width: 720, height: 1280, quality: 'medium' },
+    { value: '1080x1920', label: '1080 × 1920 (FHD)', width: 1080, height: 1920, quality: 'high' },
+    { value: '1440x2560', label: '1440 × 2560 (2K)', width: 1440, height: 2560, quality: 'ultra' },
+  ],
+  '4:3': [
+    { value: '640x480', label: '640 × 480', width: 640, height: 480, quality: 'low' },
+    { value: '960x720', label: '960 × 720', width: 960, height: 720, quality: 'low' },
+    { value: '1024x768', label: '1024 × 768', width: 1024, height: 768, quality: 'medium' },
+    { value: '1365x1024', label: '1365 × 1024', width: 1365, height: 1024, quality: 'high' },
+    { value: '2048x1536', label: '2048 × 1536', width: 2048, height: 1536, quality: 'ultra' },
+  ],
+  '3:4': [
+    { value: '480x640', label: '480 × 640', width: 480, height: 640, quality: 'low' },
+    { value: '720x960', label: '720 × 960', width: 720, height: 960, quality: 'low' },
+    { value: '768x1024', label: '768 × 1024', width: 768, height: 1024, quality: 'medium' },
+    { value: '1024x1365', label: '1024 × 1365', width: 1024, height: 1365, quality: 'high' },
+    { value: '1536x2048', label: '1536 × 2048', width: 1536, height: 2048, quality: 'ultra' },
+  ],
+};
+
+export function getDefaultResolution(ratio: string): string {
+  const options = RESOLUTION_MAP[ratio];
+  if (!options || options.length === 0) return '1024x1024';
+  // Default to medium quality, or middle option
+  const medium = options.find(o => o.quality === 'medium');
+  return medium ? medium.value : options[Math.floor(options.length / 2)].value;
+}
+
+export function getResolutionOptions(ratio: string): ResolutionOption[] {
+  return RESOLUTION_MAP[ratio] || RESOLUTION_MAP['1:1'];
+}
 
 export const TOOLBOX_ITEMS = [
   { key: 'text2img', label: '文生图', href: '/text2img', icon: 'Image' },

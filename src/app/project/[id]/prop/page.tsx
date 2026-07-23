@@ -134,7 +134,7 @@ export default function PropPage() {
         </div>
       )}
       <RatioSelector value={ratio} onChange={setRatio} />
-      <ResolutionSelector value={resolution} onChange={setResolution} />
+      <ResolutionSelector ratio={ratio} value={resolution} onChange={setResolution} />
       <button
         onClick={handleGenerate}
         disabled={submitting || (subTool === 'generate' ? !prompt.trim() : !sourceImage)}

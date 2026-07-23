@@ -203,7 +203,7 @@ export default function AnimationPage() {
 
           <PromptEditor toolKey={toolKeyMap.text} toolName="动作生成" />
           <RatioSelector value={ratio} onChange={setRatio} />
-          <ResolutionSelector value={resolution} onChange={setResolution} />
+          <ResolutionSelector ratio={ratio} value={resolution} onChange={setResolution} />
         </>
       )}
 

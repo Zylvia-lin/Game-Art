@@ -234,7 +234,7 @@ export default function InpaintPage() {
         />
       </div>
       <RatioSelector value={ratio} onChange={setRatio} />
-      <ResolutionSelector value={resolution} onChange={setResolution} />
+      <ResolutionSelector ratio={ratio} value={resolution} onChange={setResolution} />
       <button
         onClick={handleGenerate}
         disabled={submitting || !imageUrl || !prompt.trim()}

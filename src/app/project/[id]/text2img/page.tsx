@@ -56,7 +56,7 @@ export default function TextToImagePage() {
       </div>
       <StyleSelector value={style} onChange={setStyle} />
       <RatioSelector value={ratio} onChange={setRatio} />
-      <ResolutionSelector value={resolution} onChange={setResolution} />
+      <ResolutionSelector ratio={ratio} value={resolution} onChange={setResolution} />
       {error && (
         <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
           {error}

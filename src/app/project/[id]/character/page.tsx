@@ -158,7 +158,7 @@ export default function CharacterPage() {
         </div>
       )}
       <RatioSelector value={ratio} onChange={setRatio} />
-      <ResolutionSelector value={resolution} onChange={setResolution} />
+      <ResolutionSelector ratio={ratio} value={resolution} onChange={setResolution} />
       <button
         onClick={handleGenerate}
         disabled={submitting || (subTool === 'directions' || subTool === 'part_split' ? !sourceImage : !prompt.trim())}
