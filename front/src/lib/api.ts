@@ -76,23 +76,23 @@ export const projectsApi = {
   create: (data: { name: string; description?: string; style?: string }) =>
     request<Project>('/api/projects', { method: 'POST', body: JSON.stringify(data) }),
   get: (id: number) => {
-    if (!id || isNaN(id)) throw new Error('Invalid project ID');
+    if (id === undefined || id === null || isNaN(id)) throw new Error('Invalid project ID');
     return request<Project>(`/api/projects/${id}`);
   },
   update: (id: number, data: Partial<Project>) => {
-    if (!id || isNaN(id)) throw new Error('Invalid project ID');
+    if (id === undefined || id === null || isNaN(id)) throw new Error('Invalid project ID');
     return request<Project>(`/api/projects/${id}`, { method: 'PUT', body: JSON.stringify(data) });
   },
   delete: (id: number) => {
-    if (!id || isNaN(id)) throw new Error('Invalid project ID');
+    if (id === undefined || id === null || isNaN(id)) throw new Error('Invalid project ID');
     return request<{ message: string }>(`/api/projects/${id}`, { method: 'DELETE' });
   },
   generations: (id: number) => {
-    if (!id || isNaN(id)) throw new Error('Invalid project ID');
+    if (id === undefined || id === null || isNaN(id)) throw new Error('Invalid project ID');
     return request<Generation[]>(`/api/projects/${id}/generations`);
   },
   assets: (id: number, type?: string) => {
-    if (!id || isNaN(id)) throw new Error('Invalid project ID');
+    if (id === undefined || id === null || isNaN(id)) throw new Error('Invalid project ID');
     return request<Asset[]>(`/api/projects/${id}/assets${type ? `?asset_type=${type}` : ''}`);
   },
   createAsset: (data: { project_id: number; name: string; type: string; url: string; description?: string }) =>
