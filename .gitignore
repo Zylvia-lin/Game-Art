@@ -46,7 +46,6 @@ __pycache__/
 *.so
 .Python
 backend/.venv/
-backend/uv.lock
 
 # Backend env
 backend/.env
