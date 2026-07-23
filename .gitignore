@@ -60,3 +60,6 @@ front/public/uploads/
 *.swo
 .pnpm-store
 .VSCodeCounter
+
+# Preview files
+.preview

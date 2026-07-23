@@ -89,7 +89,16 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
     let message = `Request failed: ${res.status}`;
     try {
       const body = await res.json();
-      message = body.detail || body.error || message;
+      const detail = body.detail || body.error;
+      if (typeof detail === 'string') {
+        message = detail;
+      } else if (Array.isArray(detail)) {
+        message = detail.map((e: { msg?: string; message?: string }) => e.msg || e.message || JSON.stringify(e)).join('; ');
+      } else if (detail && typeof detail === 'object') {
+        message = detail.message || detail.msg || JSON.stringify(detail);
+      } else if (detail) {
+        message = String(detail);
+      }
     } catch {}
     throw new Error(message);
   }
