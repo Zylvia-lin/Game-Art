@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback, DragEvent } from 'react';
 import { useParams } from 'next/navigation';
 import { FolderOpen, Trash2, Download, Filter, Check, CheckSquare, Square, Upload, X } from 'lucide-react';
-import { projectsApi, assetsApi, generateApi } from '@/lib/api';
+import { projectsApi, assetsApi, generateApi, resolveImageUrl } from '@/lib/api';
 import type { Asset } from '@/lib/types';
 
 const ASSET_TYPES = [
@@ -344,7 +344,7 @@ export default function AssetsPage() {
                 )}
 
                 <div className="aspect-square">
-                  <img src={asset.url} alt={asset.name} className="h-full w-full object-contain p-2" />
+                  <img src={resolveImageUrl(asset.url)} alt={asset.name} className="h-full w-full object-contain p-2" />
                 </div>
                 <div className="border-t border-border p-2">
                   <p className="truncate text-xs font-medium text-foreground">{asset.name}</p>

@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, DragEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { ProjectAssetSelector } from './project-asset-selector';
-import { generateApi } from '@/lib/api';
+import { generateApi, resolveImageUrl } from '@/lib/api';
 import type { Asset } from '@/lib/types';
 import { Upload, X, FolderOpen, Loader2 } from 'lucide-react';
 
@@ -69,7 +69,7 @@ export function ImageSourceSelector({ projectId, imageUrl, onImageChange, label 
       <label className="text-sm font-medium text-zinc-400">{label}</label>
       {imageUrl ? (
         <div className="relative group rounded-lg overflow-hidden border border-[#27272a]">
-          <img src={imageUrl} alt="Source" className="w-full h-40 object-contain bg-[#0a0a0f]" />
+          <img src={resolveImageUrl(imageUrl)} alt="Source" className="w-full h-40 object-contain bg-[#0a0a0f]" />
           <button
             onClick={() => onImageChange(null)}
             className="absolute top-2 right-2 p-1.5 rounded-md bg-black/60 text-zinc-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"

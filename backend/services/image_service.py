@@ -1,94 +1,77 @@
+"""
+Image generation service.
+Calls image generation APIs (Seedream, DALL-E, etc.) to generate images.
+"""
 import httpx
-from typing import Optional
-from models.model_config import ModelConfig
+import base64
 
 
-async def _call_image_api(model: ModelConfig, payload: dict) -> list[str]:
-    url = model.api_base_url.rstrip("/")
-    if "/images" not in url:
-        url = url + "/images/generations"
-
-    headers = {
-        "Authorization": f"Bearer {model.api_key}",
-        "Content-Type": "application/json"
-    }
-
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        response = await client.post(url, json=payload, headers=headers)
-        response.raise_for_status()
-        data = response.json()
-
-    urls = []
-    for item in data.get("data", []):
-        if "url" in item:
-            urls.append(item["url"])
-        elif "b64_json" in item:
-            import base64
-            urls.append(f"data:image/png;base64,{item['b64_json']}")
-    return urls
+def resolve_size(input_params: dict) -> str:
+    """Resolve size string from input params. Expects WxH format."""
+    resolution = input_params.get("resolution", "1024x1024")
+    parts = str(resolution).split("x")
+    if len(parts) == 2:
+        try:
+            w, h = int(parts[0]), int(parts[1])
+            if w > 0 and h > 0:
+                return f"{w}x{h}"
+        except ValueError:
+            pass
+    return "1024x1024"
 
 
 async def generate_image(
     prompt: str,
-    style: Optional[str] = None,
-    ratio: Optional[str] = "1:1",
-    resolution: Optional[str] = "1024x1024",
-    model: ModelConfig = None
+    model: dict,
+    input_params: dict,
 ) -> list[str]:
-    if model is None:
-        raise ValueError("No image model configured")
+    """
+    Generate image using the configured image model.
+    Supports text-to-image, image-to-image (image_url), and inpainting (mask_url).
+    Returns list of image URLs or base64 data URLs.
+    """
+    size = resolve_size(input_params)
 
-    width, height = 1024, 1024
-    if resolution and "x" in resolution:
-        parts = resolution.split("x")
-        width, height = int(parts[0]), int(parts[1])
-
-    payload = {
-        "model": model.model_name,
+    body = {
+        "model": model["model_name"],
         "prompt": prompt,
-        "size": f"{width}x{height}",
-        "n": 1
+        "size": size,
+        "n": 1,
     }
 
-    if style:
-        payload["prompt"] = f"{prompt}, {style} style"
+    # Add reference image for img2img / inpaint
+    image_url = input_params.get("image_url")
+    mask_url = input_params.get("mask_url")
+    if image_url:
+        body["image"] = image_url
+    if mask_url:
+        body["mask"] = mask_url
 
-    return await _call_image_api(model, payload)
-
-
-async def edit_image(
-    image_url: str,
-    prompt: str,
-    strength: float = 0.7,
-    model: ModelConfig = None
-) -> list[str]:
-    if model is None:
-        raise ValueError("No image model configured")
-
-    payload = {
-        "model": model.model_name,
-        "prompt": prompt,
-        "image": image_url,
-        "strength": strength,
-        "n": 1
+    url = model["api_base_url"].rstrip("/")
+    headers = {
+        "Authorization": f"Bearer {model['api_key']}",
+        "Content-Type": "application/json",
     }
-    return await _call_image_api(model, payload)
 
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        response = await client.post(url, json=body, headers=headers)
+        if response.status_code != 200:
+            error_text = response.text
+            raise Exception(f"Image API error: {response.status_code} - {error_text}")
 
-async def inpaint_image(
-    image_url: str,
-    mask_url: str,
-    prompt: str,
-    model: ModelConfig = None
-) -> list[str]:
-    if model is None:
-        raise ValueError("No image model configured")
+        data = response.json()
 
-    payload = {
-        "model": model.model_name,
-        "prompt": prompt,
-        "image": image_url,
-        "mask": mask_url,
-        "n": 1
-    }
-    return await _call_image_api(model, payload)
+    # Extract image URLs from response
+    images = data.get("images") or data.get("data") or []
+    urls = []
+    for img in images:
+        if isinstance(img, dict):
+            if img.get("url"):
+                urls.append(img["url"])
+            elif img.get("b64_json"):
+                urls.append(f"data:image/png;base64,{img['b64_json']}")
+
+    if not urls:
+        raise Exception("No images returned from API")
+
+    return urls

@@ -8,7 +8,26 @@ import type {
   Task,
 } from './types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || '';
+/**
+ * Python FastAPI backend URL.
+ * Set NEXT_PUBLIC_API_URL in .env.local, e.g. http://localhost:8000
+ */
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+/**
+ * Resolve image URLs. Backend returns /uploads/xxx.png paths,
+ * which need to be prefixed with the backend URL for display.
+ */
+export function resolveImageUrl(path: string): string {
+  if (!path) return '';
+  if (path.startsWith('/uploads/')) {
+    return `${API_BASE}${path}`;
+  }
+  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) {
+    return path;
+  }
+  return path;
+}
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -75,14 +94,12 @@ export const assetsApi = {
 };
 
 // Generate — submit tasks to the queue
-// toolKey uses underscores matching TOOL_KEY_MAP values (e.g. text_to_image)
 export const generateApi = {
   submit: (toolKey: string, data: Record<string, unknown> & { project_id: number }) =>
     request<GenerateResponse>(`/api/generate/${toolKey}`, {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  // Convenience methods matching tool keys
   textToImage: (data: Record<string, unknown> & { project_id: number }) =>
     generateApi.submit('text_to_image', data),
   imageToImage: (data: Record<string, unknown> & { project_id: number }) =>
@@ -107,6 +124,7 @@ export const generateApi = {
     generateApi.submit('ui_layout_generate', data),
   sceneMapGenerate: (data: Record<string, unknown> & { project_id: number }) =>
     generateApi.submit('scene_map_generate', data),
+
   // File upload
   upload: async (file: File): Promise<{ url: string }> => {
     const formData = new FormData();
@@ -118,6 +136,7 @@ export const generateApi = {
     if (!res.ok) throw new Error('Upload failed');
     return res.json();
   },
+
   // Task management
   getTask: (taskId: number) =>
     request<Task>(`/api/generate/task?task_id=${taskId}`),

@@ -7,6 +7,7 @@ import { ToolLayout } from '@/components/tools/tool-layout';
 import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { GenerationResultActions } from '@/components/tools/generation-result-actions';
+import { resolveImageUrl } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
 import { projectsApi } from '@/lib/api';
@@ -151,7 +152,7 @@ export default function PropPage() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {results.map((url, i) => (
             <div key={i} className="overflow-hidden rounded-xl border border-border bg-card">
-              <img src={url} alt={`Prop ${i + 1}`} className="w-full object-contain" />
+              <img src={resolveImageUrl(url)} alt={`Prop ${i + 1}`} className="w-full object-contain" />
               <div className="p-3 border-t border-border">
                 <GenerationResultActions imageUrl={url} projectId={String(projectId)} showAddToLibrary />
               </div>

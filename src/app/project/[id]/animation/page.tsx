@@ -7,6 +7,7 @@ import { ToolLayout } from '@/components/tools/tool-layout';
 import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { useTaskQueue } from '@/hooks/use-task-queue';
+import { resolveImageUrl } from '@/lib/api';
 import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
 import { PromptEditor } from '@/components/tools/prompt-editor';
 import type { Task } from '@/lib/types';
@@ -303,7 +304,7 @@ export default function AnimationPage() {
           <div key={i} className="group relative">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={frame.url}
+              src={resolveImageUrl(frame.url)}
               alt={`Frame ${i}`}
               className="h-full w-full rounded-lg border border-border object-cover"
             />

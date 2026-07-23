@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Image as ImageIcon, X, Search, FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { projectsApi } from '@/lib/api';
+import { projectsApi, resolveImageUrl } from '@/lib/api';
 import type { Asset } from '@/lib/types';
 
 interface ProjectAssetSelectorProps {
@@ -91,7 +91,7 @@ export function ProjectAssetSelector({ projectId, onSelect, onClose, filterType 
                   className="group relative aspect-square rounded-lg overflow-hidden border border-[#27272a] hover:border-indigo-500/50 transition-all"
                 >
                   <img
-                    src={asset.url}
+                    src={resolveImageUrl(asset.url)}
                     alt={asset.name}
                     className="w-full h-full object-cover"
                   />

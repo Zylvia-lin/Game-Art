@@ -7,6 +7,7 @@ import { ToolLayout } from '@/components/tools/tool-layout';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { GenerationResultActions } from '@/components/tools/generation-result-actions';
+import { resolveImageUrl } from '@/lib/api';
 import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
 import { projectsApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
@@ -107,7 +108,7 @@ export default function ImageToImagePage() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {results.map((url, i) => (
             <div key={i} className="group relative overflow-hidden rounded-xl border border-border bg-card">
-              <img src={url} alt={`Result ${i + 1}`} className="w-full object-contain" />
+              <img src={resolveImageUrl(url)} alt={`Result ${i + 1}`} className="w-full object-contain" />
               <div className="p-3 border-t border-border">
                 <GenerationResultActions projectId={String(projectId)} imageUrl={url} showAddToLibrary />
               </div>

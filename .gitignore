@@ -33,6 +33,12 @@ storybook-static
 .mypy_cache/
 .ruff_cache/
 .tox/
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+# Uploads
+public/uploads/
+backend/uploads/
 
 # Go tooling
 bin/

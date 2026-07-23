@@ -8,6 +8,7 @@ import { ToolLayout } from '@/components/tools/tool-layout';
 import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { GenerationResultActions } from '@/components/tools/generation-result-actions';
+import { resolveImageUrl } from '@/lib/api';
 import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
 import { projectsApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
@@ -223,7 +224,7 @@ export default function CharacterPage() {
         <div className="space-y-4">
           {results.map((url, i) => (
             <div key={i} className="overflow-hidden rounded-xl border border-border bg-card">
-              <img src={url} alt={`Character ${i + 1}`} className="w-full object-contain" />
+              <img src={resolveImageUrl(url)} alt={`Character ${i + 1}`} className="w-full object-contain" />
               <GenerationResultActions imageUrl={url} projectId={String(projectId)} />
             </div>
           ))}
