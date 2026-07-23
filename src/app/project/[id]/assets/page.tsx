@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback, DragEvent } from 'react';
 import { useParams } from 'next/navigation';
 import { FolderOpen, Trash2, Download, Filter, Check, CheckSquare, Square, Upload, X } from 'lucide-react';
 import { projectsApi, assetsApi, generateApi } from '@/lib/api';
@@ -42,6 +42,9 @@ export default function AssetsPage() {
   const [uploadDescription, setUploadDescription] = useState('');
   const [uploadCategory, setUploadCategory] = useState<string>('character');
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [uploadDragging, setUploadDragging] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchAssets = async () => {
@@ -142,9 +145,7 @@ export default function AssetsPage() {
 
   const finalizedCount = assets.filter(a => a.finalized).length;
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleFile = (file: File) => {
     if (!file.type.startsWith('image/')) {
       alert('请选择图片文件');
       return;
@@ -158,6 +159,18 @@ export default function AssetsPage() {
     if (!uploadName) {
       setUploadName(file.name.replace(/\.[^.]+$/, ''));
     }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFile(file);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFile(file);
   };
 
   const handleUpload = async () => {
@@ -407,9 +420,31 @@ export default function AssetsPage() {
                   </button>
                 </div>
               ) : (
-                <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-[#0a0a0f]/50 px-4 py-10 transition-colors hover:border-primary/50">
+                <label
+                  className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-10 transition-colors ${
+                    uploadDragging ? 'border-primary bg-primary/10' : 'border-border bg-[#0a0a0f]/50 hover:border-primary/50'
+                  }`}
+                  onDragOver={(e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setUploadDragging(true); }}
+                  onDragEnter={(e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setUploadDragging(true); }}
+                  onDragLeave={(e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setUploadDragging(false); }}
+                  onDrop={(e: React.DragEvent) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setUploadDragging(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (file && file.type.startsWith('image/')) {
+                      if (file.size > 10 * 1024 * 1024) { setUploadError('文件大小超过 10MB 限制'); return; }
+                      setUploadError('');
+                      setUploadFile(file);
+                      if (!uploadName.trim()) setUploadName(file.name.replace(/\.[^.]+$/, ''));
+                      const reader = new FileReader();
+                      reader.onload = (ev) => setUploadPreview(ev.target?.result as string);
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                >
                   <Upload className="h-8 w-8 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">点击选择图片</span>
+                  <span className="text-sm text-muted-foreground">{uploadDragging ? '松开以上传' : '点击选择或拖拽图片到此处'}</span>
                   <span className="text-xs text-muted-foreground/60">支持 JPG、PNG、WebP，最大 10MB</span>
                   <input
                     ref={fileInputRef}
