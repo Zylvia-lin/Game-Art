@@ -158,6 +158,23 @@ export const RESOLUTION_MAP: Record<string, { value: string; label: string; desc
   ],
 };
 
+// 侧边栏 - 创作工具
+export const CREATION_ITEMS = [
+  { key: 'text2img', label: '文生图', href: '/text2img', icon: 'Image' },
+  { key: 'img2img', label: '图生图', href: '/img2img', icon: 'ImagePlus' },
+  { key: 'inpaint', label: '局部重绘', href: '/inpaint', icon: 'Paintbrush' },
+  { key: 'character', label: '角色生成', href: '/character', icon: 'User' },
+  { key: 'animation', label: '动画生成', href: '/animation', icon: 'Film' },
+  { key: 'prop', label: '道具生成', href: '/prop', icon: 'Sword' },
+  { key: 'ui', label: 'UI生成', href: '/ui', icon: 'Layout' },
+  { key: 'scene', label: '场景生成', href: '/scene', icon: 'Map' },
+] as const;
+
+// 侧边栏 - 工具箱
+export const TOOLBOX_ITEMS = [
+  { key: 'animation', label: '帧提取', href: '/animation', icon: 'Film' },
+] as const;
+
 // 工具页面 key 映射
 export const TOOL_KEY_MAP: Record<string, string> = {
   text2img: 'text2img',
