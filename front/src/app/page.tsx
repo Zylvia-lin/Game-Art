@@ -43,11 +43,11 @@ export default function HomePage() {
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('确定要删除此项目吗？所有相关资产将被清除。')) return;
     try {
-      await projectsApi.delete(Number(id));
-      setProjects(projects.filter((p) => p.id !== Number(id)));
+      await projectsApi.delete(id);
+      setProjects(projects.filter((p) => p.id !== id));
     } catch (err) {
       console.error('Failed to delete project:', err);
       alert('删除项目失败：' + (err instanceof Error ? err.message : String(err)));

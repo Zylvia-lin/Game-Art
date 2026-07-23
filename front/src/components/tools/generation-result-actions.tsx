@@ -51,11 +51,11 @@ export function GenerationResultActions({
   };
 
   const handleAddToLibrary = async () => {
-    if (!projectId || isNaN(Number(projectId))) return;
+    if (!projectId) return;
     setAddingToLibrary(true);
     try {
       const asset = await assetsApi.create({
-        project_id: Number(projectId),
+        project_id: projectId,
         name: `生成图片 ${new Date().toLocaleString()}`,
         type: imageType === 'general' ? 'prop' : imageType,
         url: imageUrl,

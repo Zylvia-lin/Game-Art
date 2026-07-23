@@ -27,7 +27,7 @@ const UPLOAD_CATEGORIES = [
 
 export default function AssetsPage() {
   const params = useParams();
-  const projectId = Number(params.id);
+  const projectId = params.id;
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
@@ -48,7 +48,7 @@ export default function AssetsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Wait for params to load
-  if (!params.id || isNaN(projectId)) {
+  if (!params.id) {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -69,7 +69,7 @@ export default function AssetsPage() {
   };
 
   useEffect(() => {
-    if (!projectId || isNaN(projectId)) return;
+    if (!projectId) return;
     fetchAssets();
   }, [projectId, filter]);
 

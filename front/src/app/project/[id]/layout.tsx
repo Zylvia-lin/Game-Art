@@ -14,8 +14,8 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
   const [project, setProject] = useState<Project | null>(null);
 
   useEffect(() => {
-    if (projectId && !isNaN(Number(projectId))) {
-      projectsApi.get(Number(projectId)).then(setProject).catch(() => {});
+    if (projectId) {
+      projectsApi.get(projectId).then(setProject).catch(() => {});
     }
   }, [projectId]);
 

@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/generate", tags=["generate"])
 
 
 class GenerateRequest(BaseModel):
-    project_id: int
+    project_id: str
     prompt: Optional[str] = None
     style: Optional[str] = None
     ratio: Optional[str] = None
@@ -84,8 +84,8 @@ async def submit_generation(tool_key: str, data: GenerateRequest):
 
 @router.get("/task")
 async def get_task_info(
-    task_id: Optional[int] = Query(None),
-    project_id: Optional[int] = Query(None),
+    task_id: Optional[str] = Query(None),
+    project_id: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     stats: Optional[bool] = Query(None),
 ):
@@ -106,7 +106,7 @@ async def get_task_info(
 
 
 @router.post("/task/{task_id}/cancel")
-async def cancel_generation_task(task_id: int):
+async def cancel_generation_task(task_id: str):
     """Cancel a pending or processing task."""
     task = await cancel_task(task_id)
     if not task:

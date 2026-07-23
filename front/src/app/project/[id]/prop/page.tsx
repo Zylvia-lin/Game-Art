@@ -15,7 +15,7 @@ import type { Project, Task } from '@/lib/types';
 
 export default function PropPage() {
   const params = useParams();
-  const projectId = Number(params.id);
+  const projectId = params.id;
   const [subTool, setSubTool] = useState<string>('generate');
   const [prompt, setPrompt] = useState('');
   const [style, setStyle] = useState('pixel');
@@ -27,7 +27,7 @@ export default function PropPage() {
   const [project, setProject] = useState<Project | null>(null);
 
   useEffect(() => {
-    if (!projectId || isNaN(projectId)) return;
+    if (!projectId) return;
     projectsApi.get(projectId).then(setProject).catch(() => {});
   }, [projectId]);
 
@@ -36,7 +36,7 @@ export default function PropPage() {
   }, [project]);
 
   // Wait for params to load
-  if (!params.id || isNaN(projectId)) {
+  if (!params.id) {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />

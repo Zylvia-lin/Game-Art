@@ -11,7 +11,7 @@ router = APIRouter(prefix="/api/assets", tags=["assets"])
 
 
 class AssetCreate(BaseModel):
-    project_id: int
+    project_id: str
     name: str
     type: str
     url: str

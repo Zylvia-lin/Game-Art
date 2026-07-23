@@ -39,7 +39,7 @@ interface ExtractedFrame {
 
 export default function AnimationPage() {
   const { id } = useParams();
-  const projectId = Number(id);
+  const projectId = id;
   const [subTool, setSubTool] = useState('text');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
@@ -59,7 +59,7 @@ export default function AnimationPage() {
   const { submitting, submitTask } = useTaskQueue({ projectId, onTaskComplete: handleTaskComplete });
 
   // Wait for params to load
-  if (!id || isNaN(projectId)) {
+  if (!id) {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />

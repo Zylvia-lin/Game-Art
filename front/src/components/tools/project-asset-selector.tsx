@@ -24,10 +24,10 @@ export function ProjectAssetSelector({ projectId, onSelect, onClose, filterType 
   }, [projectId]);
 
   const loadAssets = async () => {
-    if (!projectId || isNaN(Number(projectId))) return;
+    if (!projectId) return;
     try {
       setLoading(true);
-      const data = await projectsApi.assets(Number(projectId));
+      const data = await projectsApi.assets(projectId);
       setAssets(data);
     } catch (error) {
       console.error('Failed to load assets:', error);

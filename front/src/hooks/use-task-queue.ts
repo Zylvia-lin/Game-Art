@@ -3,7 +3,7 @@ import { generateApi } from '@/lib/api';
 import type { Task, TaskStatus } from '@/lib/types';
 
 interface UseTaskQueueOptions {
-  projectId: number;
+  projectId: string;
   onTaskComplete?: (task: Task) => void;
   onTaskError?: (task: Task) => void;
 }
@@ -15,7 +15,7 @@ interface UseTaskQueueReturn {
   completedTasks: Task[];
   failedTasks: Task[];
   submitTask: (toolKey: string, params: Record<string, unknown>) => Promise<Task>;
-  cancelTask: (taskId: number) => Promise<void>;
+  cancelTask: (taskId: string) => Promise<void>;
   clearCompleted: () => void;
   isLoading: boolean;
   submitting: boolean;
@@ -28,13 +28,13 @@ export function useTaskQueue({ projectId, onTaskComplete, onTaskError }: UseTask
 
   // Initial load: fetch existing tasks for this project
   useEffect(() => {
-    if (!projectId || isNaN(projectId)) return;
+    if (!projectId) return;
     generateApi.getProjectTasks(projectId).then(setTasks).catch(() => {});
   }, [projectId]);
 
   // Poll for task status updates
   useEffect(() => {
-    if (!projectId || isNaN(projectId)) return;
+    if (!projectId) return;
     const pollTaskStatus = async () => {
       const activeTasks = tasks.filter(t => t.status === 'pending' || t.status === 'processing');
       if (activeTasks.length === 0) {
@@ -88,7 +88,7 @@ export function useTaskQueue({ projectId, onTaskComplete, onTaskError }: UseTask
   }, [tasks, projectId, onTaskComplete, onTaskError]);
 
   const submitTask = useCallback(async (toolKey: string, params: Record<string, unknown>): Promise<Task> => {
-    if (!projectId || isNaN(projectId)) {
+    if (!projectId) {
       throw new Error('Invalid project ID');
     }
     setIsLoading(true);

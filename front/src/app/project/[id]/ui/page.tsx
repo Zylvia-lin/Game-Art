@@ -30,7 +30,7 @@ const COLORS = ['#6366f1', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4'
 
 export default function UIPage() {
   const params = useParams();
-  const projectId = Number(params.id);
+  const projectId = params.id;
   const [subTool, setSubTool] = useState<string>('layout_generate');
   const [prompt, setPrompt] = useState('');
   const [ratio, setRatio] = useState('16:9');
@@ -44,7 +44,7 @@ export default function UIPage() {
   const { submitting, submitTask } = useTaskQueue({ projectId, onTaskComplete: handleTaskComplete });
 
   // Wait for params to load
-  if (!params.id || isNaN(projectId)) {
+  if (!params.id) {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />

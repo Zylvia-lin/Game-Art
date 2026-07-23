@@ -1,154 +1,254 @@
-import type {
-  ModelConfig,
-  SystemPrompt,
-  Project,
-  Generation,
-  Asset,
-  GenerateResponse,
-  Task,
-} from './types';
-
-/**
- * Python FastAPI backend URL.
- * Set NEXT_PUBLIC_API_URL in .env.local, e.g. http://localhost:8000
- */
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-/**
- * Resolve image URLs. Backend returns /uploads/xxx.png paths,
- * which need to be prefixed with the backend URL for display.
- */
-export function resolveImageUrl(path: string): string {
-  if (!path) return '';
-  if (path.startsWith('/uploads/')) {
-    return `${API_BASE}${path}`;
-  }
-  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) {
-    return path;
-  }
-  return path;
+// ============================================
+// Types
+// ============================================
+
+export interface Project {
+  id: string;
+  name: string;
+  style: string;
+  description?: string;
+  created_at: string;
+  updated_at: string;
 }
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  // Validate path doesn't contain NaN
-  if (path.includes('NaN')) {
-    throw new Error(`Invalid API path: ${path}`);
-  }
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
+export interface ModelConfig {
+  id: string;
+  name: string;
+  type: string;
+  provider: string;
+  api_base_url: string;
+  api_key: string;
+  model_name: string;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SystemPrompt {
+  id: string;
+  tool_key: string;
+  tool_name: string;
+  prompt_text: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Asset {
+  id: string;
+  project_id: string;
+  name: string;
+  type: string;
+  url: string;
+  finalized: boolean;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Generation {
+  id: string;
+  project_id: string;
+  task_id: string;
+  tool_key: string;
+  prompt: string;
+  result_url?: string;
+  status: string;
+  created_at: string;
+}
+
+export interface Task {
+  id: string;
+  project_id: string;
+  tool_key: string;
+  status: string;
+  progress: number;
+  result_url?: string;
+  error?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// ============================================
+// Helper
+// ============================================
+
+function isValidId(id: unknown): id is string {
+  return typeof id === 'string' && id.length > 0;
+}
+
+async function request<T>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_BASE}${url}`, {
+    headers: { 'Content-Type': 'application/json' },
     ...options,
   });
   if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: res.statusText }));
-    const message = typeof error === 'string' ? error : (error.error || error.detail || error.message || `Request failed: ${res.status}`);
+    let message = `Request failed: ${res.status}`;
+    try {
+      const body = await res.json();
+      message = body.detail || body.error || message;
+    } catch {}
     throw new Error(message);
   }
   return res.json();
 }
 
-// Models
-export const modelsApi = {
-  list: () => request<ModelConfig[]>('/api/models'),
-  create: (data: Partial<ModelConfig>) =>
-    request<ModelConfig>('/api/models', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: number, data: Partial<ModelConfig>) =>
-    request<ModelConfig>(`/api/models/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  delete: (id: number) =>
-    request<{ message: string }>(`/api/models/${id}`, { method: 'DELETE' }),
-  setDefault: (id: number) =>
-    request<ModelConfig>(`/api/models/${id}/default`, { method: 'PUT' }),
-};
+// ============================================
+// Projects API
+// ============================================
 
-// Prompts
-export const promptsApi = {
-  list: () => request<SystemPrompt[]>('/api/prompts'),
-  get: (toolKey: string) => request<SystemPrompt>(`/api/prompts/${toolKey}`),
-  update: (toolKey: string, data: { prompt_content: string; description?: string }) =>
-    request<SystemPrompt>(`/api/prompts/${toolKey}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
-};
-
-// Projects
 export const projectsApi = {
   list: () => request<Project[]>('/api/projects'),
-  create: (data: { name: string; description?: string; style?: string }) =>
-    request<Project>('/api/projects', { method: 'POST', body: JSON.stringify(data) }),
-  get: (id: number) => {
-    if (id === undefined || id === null || isNaN(id)) throw new Error('Invalid project ID');
+
+  get: (id: string) => {
+    if (!isValidId(id)) throw new Error('Invalid project ID');
     return request<Project>(`/api/projects/${id}`);
   },
-  update: (id: number, data: Partial<Project>) => {
-    if (id === undefined || id === null || isNaN(id)) throw new Error('Invalid project ID');
-    return request<Project>(`/api/projects/${id}`, { method: 'PUT', body: JSON.stringify(data) });
-  },
-  delete: (id: number) => {
-    if (id === undefined || id === null || isNaN(id)) throw new Error('Invalid project ID');
-    return request<{ message: string }>(`/api/projects/${id}`, { method: 'DELETE' });
-  },
-  generations: (id: number) => {
-    if (id === undefined || id === null || isNaN(id)) throw new Error('Invalid project ID');
-    return request<Generation[]>(`/api/projects/${id}/generations`);
-  },
-  assets: (id: number, type?: string) => {
-    if (id === undefined || id === null || isNaN(id)) throw new Error('Invalid project ID');
-    return request<Asset[]>(`/api/projects/${id}/assets${type ? `?asset_type=${type}` : ''}`);
-  },
-  createAsset: (data: { project_id: number; name: string; type: string; url: string; description?: string }) =>
-    request<Asset>('/api/assets', { method: 'POST', body: JSON.stringify(data) }),
-};
 
-// Assets (standalone)
-export const assetsApi = {
-  get: (id: number) => {
-    if (!id || isNaN(id)) throw new Error('Invalid asset ID');
-    return request<Asset>(`/api/assets/${id}`);
-  },
-  update: (id: number, data: { finalized?: boolean; name?: string; type?: string }) => {
-    if (!id || isNaN(id)) throw new Error('Invalid asset ID');
-    return request<Asset>(`/api/assets/${id}`, { method: 'PUT', body: JSON.stringify(data) });
-  },
-  delete: (id: number) => {
-    if (!id || isNaN(id)) throw new Error('Invalid asset ID');
-    return request<{ success: boolean }>(`/api/assets/${id}`, { method: 'DELETE' });
-  },
-  finalize: (id: number, finalized: boolean) => {
-    if (!id || isNaN(id)) throw new Error('Invalid asset ID');
-    return request<Asset>(`/api/assets/${id}`, { method: 'PUT', body: JSON.stringify({ finalized }) });
-  },
-};
-
-// Generate — submit tasks to the queue
-export const generateApi = {
-  submit: (toolKey: string, data: Record<string, unknown> & { project_id: number }) =>
-    request<GenerateResponse>(`/api/generate/${toolKey}`, {
+  create: (data: { name: string; style: string; description?: string }) =>
+    request<Project>('/api/projects', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  textToImage: (data: Record<string, unknown> & { project_id: number }) =>
+
+  update: (id: string, data: { name?: string; style?: string; description?: string }) => {
+    if (!isValidId(id)) throw new Error('Invalid project ID');
+    return request<Project>(`/api/projects/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: (id: string) => {
+    if (!isValidId(id)) throw new Error('Invalid project ID');
+    return request<void>(`/api/projects/${id}`, { method: 'DELETE' });
+  },
+
+  assets: (projectId: string) => {
+    if (!isValidId(projectId)) throw new Error('Invalid project ID');
+    return request<Asset[]>(`/api/projects/${projectId}/assets`);
+  },
+
+  generations: (projectId: string) => {
+    if (!isValidId(projectId)) throw new Error('Invalid project ID');
+    return request<Generation[]>(`/api/projects/${projectId}/generations`);
+  },
+};
+
+// ============================================
+// Models API
+// ============================================
+
+export const modelsApi = {
+  list: (type?: string) =>
+    request<ModelConfig[]>(`/api/models${type ? `?type=${type}` : ''}`),
+
+  get: (id: string) => {
+    if (!isValidId(id)) throw new Error('Invalid model ID');
+    return request<ModelConfig>(`/api/models/${id}`);
+  },
+
+  create: (data: Omit<ModelConfig, 'id' | 'created_at' | 'updated_at'>) =>
+    request<ModelConfig>('/api/models', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: string, data: Partial<ModelConfig>) => {
+    if (!isValidId(id)) throw new Error('Invalid model ID');
+    return request<ModelConfig>(`/api/models/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: (id: string) => {
+    if (!isValidId(id)) throw new Error('Invalid model ID');
+    return request<void>(`/api/models/${id}`, { method: 'DELETE' });
+  },
+
+  setDefault: (id: string) => {
+    if (!isValidId(id)) throw new Error('Invalid model ID');
+    return request<ModelConfig>(`/api/models/${id}/default`, { method: 'PUT' });
+  },
+};
+
+// ============================================
+// Prompts API
+// ============================================
+
+export const promptsApi = {
+  list: () => request<SystemPrompt[]>('/api/prompts'),
+
+  get: (id: string) => {
+    if (!isValidId(id)) throw new Error('Invalid prompt ID');
+    return request<SystemPrompt>(`/api/prompts/${id}`);
+  },
+
+  getByToolKey: (toolKey: string) =>
+    request<SystemPrompt>(`/api/prompts/tool/${toolKey}`),
+
+  update: (id: string, data: { prompt_text: string; tool_name?: string }) => {
+    if (!isValidId(id)) throw new Error('Invalid prompt ID');
+    return request<SystemPrompt>(`/api/prompts/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
+// ============================================
+// Assets API
+// ============================================
+
+export const assetsApi = {
+  create: (data: { project_id: string; name: string; type: string; url: string; description?: string }) =>
+    request<Asset>('/api/assets', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: string) => {
+    if (!isValidId(id)) throw new Error('Invalid asset ID');
+    return request<void>(`/api/assets/${id}`, { method: 'DELETE' });
+  },
+};
+
+// ============================================
+// Generate API
+// ============================================
+
+export const generateApi = {
+  submit: (toolKey: string, data: Record<string, unknown>) =>
+    request<Task>(`/api/generate/${toolKey}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  textToImage: (data: Record<string, unknown> & { project_id: string }) =>
     generateApi.submit('text_to_image', data),
-  imageToImage: (data: Record<string, unknown> & { project_id: number }) =>
+  imageToImage: (data: Record<string, unknown> & { project_id: string }) =>
     generateApi.submit('image_to_image', data),
-  inpaint: (data: Record<string, unknown> & { project_id: number }) =>
+  inpaint: (data: Record<string, unknown> & { project_id: string }) =>
     generateApi.submit('inpaint', data),
-  characterTpose: (data: Record<string, unknown> & { project_id: number }) =>
+  characterTpose: (data: Record<string, unknown> & { project_id: string }) =>
     generateApi.submit('character_tpose', data),
-  characterDirections: (data: Record<string, unknown> & { project_id: number }) =>
+  characterDirections: (data: Record<string, unknown> & { project_id: string }) =>
     generateApi.submit('character_directions', data),
-  characterThreeView: (data: Record<string, unknown> & { project_id: number }) =>
+  characterThreeView: (data: Record<string, unknown> & { project_id: string }) =>
     generateApi.submit('character_three_view', data),
-  characterPartSplit: (data: Record<string, unknown> & { project_id: number }) =>
+  characterPartSplit: (data: Record<string, unknown> & { project_id: string }) =>
     generateApi.submit('character_part_split', data),
-  animationText: (data: Record<string, unknown> & { project_id: number }) =>
+  animationText: (data: Record<string, unknown> & { project_id: string }) =>
     generateApi.submit('animation_text', data),
-  propGenerate: (data: Record<string, unknown> & { project_id: number }) =>
+  propGenerate: (data: Record<string, unknown> & { project_id: string }) =>
     generateApi.submit('prop_generate', data),
-  propVariant: (data: Record<string, unknown> & { project_id: number }) =>
+  propVariant: (data: Record<string, unknown> & { project_id: string }) =>
     generateApi.submit('prop_variant', data),
-  uiLayoutGenerate: (data: Record<string, unknown> & { project_id: number }) =>
+  uiLayoutGenerate: (data: Record<string, unknown> & { project_id: string }) =>
     generateApi.submit('ui_layout_generate', data),
-  sceneMapGenerate: (data: Record<string, unknown> & { project_id: number }) =>
+  sceneMapGenerate: (data: Record<string, unknown> & { project_id: string }) =>
     generateApi.submit('scene_map_generate', data),
 
   // File upload
@@ -164,19 +264,24 @@ export const generateApi = {
   },
 
   // Task management
-  getTask: (taskId: number) =>
+  getTask: (taskId: string) =>
     request<Task>(`/api/generate/task?task_id=${taskId}`),
-  getProjectTasks: (projectId: number, status?: string) =>
-    request<Task[]>(`/api/generate/task?project_id=${projectId}${status ? `&status=${status}` : ''}`),
-  getQueueStats: (projectId?: number) =>
+  getProjectTasks: (projectId: string, status?: string) => {
+    if (!isValidId(projectId)) return Promise.resolve([]);
+    return request<Task[]>(`/api/generate/task?project_id=${projectId}${status ? `&status=${status}` : ''}`);
+  },
+  getQueueStats: (projectId?: string) =>
     request<{ pending: number; processing: number; completed: number; failed: number }>(
       `/api/generate/task?stats=true${projectId ? `&project_id=${projectId}` : ''}`
     ),
-  cancelTask: (taskId: number) =>
+  cancelTask: (taskId: string) =>
     request<Task>(`/api/generate/task/${taskId}/cancel`, { method: 'POST' }),
 };
 
-// 本地工具 API（不走 AI）
+// ============================================
+// Tools API (local tools, no AI)
+// ============================================
+
 export const toolsApi = {
   extractFrames: (data: { image_url: string; rows: number; cols: number }) =>
     request<{ frames: string[] }>('/api/tools/extract-frames', {
@@ -189,3 +294,13 @@ export const toolsApi = {
       body: JSON.stringify(data),
     }),
 };
+
+// ============================================
+// Image URL resolver
+// ============================================
+
+export function resolveImageUrl(url: string | undefined | null): string {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `${API_BASE}${url.startsWith('/') ? '' : '/'}${url}`;
+}

@@ -30,7 +30,7 @@ def _to_task(row: dict) -> dict:
     }
 
 
-async def create_task(project_id: int, tool_key: str, input_params: dict) -> dict:
+async def create_task(project_id: str, tool_key: str, input_params: dict) -> dict:
     """Create a new task and start processing."""
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -46,12 +46,12 @@ async def create_task(project_id: int, tool_key: str, input_params: dict) -> dic
     return task
 
 
-async def get_task(task_id: int) -> dict | None:
+async def get_task(task_id: str) -> dict | None:
     row = await fetch_one("SELECT * FROM tasks WHERE id = $1", task_id)
     return _to_task(row) if row else None
 
 
-async def get_project_tasks(project_id: int, status: str | None = None) -> list[dict]:
+async def get_project_tasks(project_id: str, status: str | None = None) -> list[dict]:
     if status:
         rows = await fetch_all(
             "SELECT * FROM tasks WHERE project_id = $1 AND status = $2 ORDER BY created_at DESC",
@@ -65,7 +65,7 @@ async def get_project_tasks(project_id: int, status: str | None = None) -> list[
     return [_to_task(r) for r in rows]
 
 
-async def get_queue_stats(project_id: int | None = None) -> dict:
+async def get_queue_stats(project_id: str | None = None) -> dict:
     if project_id:
         rows = await fetch_all(
             """SELECT status, COUNT(*) as count FROM tasks
@@ -83,7 +83,7 @@ async def get_queue_stats(project_id: int | None = None) -> dict:
 
 
 async def update_task_status(
-    task_id: int,
+    task_id: str,
     status: str,
     output_urls: list | None = None,
     error_message: str | None = None,
@@ -114,7 +114,7 @@ async def update_task_status(
         return _to_task(dict(row)) if row else None
 
 
-async def cancel_task(task_id: int) -> dict | None:
+async def cancel_task(task_id: str) -> dict | None:
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(

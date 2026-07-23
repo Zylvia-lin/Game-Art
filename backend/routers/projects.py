@@ -89,7 +89,7 @@ async def create_project(data: ProjectCreate):
 
 
 @router.get("/{project_id}")
-async def get_project(project_id: int):
+async def get_project(project_id: str):
     row = await fetch_one("SELECT * FROM projects WHERE id = $1", project_id)
     if not row:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -97,7 +97,7 @@ async def get_project(project_id: int):
 
 
 @router.put("/{project_id}")
-async def update_project(project_id: int, data: ProjectUpdate):
+async def update_project(project_id: str, data: ProjectUpdate):
     pool = await get_pool()
     async with pool.acquire() as conn:
         update_data = data.model_dump(exclude_unset=True)
@@ -122,7 +122,7 @@ async def update_project(project_id: int, data: ProjectUpdate):
 
 
 @router.delete("/{project_id}")
-async def delete_project(project_id: int):
+async def delete_project(project_id: str):
     result = await execute("DELETE FROM projects WHERE id = $1", project_id)
     if "DELETE 0" in result:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -130,7 +130,7 @@ async def delete_project(project_id: int):
 
 
 @router.get("/{project_id}/assets")
-async def list_project_assets(project_id: int, asset_type: Optional[str] = Query(None)):
+async def list_project_assets(project_id: str, asset_type: Optional[str] = Query(None)):
     if asset_type:
         rows = await fetch_all(
             "SELECT * FROM assets WHERE project_id = $1 AND type = $2 ORDER BY created_at DESC",
@@ -145,7 +145,7 @@ async def list_project_assets(project_id: int, asset_type: Optional[str] = Query
 
 
 @router.get("/{project_id}/generations")
-async def list_project_generations(project_id: int):
+async def list_project_generations(project_id: str):
     rows = await fetch_all(
         "SELECT * FROM generations WHERE project_id = $1 ORDER BY created_at DESC",
         project_id,

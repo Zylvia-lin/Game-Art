@@ -28,7 +28,7 @@ const toolKeyMap: Record<string, string> = {
 
 export default function ScenePage() {
   const params = useParams();
-  const projectId = Number(params.id);
+  const projectId = params.id;
   const [subTool, setSubTool] = useState<string>('map_generate');
   const [prompt, setPrompt] = useState('');
   const [mapType, setMapType] = useState('top');
@@ -41,7 +41,7 @@ export default function ScenePage() {
   const { submitting, submitTask } = useTaskQueue({ projectId, onTaskComplete: handleTaskComplete });
 
   // Wait for params to load
-  if (!params.id || isNaN(projectId)) {
+  if (!params.id) {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />

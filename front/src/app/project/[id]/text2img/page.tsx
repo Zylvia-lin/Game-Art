@@ -12,7 +12,7 @@ import { generateApi, projectsApi } from '@/lib/api';
 
 export default function TextToImagePage() {
   const params = useParams();
-  const projectId = Number(params.id);
+  const projectId = params.id;
   const [prompt, setPrompt] = useState('');
   const [style, setStyle] = useState('pixel');
   const [ratio, setRatio] = useState('1:1');
@@ -22,14 +22,14 @@ export default function TextToImagePage() {
 
   // Load project style as default
   useEffect(() => {
-    if (!projectId || isNaN(projectId)) return;
+    if (!projectId) return;
     projectsApi.get(projectId).then((project) => {
       if (project.style) setStyle(project.style);
     }).catch(() => {});
   }, [projectId]);
 
   // Wait for params to load
-  if (!params.id || isNaN(projectId)) {
+  if (!params.id) {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />

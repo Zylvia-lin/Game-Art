@@ -14,7 +14,7 @@ import { generateApi } from '@/lib/api';
 
 export default function InpaintPage() {
   const params = useParams();
-  const projectId = Number(params.id);
+  const projectId = params.id;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
   const [imageUrl, setImageUrl] = useState('');
@@ -29,7 +29,7 @@ export default function InpaintPage() {
   const { submitting, submitTask } = useTaskQueue({ projectId });
 
   // Wait for params to load
-  if (!params.id || isNaN(projectId)) {
+  if (!params.id) {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />

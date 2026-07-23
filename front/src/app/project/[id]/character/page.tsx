@@ -37,12 +37,12 @@ const TOOL_KEY_MAP: Record<string, string> = {
 
 export default function CharacterPage() {
   const params = useParams();
-  const projectId = Number(params.id);
+  const projectId = params.id;
   const [projectStyle, setProjectStyle] = useState<string>('pixel');
 
   // Load project to get default style
   useEffect(() => {
-    if (!projectId || isNaN(projectId)) return;
+    if (!projectId) return;
     projectsApi.get(projectId).then(p => {
       if (p?.style) {
         setProjectStyle(p.style);
@@ -52,7 +52,7 @@ export default function CharacterPage() {
   }, [projectId]);
 
   // Wait for params to load
-  if (!params.id || isNaN(projectId)) {
+  if (!params.id) {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
