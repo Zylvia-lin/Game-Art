@@ -17,6 +17,7 @@ export function TaskQueuePanel({ projectId, onTaskComplete }: TaskQueuePanelProp
   const prevTasksRef = useRef<Map<number, Task>>(new Map());
 
   const fetchTasks = useCallback(async () => {
+    if (!projectId || isNaN(projectId)) return;
     try {
       const data = await generateApi.getProjectTasks(projectId);
       setTasks(data);
