@@ -213,6 +213,12 @@ export const assetsApi = {
       body: JSON.stringify(data),
     }),
 
+  update: (id: string, data: { name?: string; type?: string; finalized?: boolean }) =>
+    request<Asset>(`/api/assets/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
   delete: (id: string) => {
     if (!isValidId(id)) throw new Error('Invalid asset ID');
     return request<void>(`/api/assets/${id}`, { method: 'DELETE' });

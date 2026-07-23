@@ -120,10 +120,16 @@ async def _post_process_images(urls: list[str]) -> list[str]:
     for url in urls:
         try:
             local_path = await _download_image(url)
-            transparent_url = remove_green_background(local_path)
-            processed.append(transparent_url)
+            try:
+                transparent_url = remove_green_background(local_path)
+                processed.append(transparent_url)
+            except Exception as e:
+                print(f"Green background removal failed for {local_path}: {e}")
+                # Image is already downloaded locally, use it as-is
+                processed.append(local_path)
         except Exception as e:
-            print(f"Post-processing failed for image {url}: {e}")
+            print(f"Download failed for image {url}: {e}")
+            # Last resort: use original URL (may expire)
             processed.append(url)
 
     return processed

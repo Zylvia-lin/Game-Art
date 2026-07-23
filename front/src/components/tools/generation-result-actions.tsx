@@ -35,14 +35,8 @@ export function GenerationResultActions({
     if (!assetId) return;
     setFinalizing(true);
     try {
-      const res = await fetch(`/api/assets/${assetId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ finalized: !finalized }),
-      });
-      if (res.ok) {
-        onFinalizeChange?.(!finalized);
-      }
+      await assetsApi.update(assetId, { finalized: !finalized });
+      onFinalizeChange?.(!finalized);
     } catch (err) {
       console.error('Failed to toggle finalize:', err);
     } finally {
@@ -72,7 +66,8 @@ export function GenerationResultActions({
 
   const handleDownload = async () => {
     try {
-      const response = await fetch(imageUrl);
+      const response = await fetch(imageUrl, { mode: 'cors' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -81,7 +76,13 @@ export function GenerationResultActions({
       link.click();
       window.URL.revokeObjectURL(blobUrl);
     } catch (err) {
-      console.error('Download failed:', err);
+      console.error('Download failed, falling back to direct link:', err);
+      // Fallback: open in new tab for manual download
+      const link = document.createElement('a');
+      link.href = imageUrl;
+      link.target = '_blank';
+      link.download = `asset_${assetId || 'untitled'}.png`;
+      link.click();
     }
   };
 

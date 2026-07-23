@@ -116,6 +116,7 @@ export default function TextToImagePage() {
   const handleDownload = async (url: string, filename: string) => {
     try {
       const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -124,7 +125,12 @@ export default function TextToImagePage() {
       link.click();
       window.URL.revokeObjectURL(blobUrl);
     } catch {
-      // ignore
+      // Fallback: open in new tab for direct download
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.target = '_blank';
+      link.click();
     }
   };
 
