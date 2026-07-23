@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { FolderOpen, Trash2, Download, Filter, Check, CheckSquare, Square, Upload, X } from 'lucide-react';
-import { projectsApi, generateApi } from '@/lib/api';
+import { projectsApi, assetsApi, generateApi } from '@/lib/api';
 import type { Asset } from '@/lib/types';
 
 const ASSET_TYPES = [
@@ -63,7 +63,7 @@ export default function AssetsPage() {
   const handleDelete = async (id: number) => {
     if (!confirm('确定要删除此资产吗？')) return;
     try {
-      await projectsApi.deleteAsset(id);
+      await assetsApi.delete(id);
       setAssets(assets.filter((a) => a.id !== id));
       setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next; });
     } catch (err) {
@@ -131,7 +131,7 @@ export default function AssetsPage() {
     if (!confirm(`确定要删除选中的 ${selectedIds.size} 个资产吗？`)) return;
     for (const id of selectedIds) {
       try {
-        await projectsApi.deleteAsset(id);
+        await assetsApi.delete(id);
       } catch (err) {
         console.error('Failed to delete:', err);
       }

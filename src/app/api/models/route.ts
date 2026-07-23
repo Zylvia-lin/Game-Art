@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getModelConfigs, createModelConfig } from '@/lib/store';
+import { getModelConfigs, createModelConfig, toModelConfigSafe } from '@/lib/store';
 
 export async function GET() {
   const configs = await getModelConfigs();
-  return NextResponse.json(configs);
+  // Mask API keys in list responses for security
+  const safe = configs.map(c => ({
+    ...c,
+    api_key: c.api_key && c.api_key.length > 8
+      ? c.api_key.slice(0, 4) + '****' + c.api_key.slice(-4)
+      : c.api_key,
+  }));
+  return NextResponse.json(safe);
 }
 
 export async function POST(request: NextRequest) {

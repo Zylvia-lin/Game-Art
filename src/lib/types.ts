@@ -149,6 +149,7 @@ export const TOOL_KEY_MAP: Record<string, string> = {
   inpaint: 'inpaint',
   character_tpose: 'character_tpose',
   character_directions: 'character_directions',
+  character_three_view: 'character_three_view',
   character_part_split: 'character_part_split',
   animation_text: 'animation_text',
   animation_skeleton: 'animation_skeleton',

@@ -66,13 +66,8 @@ export function TaskQueuePanel({ projectId, onTaskComplete }: TaskQueuePanelProp
     }
   };
 
-  const handleClearCompleted = async () => {
-    try {
-      await generateApi.clearTasks(projectId);
-      setTasks(prev => prev.filter(t => t.status !== 'completed' && t.status !== 'failed'));
-    } catch {
-      // ignore
-    }
+  const handleClearCompleted = () => {
+    setTasks(prev => prev.filter(t => t.status !== 'completed' && t.status !== 'failed'));
   };
 
   const pendingTasks = tasks.filter(t => t.status === 'pending');

@@ -223,6 +223,23 @@ export function stopProcessing(): void {
 }
 
 /**
+ * Cancel a pending or processing task
+ */
+export async function cancelTask(taskId: number): Promise<Task | null> {
+  const result = await sql`
+    UPDATE tasks SET
+      status = 'failed',
+      error_message = 'Cancelled by user',
+      completed_at = ${new Date().toISOString()},
+      updated_at = ${new Date().toISOString()}
+    WHERE id = ${taskId} AND status IN ('pending', 'processing')
+    RETURNING *
+  `;
+  if (result.length === 0) return null;
+  return toTask(result[0]);
+}
+
+/**
  * Get queue statistics
  */
 export async function getQueueStats(projectId?: number): Promise<{

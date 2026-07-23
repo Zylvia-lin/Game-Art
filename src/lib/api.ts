@@ -5,6 +5,7 @@ import type {
   Generation,
   Asset,
   GenerateResponse,
+  Task,
 } from './types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || '';
@@ -58,54 +59,57 @@ export const projectsApi = {
   generations: (id: number) => request<Generation[]>(`/api/projects/${id}/generations`),
   assets: (id: number, type?: string) =>
     request<Asset[]>(`/api/projects/${id}/assets${type ? `?asset_type=${type}` : ''}`),
-  deleteAsset: (id: number) =>
-    request<{ message: string }>(`/api/projects/assets/${id}`, { method: 'DELETE' }),
   createAsset: (data: { project_id: number; name: string; type: string; url: string; description?: string }) =>
     request<Asset>('/api/assets', { method: 'POST', body: JSON.stringify(data) }),
 };
 
-// Generate
+// Assets (standalone)
+export const assetsApi = {
+  get: (id: number) => request<Asset>(`/api/assets/${id}`),
+  update: (id: number, data: { finalized?: boolean; name?: string; type?: string }) =>
+    request<Asset>(`/api/assets/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: number) =>
+    request<{ success: boolean }>(`/api/assets/${id}`, { method: 'DELETE' }),
+  finalize: (id: number, finalized: boolean) =>
+    request<Asset>(`/api/assets/${id}`, { method: 'PUT', body: JSON.stringify({ finalized }) }),
+};
+
+// Generate — submit tasks to the queue
+// toolKey uses underscores matching TOOL_KEY_MAP values (e.g. text_to_image)
 export const generateApi = {
-  textToImage: (data: Record<string, unknown>) =>
-    request<GenerateResponse>('/api/generate/text-to-image', {
+  submit: (toolKey: string, data: Record<string, unknown> & { project_id: number }) =>
+    request<GenerateResponse>(`/api/generate/${toolKey}`, {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  imageToImage: (data: Record<string, unknown>) =>
-    request<GenerateResponse>('/api/generate/image-to-image', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-  inpaint: (data: Record<string, unknown>) =>
-    request<GenerateResponse>('/api/generate/inpaint', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-  character: (data: Record<string, unknown>) =>
-    request<GenerateResponse>('/api/generate/character', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-  animation: (data: Record<string, unknown>) =>
-    request<GenerateResponse>('/api/generate/animation', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-  prop: (data: Record<string, unknown>) =>
-    request<GenerateResponse>('/api/generate/prop', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-  uiLayout: (data: Record<string, unknown>) =>
-    request<GenerateResponse>('/api/generate/ui-layout', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-  scene: (data: Record<string, unknown>) =>
-    request<GenerateResponse>('/api/generate/scene', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+  // Convenience methods matching tool keys
+  textToImage: (data: Record<string, unknown> & { project_id: number }) =>
+    generateApi.submit('text_to_image', data),
+  imageToImage: (data: Record<string, unknown> & { project_id: number }) =>
+    generateApi.submit('image_to_image', data),
+  inpaint: (data: Record<string, unknown> & { project_id: number }) =>
+    generateApi.submit('inpaint', data),
+  characterTpose: (data: Record<string, unknown> & { project_id: number }) =>
+    generateApi.submit('character_tpose', data),
+  characterDirections: (data: Record<string, unknown> & { project_id: number }) =>
+    generateApi.submit('character_directions', data),
+  characterThreeView: (data: Record<string, unknown> & { project_id: number }) =>
+    generateApi.submit('character_three_view', data),
+  characterPartSplit: (data: Record<string, unknown> & { project_id: number }) =>
+    generateApi.submit('character_part_split', data),
+  animationText: (data: Record<string, unknown> & { project_id: number }) =>
+    generateApi.submit('animation_text', data),
+  animationSkeleton: (data: Record<string, unknown> & { project_id: number }) =>
+    generateApi.submit('animation_skeleton', data),
+  propGenerate: (data: Record<string, unknown> & { project_id: number }) =>
+    generateApi.submit('prop_generate', data),
+  propVariant: (data: Record<string, unknown> & { project_id: number }) =>
+    generateApi.submit('prop_variant', data),
+  uiLayoutGenerate: (data: Record<string, unknown> & { project_id: number }) =>
+    generateApi.submit('ui_layout_generate', data),
+  sceneMapGenerate: (data: Record<string, unknown> & { project_id: number }) =>
+    generateApi.submit('scene_map_generate', data),
+  // File upload
   upload: async (file: File): Promise<{ url: string }> => {
     const formData = new FormData();
     formData.append('file', file);
@@ -118,15 +122,13 @@ export const generateApi = {
   },
   // Task management
   getTask: (taskId: number) =>
-    request<import('./types').Task>(`/api/generate/task?task_id=${taskId}`),
+    request<Task>(`/api/generate/task?task_id=${taskId}`),
   getProjectTasks: (projectId: number, status?: string) =>
-    request<import('./types').Task[]>(`/api/generate/task?project_id=${projectId}${status ? `&status=${status}` : ''}`),
+    request<Task[]>(`/api/generate/task?project_id=${projectId}${status ? `&status=${status}` : ''}`),
   getQueueStats: (projectId?: number) =>
     request<{ pending: number; processing: number; completed: number; failed: number }>(
       `/api/generate/task?stats=true${projectId ? `&project_id=${projectId}` : ''}`
     ),
   cancelTask: (taskId: number) =>
-    request<import('./types').Task>(`/api/generate/task/${taskId}/cancel`, { method: 'POST' }),
-  clearTasks: (projectId: number) =>
-    request<void>(`/api/generate/task?project_id=${projectId}`, { method: 'DELETE' }),
+    request<Task>(`/api/generate/task/${taskId}/cancel`, { method: 'POST' }),
 };

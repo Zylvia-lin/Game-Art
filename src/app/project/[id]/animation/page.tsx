@@ -56,12 +56,17 @@ export default function AnimationPage() {
     if (!finalAction) return;
     setSubmitting(true);
     try {
-      // Submit task - returns immediately with task info
-      await generateApi.animation({
+      // Map sub_tool to actual tool_key
+      const toolKeyMap: Record<string, string> = {
+        text: 'animation_text',
+        skeleton: 'animation_skeleton',
+        frame_extract: 'animation_frame_extract',
+      };
+      const toolKey = toolKeyMap[subTool] || 'animation_text';
+      await generateApi.submit(toolKey, {
         project_id: projectId,
         image_url: imageUrl,
         action: finalAction,
-        sub_tool: subTool,
         frame_count: frameCount,
         ratio,
         resolution,

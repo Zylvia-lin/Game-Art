@@ -2,13 +2,14 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { Sparkles, Loader2, Download, ImageIcon } from 'lucide-react';
+import { Sparkles, Loader2, ImageIcon } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { GenerationResultActions } from '@/components/tools/generation-result-actions';
 import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
-import { generateApi, projectsApi } from '@/lib/api';
+import { projectsApi } from '@/lib/api';
+import { useTaskQueue } from '@/hooks/use-task-queue';
 import type { Task } from '@/lib/types';
 
 export default function ImageToImagePage() {
@@ -19,7 +20,6 @@ export default function ImageToImagePage() {
   const [strength, setStrength] = useState(0.7);
   const [ratio, setRatio] = useState('1:1');
   const [resolution, setResolution] = useState('1024x1024');
-  const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<string[]>([]);
 
   // Load project style (for potential future use in img2img prompts)
@@ -33,12 +33,15 @@ export default function ImageToImagePage() {
     }
   }, []);
 
+  const { submitting, submitTask } = useTaskQueue({
+    projectId,
+    onTaskComplete: handleTaskComplete,
+  });
+
   const handleGenerate = async () => {
     if (!imageUrl || !prompt.trim()) return;
-    setSubmitting(true);
     try {
-      await generateApi.imageToImage({
-        project_id: projectId,
+      await submitTask('image_to_image', {
         image_url: imageUrl,
         prompt,
         ratio,
@@ -47,7 +50,6 @@ export default function ImageToImagePage() {
       });
     } catch (err) {
       console.error('Generation failed:', err);
-      setSubmitting(false);
     }
   };
 
@@ -118,7 +120,7 @@ export default function ImageToImagePage() {
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-accent">
               <ImageIcon className="h-8 w-8 text-muted-foreground" />
             </div>
-            <p className="text-sm text-muted-foreground">上传或选择参考图片并描述修改内容</p>
+            <p className="text-sm text-muted-foreground">上传参考图片并描述修改内容</p>
           </div>
         </div>
       )}
@@ -128,16 +130,10 @@ export default function ImageToImagePage() {
   return (
     <ToolLayout
       title="图生图"
-      description="基于参考图片进行整体编辑"
-      toolKey="image_to_image"
-      toolName="图生图编辑"
-      params={paramsPanel}
-      canvas={
-        <div className="flex h-full flex-col">
-          <div className="flex-1">{canvas}</div>
-          <TaskQueuePanel projectId={projectId} onTaskComplete={handleTaskComplete} />
-        </div>
-      }
+      description="基于参考图片进行风格转换或内容编辑"
+      paramsPanel={paramsPanel}
+      canvas={canvas}
+      queuePanel={<TaskQueuePanel projectId={projectId} />}
     />
   );
 }

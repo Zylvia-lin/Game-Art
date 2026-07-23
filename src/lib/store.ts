@@ -2,13 +2,15 @@
 import postgres from 'postgres';
 import type { ModelConfig, SystemPrompt, Project, Generation, Asset } from '@/lib/types';
 
-export const sql = postgres({
-  host: 'localhost',
-  port: 5432,
-  database: 'game_art_ai',
-  username: 'gameart',
-  password: 'gameart123',
-});
+const dbConfig = {
+  host: process.env.DB_HOST || 'localhost',
+  port: parseInt(process.env.DB_PORT || '5432'),
+  database: process.env.DB_NAME || 'game_art_ai',
+  username: process.env.DB_USER || 'gameart',
+  password: process.env.DB_PASSWORD || 'gameart123',
+};
+
+export const sql = postgres(dbConfig);
 
 // Helper to convert postgres row to our types
 const toModelConfig = (row: Record<string, unknown>): ModelConfig => ({
@@ -23,6 +25,15 @@ const toModelConfig = (row: Record<string, unknown>): ModelConfig => ({
   created_at: (row.created_at as Date).toISOString(),
   updated_at: (row.updated_at as Date).toISOString(),
 });
+
+// Mask api_key for list responses (security)
+export const toModelConfigSafe = (row: Record<string, unknown>): ModelConfig => {
+  const config = toModelConfig(row);
+  if (config.api_key && config.api_key.length > 8) {
+    config.api_key = config.api_key.slice(0, 4) + '****' + config.api_key.slice(-4);
+  }
+  return config;
+};
 
 const toSystemPrompt = (row: Record<string, unknown>): SystemPrompt => ({
   id: row.id as number,
@@ -122,6 +133,19 @@ export async function deleteModelConfig(id: number): Promise<boolean> {
   return result.count > 0;
 }
 
+export async function setDefaultModel(id: number): Promise<ModelConfig | undefined> {
+  // First, clear all defaults
+  await sql`UPDATE model_configs SET is_default = false, updated_at = NOW()`;
+  // Then set the new default
+  const rows = await sql`
+    UPDATE model_configs
+    SET is_default = true, updated_at = NOW()
+    WHERE id = ${id}
+    RETURNING *
+  `;
+  return rows[0] ? toModelConfig(rows[0] as unknown as Record<string, unknown>) : undefined;
+}
+
 // ============ System Prompts ============
 export async function getSystemPrompts(): Promise<SystemPrompt[]> {
   const rows = await sql`SELECT * FROM system_prompts ORDER BY id`;
@@ -153,10 +177,10 @@ export async function getProject(id: number): Promise<Project | undefined> {
   return rows[0] ? toProject(rows[0] as unknown as Record<string, unknown>) : undefined;
 }
 
-export async function createProject(data: { name: string; description?: string; cover_url?: string }): Promise<Project> {
+export async function createProject(data: { name: string; description?: string; cover_url?: string; style?: string }): Promise<Project> {
   const rows = await sql`
-    INSERT INTO projects (name, description, cover_url)
-    VALUES (${data.name}, ${data.description || null}, ${data.cover_url || null})
+    INSERT INTO projects (name, description, cover_url, style)
+    VALUES (${data.name}, ${data.description || null}, ${data.cover_url || null}, ${data.style || 'pixel'})
     RETURNING *
   `;
   return toProject(rows[0] as unknown as Record<string, unknown>);
@@ -200,8 +224,8 @@ export async function getAsset(id: number): Promise<Asset | undefined> {
 
 export async function createAsset(data: { project_id: number; name: string; type: string; url: string; metadata_?: Record<string, unknown>; generation_id?: number }): Promise<Asset> {
   const rows = await sql`
-    INSERT INTO assets (project_id, name, type, url, metadata)
-    VALUES (${data.project_id}, ${data.name}, ${data.type}, ${data.url}, ${JSON.stringify(data.metadata_ || {})}::jsonb)
+    INSERT INTO assets (project_id, generation_id, name, type, url, metadata)
+    VALUES (${data.project_id}, ${data.generation_id ?? null}, ${data.name}, ${data.type}, ${data.url}, ${JSON.stringify(data.metadata_ || {})}::jsonb)
     RETURNING *
   `;
   return toAsset(rows[0] as unknown as Record<string, unknown>);

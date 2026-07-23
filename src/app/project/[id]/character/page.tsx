@@ -1,13 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, User } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { GenerationResultActions } from '@/components/tools/generation-result-actions';
-import { generateApi, projectsApi } from '@/lib/api';
+import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
+import { projectsApi } from '@/lib/api';
+import { useTaskQueue } from '@/hooks/use-task-queue';
+import type { Task } from '@/lib/types';
 
 const SUB_TOOLS = [
   { key: 'tpose', label: 'T-pose 生成', desc: '生成标准站姿角色' },
@@ -16,15 +19,25 @@ const SUB_TOOLS = [
   { key: 'part_split', label: '部件拆分', desc: '拆分为独立部件层' },
 ] as const;
 
+const TOOL_KEY_MAP: Record<string, string> = {
+  tpose: 'character_tpose',
+  three_view: 'character_three_view',
+  directions: 'character_directions',
+  part_split: 'character_part_split',
+};
+
 export default function CharacterPage() {
   const params = useParams();
-  const projectId = String(params.id);
+  const projectId = Number(params.id);
   const [projectStyle, setProjectStyle] = useState<string>('pixel');
 
   // Load project to get default style
   useEffect(() => {
-    projectsApi.get(Number(projectId)).then(p => {
-      if (p?.style) setProjectStyle(p.style);
+    projectsApi.get(projectId).then(p => {
+      if (p?.style) {
+        setProjectStyle(p.style);
+        setStyle(p.style);
+      }
     }).catch(() => {});
   }, [projectId]);
 
@@ -44,52 +57,35 @@ export default function CharacterPage() {
   const [ratio, setRatio] = useState('1:1');
   const [resolution, setResolution] = useState('1024x1024');
   const [sourceImage, setSourceImage] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<string[]>([]);
 
-  const toolKeyMap: Record<string, string> = {
-    tpose: 'character_tpose',
-    three_view: 'character_three_view',
-    directions: 'character_directions',
-    part_split: 'character_part_split',
-  };
-  const toolNameMap: Record<string, string> = {
-    tpose: 'T-pose角色生成',
-    three_view: '三视图角色生成',
-    directions: '多方向角色生成',
-    part_split: '角色部件拆分',
-  };
+  const handleTaskComplete = useCallback((task: Task) => {
+    if (task.output_urls && task.output_urls.length > 0) {
+      setResults(prev => [...task.output_urls, ...prev]);
+    }
+  }, []);
+
+  const { submitting, submitTask } = useTaskQueue({
+    projectId,
+    onTaskComplete: handleTaskComplete,
+  });
 
   const handleGenerate = async () => {
     if (subTool === 'tpose' && !prompt.trim()) return;
     if ((subTool === 'directions' || subTool === 'part_split') && !sourceImage) return;
     if (subTool === 'three_view' && !prompt.trim() && !sourceImage) return;
-    setLoading(true);
+
     try {
-      const res = await fetch(`/api/generate/${toolKeyMap[subTool]}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          project_id: Number(projectId),
-          prompt: prompt || '基于输入图片生成',
-          image_url: sourceImage || undefined,
-          directions,
-          style,
-          ratio,
-          resolution,
-        }),
+      await submitTask(TOOL_KEY_MAP[subTool], {
+        prompt: prompt || '基于输入图片生成',
+        image_url: sourceImage || undefined,
+        directions,
+        style,
+        ratio,
+        resolution,
       });
-      const data = await res.json();
-      if (data.data?.urls?.length) {
-        setResults(data.data.urls);
-      } else if (data.data?.enhanced_prompt) {
-        setResults([]);
-        alert(`图片模型未配置。增强后的提示词：\n${data.data.enhanced_prompt}`);
-      }
     } catch (err) {
       console.error('Generation failed:', err);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -120,7 +116,7 @@ export default function CharacterPage() {
 
       {(needsImage || optionalImage) && (
         <ImageSourceSelector
-          projectId={projectId}
+          projectId={String(projectId)}
           imageUrl={sourceImage}
           onImageChange={setSourceImage}
           label={needsImage ? '角色图片' : '参考图片（可选）'}
@@ -165,41 +161,30 @@ export default function CharacterPage() {
       <ResolutionSelector value={resolution} onChange={setResolution} />
       <button
         onClick={handleGenerate}
-        disabled={loading || (subTool === 'tpose' ? !prompt.trim() : !sourceImage)}
+        disabled={submitting || (subTool === 'tpose' ? !prompt.trim() : !sourceImage)}
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-0.5"
       >
-        {loading ? <><Loader2 className="h-4 w-4 animate-spin" />生成中...</> : <><Sparkles className="h-4 w-4" />生成角色</>}
+        {submitting ? <><Loader2 className="h-4 w-4 animate-spin" />提交中...</> : <><Sparkles className="h-4 w-4" />生成角色</>}
       </button>
     </>
   );
 
   const canvas = (
     <div className="flex h-full flex-col">
-      {loading ? (
-        <div className="flex flex-1 items-center justify-center">
-          <div className="text-center">
-            <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
-            <p className="mt-4 text-sm text-muted-foreground">AI 正在设计角色...</p>
-          </div>
-        </div>
-      ) : results.length > 0 ? (
+      {results.length > 0 ? (
         <div className="space-y-4">
           {results.map((url, i) => (
             <div key={i} className="overflow-hidden rounded-xl border border-border bg-card">
               <img src={url} alt={`Character ${i + 1}`} className="w-full object-contain" />
-              <GenerationResultActions imageUrl={url} projectId={projectId} />
+              <GenerationResultActions imageUrl={url} projectId={String(projectId)} />
             </div>
           ))}
         </div>
       ) : (
         <div className="flex flex-1 items-center justify-center">
           <div className="text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-accent">
-              <User className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {needsImage ? '请先选择或上传角色图片' : '描述你的角色，开始生成'}
-            </p>
+            <User className="mx-auto h-12 w-12 text-muted-foreground/30" />
+            <p className="mt-4 text-sm text-muted-foreground">选择功能并描述角色，开始生成</p>
           </div>
         </div>
       )}
@@ -209,11 +194,10 @@ export default function CharacterPage() {
   return (
     <ToolLayout
       title="角色生成"
-      description="生成游戏角色资产"
-      toolKey={toolKeyMap[subTool]}
-      toolName={toolNameMap[subTool]}
-      params={paramsPanel}
+      description="生成游戏角色：T-pose、三视图、多方向、部件拆分"
+      paramsPanel={paramsPanel}
       canvas={canvas}
+      queuePanel={<TaskQueuePanel projectId={projectId} />}
     />
   );
 }

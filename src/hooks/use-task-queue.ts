@@ -15,7 +15,7 @@ interface UseTaskQueueReturn {
   completedTasks: Task[];
   failedTasks: Task[];
   submitTask: (toolKey: string, params: Record<string, unknown>) => Promise<Task>;
-  cancelTask: (taskId: number) => void;
+  cancelTask: (taskId: number) => Promise<void>;
   clearCompleted: () => void;
   isLoading: boolean;
   submitting: boolean;
@@ -39,28 +39,25 @@ export function useTaskQueue({ projectId, onTaskComplete, onTaskError }: UseTask
       }
 
       try {
-        const response = await fetch(`/api/generate/task?project_id=${projectId}`);
-        if (response.ok) {
-          const updatedTasks: Task[] = await response.json();
-          setTasks(prev => {
-            const taskMap = new Map(updatedTasks.map(t => [t.id, t]));
-            const merged = prev.map(t => taskMap.get(t.id) || t);
-            
-            // Check for newly completed/failed tasks
-            merged.forEach(task => {
-              const prevTask = prev.find(t => t.id === task.id);
-              if (prevTask && prevTask.status !== task.status) {
-                if (task.status === 'completed') {
-                  onTaskComplete?.(task);
-                } else if (task.status === 'failed') {
-                  onTaskError?.(task);
-                }
+        const updatedTasks = await generateApi.getProjectTasks(projectId);
+        setTasks(prev => {
+          const taskMap = new Map(updatedTasks.map(t => [t.id, t]));
+          const merged = prev.map(t => taskMap.get(t.id) || t);
+
+          // Check for newly completed/failed tasks
+          merged.forEach(task => {
+            const prevTask = prev.find(t => t.id === task.id);
+            if (prevTask && prevTask.status !== task.status) {
+              if (task.status === 'completed') {
+                onTaskComplete?.(task);
+              } else if (task.status === 'failed') {
+                onTaskError?.(task);
               }
-            });
-            
-            return merged;
+            }
           });
-        }
+
+          return merged;
+        });
       } catch (error) {
         console.error('Failed to poll task status:', error);
       }
@@ -86,18 +83,9 @@ export function useTaskQueue({ projectId, onTaskComplete, onTaskError }: UseTask
   const submitTask = useCallback(async (toolKey: string, params: Record<string, unknown>): Promise<Task> => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/generate/' + toolKey, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id: projectId, ...params }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        throw new Error(errorData?.error || 'Failed to submit task');
-      }
-
-      const task: Task = await response.json();
+      const result = await generateApi.submit(toolKey, { project_id: projectId, ...params });
+      // The API returns { status, task_id, message }, fetch the full task
+      const task = await generateApi.getTask(result.task_id);
       setTasks(prev => [...prev, task]);
       return task;
     } finally {
@@ -105,10 +93,15 @@ export function useTaskQueue({ projectId, onTaskComplete, onTaskError }: UseTask
     }
   }, [projectId]);
 
-  const cancelTask = useCallback((taskId: number) => {
-    setTasks(prev => prev.map(t => 
-      t.id === taskId ? { ...t, status: 'cancelled' as TaskStatus } : t
-    ));
+  const cancelTask = useCallback(async (taskId: number) => {
+    try {
+      await generateApi.cancelTask(taskId);
+      setTasks(prev => prev.map(t =>
+        t.id === taskId ? { ...t, status: 'failed' as TaskStatus, error_message: 'Cancelled by user' } : t
+      ));
+    } catch (error) {
+      console.error('Failed to cancel task:', error);
+    }
   }, []);
 
   const clearCompleted = useCallback(() => {

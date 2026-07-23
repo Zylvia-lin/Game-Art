@@ -161,7 +161,6 @@ export default function InpaintPage() {
     try {
       const maskUrl = await getMaskUrl();
       await submitTask('inpaint', {
-        project_id: projectId,
         image_url: imageUrl,
         mask_url: maskUrl,
         prompt,
