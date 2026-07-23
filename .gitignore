@@ -63,3 +63,5 @@ front/public/uploads/
 
 # Preview files
 .preview
+.cozeproj/reduction
+.codegraph
