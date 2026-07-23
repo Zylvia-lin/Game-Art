@@ -1,0 +1,80 @@
+## Error Type
+Build Error
+
+## Error Message
+Error evaluating Node.js code
+
+## Build Output
+./src/lib/types.ts
+Error evaluating Node.js code
+SyntaxError: D:\My_Soft\game-art\front\src\lib\types.ts: Unexpected token (101:0)
+
+   99 |   { value: 'anime', label: '二次元' },
+  100 |   { value: 'pixel', label: '像素风' },
+> 101 |
+      | ^
+    [at constructor (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:137105)]
+    [at TypeScriptParserMixin.raise (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:194164)]
+    [at TypeScriptParserMixin.unexpected (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:194550)]
+    [at TypeScriptParserMixin.parseExprAtom (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:363808)]
+    [at TypeScriptParserMixin.parseExprSubscripts (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:356364)]
+    [at TypeScriptParserMixin.parseUpdate (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:355963)]
+    [at TypeScriptParserMixin.parseMaybeUnary (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:355527)]
+    [at TypeScriptParserMixin.parseMaybeUnary (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:331837)]
+    [at TypeScriptParserMixin.parseMaybeUnaryOrPrivate (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:352169)]
+    [at TypeScriptParserMixin.parseExprOps (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:352281)]
+    [at TypeScriptParserMixin.parseMaybeConditional (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:351760)]
+    [at TypeScriptParserMixin.parseMaybeAssign (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:350714)]
+    [at TypeScriptParserMixin.parseMaybeAssign (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:330620)]
+    [at D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:350260]
+    [at TypeScriptParserMixin.allowInAnd (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:383968)]
+    [at TypeScriptParserMixin.parseMaybeAssignAllowIn (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:350239)]
+    [at TypeScriptParserMixin.parseExprListItem (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:379439)]
+    [at TypeScriptParserMixin.parseExprList (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:378946)]
+    [at TypeScriptParserMixin.parseArrayLike (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:376925)]
+    [at TypeScriptParserMixin.parseArrayLike (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:318594)]
+    [at TypeScriptParserMixin.parseExprAtom (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:361613)]
+    [at TypeScriptParserMixin.parseExprSubscripts (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:356364)]
+    [at TypeScriptParserMixin.parseUpdate (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:355963)]
+    [at TypeScriptParserMixin.parseMaybeUnary (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:355527)]
+    [at TypeScriptParserMixin.parseMaybeUnary (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:331837)]
+    [at TypeScriptParserMixin.parseMaybeUnaryOrPrivate (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:352169)]
+    [at TypeScriptParserMixin.parseExprOps (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:352281)]
+    [at TypeScriptParserMixin.parseMaybeConditional (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:351760)]
+    [at TypeScriptParserMixin.parseMaybeAssign (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:350714)]
+    [at TypeScriptParserMixin.parseMaybeAssign (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:330620)]
+    [at D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:350260]
+    [at TypeScriptParserMixin.allowInAnd (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:383926)]
+    [at TypeScriptParserMixin.parseMaybeAssignAllowIn (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:350239)]
+    [at TypeScriptParserMixin.parseVar (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:402967)]
+    [at TypeScriptParserMixin.parseVarStatement (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:399366)]
+    [at TypeScriptParserMixin.parseVarStatement (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:323322)]
+    [at TypeScriptParserMixin.parseStatementContent (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:391398)]
+    [at TypeScriptParserMixin.parseStatementContent (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:324042)]
+    [at TypeScriptParserMixin.parseStatementLike (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:389494)]
+    [at TypeScriptParserMixin.parseStatementListItem (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:389120)]
+    [at TypeScriptParserMixin.parseExportDeclaration (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:415606)]
+    [at TypeScriptParserMixin.parseExportDeclaration (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:327104)]
+    [at TypeScriptParserMixin.maybeParseExportDeclaration (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:414570)]
+    [at TypeScriptParserMixin.parseExport (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:412708)]
+    [at TypeScriptParserMixin.parseExport (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:322862)]
+    [at TypeScriptParserMixin.parseStatementContent (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:391808)]
+    [at TypeScriptParserMixin.parseStatementContent (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:324042)]
+    [at TypeScriptParserMixin.parseStatementLike (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:389494)]
+    [at TypeScriptParserMixin.parseModuleItem (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:389055)]
+    [at TypeScriptParserMixin.parseBlockOrModuleBlockBody (D:\My_Soft\game-art\front\node_modules\.pnpm\next@16.1.1_@babel+core@7.28.6_react-dom@19.2.3_react@19.2.3__react@19.2.3\node_modules\next\dist\compiled\babel\bundle.js:191:401400)]
+
+Import traces:
+  Client Component Browser:
+    ./src/lib/types.ts [Client Component Browser]
+    ./src/components/layout/sidebar.tsx [Client Component Browser]
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/lib/types.ts [Client Component SSR]
+    ./src/components/layout/sidebar.tsx [Client Component SSR]
+    ./src/app/page.tsx [Client Component SSR]
+    ./src/app/page.tsx [Server Component]
+
+Next.js version: 16.1.1 (Turbopack)
