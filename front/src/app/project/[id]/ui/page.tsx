@@ -6,7 +6,6 @@ import { Sparkles, Loader2, Layout, Plus, Trash2, GripHorizontal } from 'lucide-
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
-import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import type { Task } from '@/lib/types';
 
@@ -176,8 +175,6 @@ export default function UIPage() {
         {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
         {submitting ? '生成中...' : '生成'}
       </button>
-
-      <TaskQueuePanel projectId={projectId} />
     </div>
   );
 

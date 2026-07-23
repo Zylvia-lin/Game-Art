@@ -7,7 +7,6 @@ import { ToolLayout } from '@/components/tools/tool-layout';
 import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { useTaskQueue } from '@/hooks/use-task-queue';
-import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
 import { PromptEditor } from '@/components/tools/prompt-editor';
 import type { Task } from '@/lib/types';
 
@@ -191,7 +190,6 @@ export default function ScenePage() {
               </p>
             </div>
           </div>
-          <TaskQueuePanel projectId={projectId} />
         </div>
       }
     />

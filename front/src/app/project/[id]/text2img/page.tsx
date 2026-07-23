@@ -5,7 +5,6 @@ import { useParams } from 'next/navigation';
 import { Sparkles, Loader2 } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
-import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { projectsApi } from '@/lib/api';
 import { computeSize } from '@/lib/types';
@@ -112,7 +111,6 @@ export default function TextToImagePage() {
               </p>
             </div>
           </div>
-          <TaskQueuePanel projectId={projectId} />
         </div>
       }
     />

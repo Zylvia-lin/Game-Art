@@ -7,10 +7,8 @@ import { ToolLayout } from '@/components/tools/tool-layout';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { GenerationResultActions } from '@/components/tools/generation-result-actions';
-import { resolveImageUrl } from '@/lib/api';
-import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
+import { resolveImageUrl, generateApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
-import { generateApi } from '@/lib/api';
 import { computeSize } from '@/lib/types';
 
 export default function InpaintPage() {
@@ -253,11 +251,6 @@ export default function InpaintPage() {
       >
         {submitting ? <><Loader2 className="h-4 w-4 animate-spin" />提交中...</> : <><Sparkles className="h-4 w-4" />局部重绘</>}
       </button>
-      <TaskQueuePanel projectId={projectId} onTaskComplete={(task) => {
-        if (task.status === 'completed' && task.output_urls?.length) {
-          setResults(task.output_urls);
-        }
-      }} />
     </>
   );
 

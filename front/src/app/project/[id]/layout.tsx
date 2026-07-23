@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, usePathname } from 'next/navigation';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Breadcrumb } from '@/components/layout/breadcrumb';
+import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
 import { projectsApi } from '@/lib/api';
 import type { Project } from '@/lib/types';
 
@@ -33,6 +34,7 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
         <Breadcrumb projectName={project?.name} projectId={projectId} />
         <main className="flex-1 overflow-hidden">{children}</main>
       </div>
+      <TaskQueuePanel projectId={projectId} />
     </div>
   );
 }

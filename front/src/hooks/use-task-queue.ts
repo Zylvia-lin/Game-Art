@@ -16,7 +16,7 @@ interface UseTaskQueueReturn {
   failedTasks: Task[];
   submitTask: (toolKey: string, params: Record<string, unknown>) => Promise<Task>;
   cancelTask: (taskId: string) => Promise<void>;
-  clearCompleted: () => void;
+  clearCompleted: () => Promise<void>;
   isLoading: boolean;
   submitting: boolean;
 }
@@ -103,7 +103,7 @@ export function useTaskQueue({ projectId, onTaskComplete, onTaskError }: UseTask
     }
   }, [projectId]);
 
-  const cancelTask = useCallback(async (taskId: number) => {
+  const cancelTask = useCallback(async (taskId: string) => {
     try {
       await generateApi.cancelTask(taskId);
       setTasks(prev => prev.map(t =>
@@ -114,9 +114,14 @@ export function useTaskQueue({ projectId, onTaskComplete, onTaskError }: UseTask
     }
   }, []);
 
-  const clearCompleted = useCallback(() => {
-    setTasks(prev => prev.filter(t => t.status !== 'completed' && t.status !== 'failed'));
-  }, []);
+  const clearCompleted = useCallback(async () => {
+    try {
+      await generateApi.deleteTasks(projectId);
+      setTasks(prev => prev.filter(t => t.status !== 'completed' && t.status !== 'failed'));
+    } catch (error) {
+      console.error('Failed to clear completed tasks:', error);
+    }
+  }, [projectId]);
 
   const pendingTasks = tasks.filter(t => t.status === 'pending');
   const processingTasks = tasks.filter(t => t.status === 'processing');

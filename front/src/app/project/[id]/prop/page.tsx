@@ -7,10 +7,8 @@ import { ToolLayout } from '@/components/tools/tool-layout';
 import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { GenerationResultActions } from '@/components/tools/generation-result-actions';
-import { resolveImageUrl } from '@/lib/api';
+import { resolveImageUrl, projectsApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
-import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
-import { projectsApi } from '@/lib/api';
 import type { Project, Task } from '@/lib/types';
 
 export default function PropPage() {
@@ -193,7 +191,6 @@ export default function PropPage() {
       canvas={
         <div className="flex h-full flex-col">
           {canvas}
-          <TaskQueuePanel projectId={projectId} />
         </div>
       }
     />

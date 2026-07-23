@@ -8,9 +8,7 @@ import { ToolLayout } from '@/components/tools/tool-layout';
 import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { GenerationResultActions } from '@/components/tools/generation-result-actions';
-import { resolveImageUrl } from '@/lib/api';
-import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
-import { projectsApi } from '@/lib/api';
+import { resolveImageUrl, projectsApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import type { Task } from '@/lib/types';
 
@@ -256,7 +254,6 @@ export default function CharacterPage() {
       description="生成游戏角色：T-pose、三视图、多方向、部件拆分"
       paramsPanel={paramsPanel}
       canvas={canvas}
-      queuePanel={<TaskQueuePanel projectId={projectId} />}
     />
   );
 }

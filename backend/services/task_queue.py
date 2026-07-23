@@ -145,6 +145,25 @@ async def cancel_task(task_id: str) -> dict | None:
         return _to_task(dict(row)) if row else None
 
 
+async def delete_project_tasks(project_id: str, status: str | None = None) -> int:
+    """Delete tasks for a project. If status given, only delete that status; otherwise delete completed+failed."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        if status:
+            result = await conn.execute(
+                "DELETE FROM tasks WHERE project_id = $1 AND status = $2",
+                project_id, status,
+            )
+        else:
+            result = await conn.execute(
+                "DELETE FROM tasks WHERE project_id = $1 AND status IN ('completed', 'failed')",
+                project_id,
+            )
+    # result is like "DELETE 5"
+    parts = result.split()
+    return int(parts[1]) if len(parts) > 1 else 0
+
+
 async def _get_next_pending_task() -> dict | None:
     pool = await get_pool()
     async with pool.acquire() as conn:

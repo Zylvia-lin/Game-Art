@@ -8,6 +8,7 @@ from typing import Optional
 from database import fetch_one
 from services.task_queue import (
     create_task, get_task, get_project_tasks, get_queue_stats, cancel_task,
+    delete_project_tasks,
 )
 
 router = APIRouter(prefix="/api/generate", tags=["generate"])
@@ -112,3 +113,14 @@ async def cancel_generation_task(task_id: str):
     if not task:
         raise HTTPException(status_code=404, detail="Task not found or already completed")
     return task
+
+
+@router.delete("/task")
+async def delete_tasks(
+    project_id: str = Query(...),
+    status: Optional[str] = Query(None),
+):
+    """Delete tasks for a project. If status is given, only delete tasks with that status.
+    If no status, delete all completed and failed tasks."""
+    deleted = await delete_project_tasks(project_id, status)
+    return {"deleted": deleted}

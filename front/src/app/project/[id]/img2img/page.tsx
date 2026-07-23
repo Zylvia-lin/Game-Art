@@ -7,9 +7,7 @@ import { ToolLayout } from '@/components/tools/tool-layout';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { GenerationResultActions } from '@/components/tools/generation-result-actions';
-import { resolveImageUrl } from '@/lib/api';
-import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
-import { projectsApi } from '@/lib/api';
+import { resolveImageUrl, projectsApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { computeSize } from '@/lib/types';
 import type { Task } from '@/lib/types';
@@ -147,7 +145,6 @@ export default function ImageToImagePage() {
       toolName="图生图"
       paramsPanel={paramsPanel}
       canvas={canvas}
-      queuePanel={<TaskQueuePanel projectId={projectId} />}
     />
   );
 }

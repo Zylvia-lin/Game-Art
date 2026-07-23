@@ -12,12 +12,11 @@ interface ToolLayoutProps {
   paramsPanel?: ReactNode;
   canvas: ReactNode;
   history?: ReactNode;
-  queuePanel?: ReactNode;
 }
 
-export function ToolLayout({ title, description, toolKey, toolName, params, paramsPanel, canvas, history, queuePanel }: ToolLayoutProps) {
+export function ToolLayout({ title, description, toolKey, toolName, params, paramsPanel, canvas, history }: ToolLayoutProps) {
   const leftPanel = params || paramsPanel;
-  const rightPanel = history || queuePanel;
+  const rightPanel = history;
 
   return (
     <div className="flex h-full">

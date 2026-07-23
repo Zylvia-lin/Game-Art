@@ -270,6 +270,8 @@ export const generateApi = {
     ),
   cancelTask: (taskId: string) =>
     request<Task>(`/api/generate/task/${taskId}/cancel`, { method: 'POST' }),
+  deleteTasks: (projectId: string, status?: string) =>
+    request<{ deleted: number }>(`/api/generate/task?project_id=${projectId}${status ? `&status=${status}` : ''}`, { method: 'DELETE' }),
 };
 
 // ============================================
