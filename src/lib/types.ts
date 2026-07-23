@@ -36,6 +36,7 @@ export interface Project {
   name: string;
   description: string | null;
   cover_url: string | null;
+  style: string;
   created_at: string;
   updated_at: string;
 }

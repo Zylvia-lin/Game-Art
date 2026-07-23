@@ -7,7 +7,7 @@ import { ToolLayout } from '@/components/tools/tool-layout';
 import { StyleSelector } from '@/components/tools/selectors';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { GenerationResultActions } from '@/components/tools/generation-result-actions';
-import { generateApi } from '@/lib/api';
+import { generateApi, projectsApi } from '@/lib/api';
 
 const SUB_TOOLS = [
   { key: 'tpose', label: 'T-pose 生成', desc: '生成标准站姿角色' },
@@ -18,6 +18,14 @@ const SUB_TOOLS = [
 export default function CharacterPage() {
   const params = useParams();
   const projectId = String(params.id);
+  const [projectStyle, setProjectStyle] = useState<string>('pixel');
+
+  // Load project to get default style
+  useEffect(() => {
+    projectsApi.get(Number(projectId)).then(p => {
+      if (p?.style) setProjectStyle(p.style);
+    }).catch(() => {});
+  }, [projectId]);
 
   // Check sessionStorage for pre-selected image
   useEffect(() => {
@@ -30,7 +38,7 @@ export default function CharacterPage() {
 
   const [subTool, setSubTool] = useState<string>('tpose');
   const [prompt, setPrompt] = useState('');
-  const [style, setStyle] = useState('anime');
+  const [style, setStyle] = useState(projectStyle);
   const [directions, setDirections] = useState(8);
   const [sourceImage, setSourceImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);

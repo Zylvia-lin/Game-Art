@@ -39,6 +39,7 @@ const toProject = (row: Record<string, unknown>): Project => ({
   name: row.name as string,
   description: (row.description as string) ?? null,
   cover_url: (row.cover_url as string) ?? null,
+  style: (row.style as string) ?? 'pixel',
   created_at: (row.created_at as Date).toISOString(),
   updated_at: (row.updated_at as Date).toISOString(),
 });

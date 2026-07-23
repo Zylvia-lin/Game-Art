@@ -48,7 +48,7 @@ export const promptsApi = {
 // Projects
 export const projectsApi = {
   list: () => request<Project[]>('/api/projects'),
-  create: (data: { name: string; description?: string }) =>
+  create: (data: { name: string; description?: string; style?: string }) =>
     request<Project>('/api/projects', { method: 'POST', body: JSON.stringify(data) }),
   get: (id: number) => request<Project>(`/api/projects/${id}`),
   update: (id: number, data: Partial<Project>) =>

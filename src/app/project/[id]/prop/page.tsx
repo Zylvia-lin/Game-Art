@@ -1,21 +1,32 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, Sword, Copy } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { StyleSelector } from '@/components/tools/selectors';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
+import { projectsApi } from '@/lib/api';
+import type { Project } from '@/lib/types';
 
 export default function PropPage() {
   const params = useParams();
   const projectId = Number(params.id);
   const [subTool, setSubTool] = useState<string>('generate');
   const [prompt, setPrompt] = useState('');
-  const [style, setStyle] = useState('fantasy');
+  const [style, setStyle] = useState('pixel');
   const [variantCount, setVariantCount] = useState(4);
   const { tasks, submitting, submitTask } = useTaskQueue({ projectId });
+  const [project, setProject] = useState<Project | null>(null);
+
+  useEffect(() => {
+    projectsApi.get(projectId).then(setProject).catch(() => {});
+  }, [projectId]);
+
+  useEffect(() => {
+    if (project?.style) setStyle(project.style);
+  }, [project]);
 
   const toolKeyMap: Record<string, string> = {
     generate: 'prop_generate',

@@ -5,17 +5,27 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2, FolderPlus } from 'lucide-react';
 import { projectsApi } from '@/lib/api';
 
+const STYLES = [
+  { value: 'pixel', label: '像素风', desc: '经典像素艺术风格' },
+  { value: 'anime', label: '二次元', desc: '日系动漫风格' },
+  { value: 'realistic', label: '写实', desc: '真实感渲染风格' },
+  { value: 'cartoon', label: '卡通', desc: 'Q版卡通风格' },
+  { value: 'cyberpunk', label: '赛博朋克', desc: '未来科技感' },
+  { value: 'fantasy', label: '奇幻', desc: '魔幻史诗风格' },
+];
+
 export default function NewProjectPage() {
   const router = useRouter();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [style, setStyle] = useState('pixel');
   const [saving, setSaving] = useState(false);
 
   const handleCreate = async () => {
     if (!name.trim()) return;
     setSaving(true);
     try {
-      const project = await projectsApi.create({ name, description });
+      const project = await projectsApi.create({ name, description, style });
       router.push(`/project/${project.id}`);
     } catch (err) {
       console.error('Create failed:', err);
@@ -59,10 +69,29 @@ export default function NewProjectPage() {
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                rows={3}
+                rows={2}
                 placeholder="简要描述你的项目..."
                 className="w-full rounded-lg border border-border bg-input px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors resize-none"
               />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-foreground">美术风格</label>
+              <div className="grid grid-cols-2 gap-2">
+                {STYLES.map((s) => (
+                  <button
+                    key={s.value}
+                    onClick={() => setStyle(s.value)}
+                    className={`rounded-lg border px-3 py-2 text-left transition-all ${
+                      style === s.value
+                        ? 'border-primary bg-primary/10 text-foreground'
+                        : 'border-border bg-input hover:border-primary/50 text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <div className="text-sm font-medium">{s.label}</div>
+                    <div className="text-xs opacity-70">{s.desc}</div>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 

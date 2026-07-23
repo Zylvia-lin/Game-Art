@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { Sparkles } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
@@ -8,17 +8,24 @@ import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/t
 import { PromptEditor } from '@/components/tools/prompt-editor';
 import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
 import { useTaskQueue } from '@/hooks/use-task-queue';
-import { generateApi } from '@/lib/api';
+import { generateApi, projectsApi } from '@/lib/api';
 
 export default function TextToImagePage() {
   const params = useParams();
   const projectId = Number(params.id);
   const [prompt, setPrompt] = useState('');
-  const [style, setStyle] = useState('anime');
+  const [style, setStyle] = useState('pixel');
   const [ratio, setRatio] = useState('1:1');
   const [resolution, setResolution] = useState('1024x1024');
   const [error, setError] = useState<string | null>(null);
   const { submitting, submitTask } = useTaskQueue({ projectId });
+
+  // Load project style as default
+  useEffect(() => {
+    projectsApi.get(projectId).then((project) => {
+      if (project.style) setStyle(project.style);
+    }).catch(() => {});
+  }, [projectId]);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;

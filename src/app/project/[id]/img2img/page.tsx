@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, Download, ImageIcon } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { GenerationResultActions } from '@/components/tools/generation-result-actions';
 import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
-import { generateApi } from '@/lib/api';
+import { generateApi, projectsApi } from '@/lib/api';
 import type { Task } from '@/lib/types';
 
 export default function ImageToImagePage() {
@@ -18,6 +18,11 @@ export default function ImageToImagePage() {
   const [strength, setStrength] = useState(0.7);
   const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<string[]>([]);
+
+  // Load project style (for potential future use in img2img prompts)
+  useEffect(() => {
+    projectsApi.get(projectId).catch(() => {});
+  }, [projectId]);
 
   const handleTaskComplete = useCallback((task: Task) => {
     if (task.output_urls && task.output_urls.length > 0) {
