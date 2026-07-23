@@ -2,7 +2,7 @@
 import postgres from 'postgres';
 import type { ModelConfig, SystemPrompt, Project, Generation, Asset } from '@/lib/types';
 
-const sql = postgres({
+export const sql = postgres({
   host: 'localhost',
   port: 5432,
   database: 'game_art_ai',

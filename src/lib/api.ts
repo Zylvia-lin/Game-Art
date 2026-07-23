@@ -114,4 +114,17 @@ export const generateApi = {
     if (!res.ok) throw new Error('Upload failed');
     return res.json();
   },
+  // Task management
+  getTask: (taskId: number) =>
+    request<import('./types').Task>(`/api/generate/task?task_id=${taskId}`),
+  getProjectTasks: (projectId: number, status?: string) =>
+    request<import('./types').Task[]>(`/api/generate/task?project_id=${projectId}${status ? `&status=${status}` : ''}`),
+  getQueueStats: (projectId?: number) =>
+    request<{ pending: number; processing: number; completed: number; failed: number }>(
+      `/api/generate/task?stats=true${projectId ? `&project_id=${projectId}` : ''}`
+    ),
+  cancelTask: (taskId: number) =>
+    request<import('./types').Task>(`/api/generate/task/${taskId}/cancel`, { method: 'POST' }),
+  clearTasks: (projectId: number) =>
+    request<void>(`/api/generate/task?project_id=${projectId}`, { method: 'DELETE' }),
 };

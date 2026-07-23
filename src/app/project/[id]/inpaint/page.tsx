@@ -6,6 +6,8 @@ import { Sparkles, Loader2, Undo2, Redo2, Eraser, Paintbrush } from 'lucide-reac
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { GenerationResultActions } from '@/components/tools/generation-result-actions';
+import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
+import { useTaskQueue } from '@/hooks/use-task-queue';
 import { generateApi } from '@/lib/api';
 
 export default function InpaintPage() {
@@ -16,11 +18,11 @@ export default function InpaintPage() {
   const [imageUrl, setImageUrl] = useState('');
   const [prompt, setPrompt] = useState('');
   const [brushSize, setBrushSize] = useState(20);
-  const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<string[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
   const [history, setHistory] = useState<ImageData[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const { submitting, submitTask } = useTaskQueue({ projectId });
 
   // Check for pre-selected image from sessionStorage (navigated from another tool)
   useEffect(() => {
@@ -153,20 +155,16 @@ export default function InpaintPage() {
 
   const handleGenerate = async () => {
     if (!imageUrl || !prompt.trim()) return;
-    setLoading(true);
     try {
       const maskUrl = await getMaskUrl();
-      const res = await generateApi.inpaint({
+      await submitTask('inpaint', {
         project_id: projectId,
         image_url: imageUrl,
         mask_url: maskUrl,
         prompt,
       });
-      setResults(res.output_urls);
     } catch (err) {
       console.error('Inpaint failed:', err);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -233,11 +231,16 @@ export default function InpaintPage() {
       </div>
       <button
         onClick={handleGenerate}
-        disabled={loading || !imageUrl || !prompt.trim()}
+        disabled={submitting || !imageUrl || !prompt.trim()}
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-0.5"
       >
-        {loading ? <><Loader2 className="h-4 w-4 animate-spin" />重绘中...</> : <><Sparkles className="h-4 w-4" />局部重绘</>}
+        {submitting ? <><Loader2 className="h-4 w-4 animate-spin" />提交中...</> : <><Sparkles className="h-4 w-4" />局部重绘</>}
       </button>
+      <TaskQueuePanel projectId={projectId} onTaskComplete={(task) => {
+        if (task.status === 'completed' && task.output_urls?.length) {
+          setResults(task.output_urls);
+        }
+      }} />
     </>
   );
 

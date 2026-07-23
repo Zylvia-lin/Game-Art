@@ -1,55 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createTask, getTask, getProjectTasks, getQueueStats } from '@/lib/task-queue';
+import { getTask, getProjectTasks, getQueueStats } from '@/lib/task-queue';
 
 /**
- * POST /api/generate/[tool_key]
- * Create a new generation task (async)
+ * GET /api/generate/task
+ * Query task status or list tasks
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ tool_key: string }> }
-) {
+export async function GET(request: NextRequest) {
   try {
-    const { tool_key } = await params;
-    const body = await request.json();
-    
-    const { project_id, ...inputParams } = body;
-    
-    if (!project_id) {
-      return NextResponse.json(
-        { error: 'project_id is required' },
-        { status: 400 }
-      );
-    }
-    
-    // Create task in queue
-    const task = await createTask(project_id, tool_key, inputParams);
-    
-    return NextResponse.json({
-      status: 'queued',
-      task_id: task.id,
-      message: 'Task added to queue',
-    }, { status: 201 });
-    
-  } catch (error) {
-    console.error('Error creating task:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to create task' },
-      { status: 500 }
-    );
-  }
-}
-
-/**
- * GET /api/generate/[tool_key]
- * Get task status or list tasks
- */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ tool_key: string }> }
-) {
-  try {
-    const { tool_key } = await params;
     const { searchParams } = new URL(request.url);
     
     const taskId = searchParams.get('task_id');

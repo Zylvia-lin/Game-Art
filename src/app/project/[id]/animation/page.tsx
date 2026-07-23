@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, Film } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
+import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
 import { generateApi } from '@/lib/api';
+import type { Task } from '@/lib/types';
 
 const ACTIONS = ['idle', 'walk', 'run', 'attack', 'jump', 'death', 'custom'] as const;
 const SUB_TOOLS = [
@@ -22,8 +24,14 @@ export default function AnimationPage() {
   const [action, setAction] = useState('walk');
   const [customAction, setCustomAction] = useState('');
   const [frameCount, setFrameCount] = useState(4);
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<string[]>([]);
+
+  const toolKeyMap: Record<string, string> = {
+    text: 'animation_text',
+    skeleton: 'animation_skeleton',
+    frame_extract: 'animation_frame_extract',
+  };
 
   // Check for pre-selected image from sessionStorage
   useEffect(() => {
@@ -34,29 +42,30 @@ export default function AnimationPage() {
     }
   }, []);
 
-  const toolKeyMap: Record<string, string> = {
-    text: 'animation_text',
-    skeleton: 'animation_skeleton',
-    frame_extract: 'animation_frame_extract',
-  };
+  const handleTaskComplete = useCallback((task: Task) => {
+    if (task.output_urls && task.output_urls.length > 0) {
+      setResults(prev => [...task.output_urls, ...prev]);
+    }
+  }, []);
 
   const handleGenerate = async () => {
     const finalAction = action === 'custom' ? customAction : action;
     if (!finalAction) return;
-    setLoading(true);
+    setSubmitting(true);
     try {
-      const res = await generateApi.animation({
+      // Submit task - returns immediately with task info
+      await generateApi.animation({
         project_id: projectId,
         image_url: imageUrl,
         action: finalAction,
         sub_tool: subTool,
         frame_count: frameCount,
       });
-      setResults(res.output_urls);
+      // Task is now in queue, TaskQueuePanel will show progress
     } catch (err) {
-      console.error('Generation failed:', err);
+      console.error('Failed to submit task:', err);
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -126,24 +135,18 @@ export default function AnimationPage() {
       </div>
       <button
         onClick={handleGenerate}
-        disabled={loading || !imageUrl}
+        disabled={submitting || !imageUrl}
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-0.5"
       >
-        {loading ? <><Loader2 className="h-4 w-4 animate-spin" />生成中...</> : <><Sparkles className="h-4 w-4" />生成动画</>}
+        {submitting ? <><Loader2 className="h-4 w-4 animate-spin" />提交中...</> : <><Sparkles className="h-4 w-4" />提交生成任务</>}
       </button>
     </>
   );
 
   const canvas = (
-    <div className="flex h-full flex-col">
-      {loading ? (
-        <div className="flex flex-1 items-center justify-center">
-          <div className="text-center">
-            <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
-            <p className="mt-4 text-sm text-muted-foreground">AI 正在生成动画帧...</p>
-          </div>
-        </div>
-      ) : results.length > 0 ? (
+    <div className="flex h-full flex-col gap-4">
+      <TaskQueuePanel projectId={projectId} />
+      {results.length > 0 ? (
         <div>
           <h3 className="mb-3 text-sm font-medium text-foreground">动画帧预览</h3>
           <div className="flex gap-2 overflow-x-auto pb-4">
@@ -163,7 +166,7 @@ export default function AnimationPage() {
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-accent">
               <Film className="h-8 w-8 text-muted-foreground" />
             </div>
-            <p className="text-sm text-muted-foreground">上传角色图片，选择动作生成动画</p>
+            <p className="text-sm text-muted-foreground">提交生成任务后，任务会在此显示并异步处理</p>
           </div>
         </div>
       )}

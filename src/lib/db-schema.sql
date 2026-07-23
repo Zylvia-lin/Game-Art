@@ -48,10 +48,27 @@ CREATE TABLE IF NOT EXISTS assets (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Generations
+-- Tasks (async generation queue)
+CREATE TABLE IF NOT EXISTS tasks (
+  id SERIAL PRIMARY KEY,
+  project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+  tool_key VARCHAR(100) NOT NULL,
+  input_params JSONB DEFAULT '{}',
+  status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+  output_urls JSONB DEFAULT '[]',
+  error_message TEXT,
+  progress INTEGER DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  started_at TIMESTAMP,
+  completed_at TIMESTAMP
+);
+
+-- Generations (completed task history)
 CREATE TABLE IF NOT EXISTS generations (
   id SERIAL PRIMARY KEY,
   project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+  task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL,
   tool_key VARCHAR(100) NOT NULL,
   input_params JSONB DEFAULT '{}',
   output_urls JSONB DEFAULT '[]',

@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, Download, ImageIcon } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { GenerationResultActions } from '@/components/tools/generation-result-actions';
+import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
 import { generateApi } from '@/lib/api';
+import type { Task } from '@/lib/types';
 
 export default function ImageToImagePage() {
   const params = useParams();
@@ -14,24 +16,28 @@ export default function ImageToImagePage() {
   const [imageUrl, setImageUrl] = useState('');
   const [prompt, setPrompt] = useState('');
   const [strength, setStrength] = useState(0.7);
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<string[]>([]);
+
+  const handleTaskComplete = useCallback((task: Task) => {
+    if (task.output_urls && task.output_urls.length > 0) {
+      setResults(prev => [...task.output_urls, ...prev]);
+    }
+  }, []);
 
   const handleGenerate = async () => {
     if (!imageUrl || !prompt.trim()) return;
-    setLoading(true);
+    setSubmitting(true);
     try {
-      const res = await generateApi.imageToImage({
+      await generateApi.imageToImage({
         project_id: projectId,
         image_url: imageUrl,
         prompt,
         strength,
       });
-      setResults(res.output_urls);
     } catch (err) {
       console.error('Generation failed:', err);
-    } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -73,24 +79,17 @@ export default function ImageToImagePage() {
       </div>
       <button
         onClick={handleGenerate}
-        disabled={loading || !imageUrl || !prompt.trim()}
+        disabled={submitting || !imageUrl || !prompt.trim()}
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-0.5"
       >
-        {loading ? <><Loader2 className="h-4 w-4 animate-spin" />处理中...</> : <><Sparkles className="h-4 w-4" />开始编辑</>}
+        {submitting ? <><Loader2 className="h-4 w-4 animate-spin" />提交中...</> : <><Sparkles className="h-4 w-4" />开始编辑</>}
       </button>
     </>
   );
 
   const canvas = (
     <div className="flex h-full flex-col">
-      {loading ? (
-        <div className="flex flex-1 items-center justify-center">
-          <div className="text-center">
-            <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
-            <p className="mt-4 text-sm text-muted-foreground">AI 正在编辑图片...</p>
-          </div>
-        </div>
-      ) : results.length > 0 ? (
+      {results.length > 0 ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {results.map((url, i) => (
             <div key={i} className="group relative overflow-hidden rounded-xl border border-border bg-card">
@@ -121,7 +120,12 @@ export default function ImageToImagePage() {
       toolKey="image_to_image"
       toolName="图生图编辑"
       params={paramsPanel}
-      canvas={canvas}
+      canvas={
+        <div className="flex h-full flex-col">
+          <div className="flex-1">{canvas}</div>
+          <TaskQueuePanel projectId={projectId} onTaskComplete={handleTaskComplete} />
+        </div>
+      }
     />
   );
 }

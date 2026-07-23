@@ -63,6 +63,23 @@ export interface Asset {
   created_at: string;
 }
 
+export type TaskStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+export interface Task {
+  id: number;
+  project_id: number;
+  tool_key: string;
+  input_params: Record<string, unknown>;
+  status: TaskStatus;
+  output_urls: string[];
+  error_message: string | null;
+  progress: number;
+  created_at: string;
+  updated_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
 export interface GenerateRequest {
   project_id: number;
   prompt: string;
@@ -72,9 +89,8 @@ export interface GenerateRequest {
 
 export interface GenerateResponse {
   status: string;
-  generation_id: number;
-  output_urls: string[];
-  enhanced_prompt?: string;
+  task_id: number;
+  message: string;
 }
 
 export const ART_STYLES = [

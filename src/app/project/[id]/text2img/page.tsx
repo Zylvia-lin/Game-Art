@@ -2,10 +2,12 @@
 
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Sparkles, Loader2, Download } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
-import { GenerationResultActions } from '@/components/tools/generation-result-actions';
+import { PromptEditor } from '@/components/tools/prompt-editor';
+import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
+import { useTaskQueue } from '@/hooks/use-task-queue';
 import { generateApi } from '@/lib/api';
 
 export default function TextToImagePage() {
@@ -15,28 +17,16 @@ export default function TextToImagePage() {
   const [style, setStyle] = useState('anime');
   const [ratio, setRatio] = useState('1:1');
   const [resolution, setResolution] = useState('1024x1024');
-  const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<string[]>([]);
-  const [enhancedPrompt, setEnhancedPrompt] = useState('');
+  const { submitting, submitTask } = useTaskQueue({ projectId });
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
-    setLoading(true);
-    try {
-      const res = await generateApi.textToImage({
-        project_id: projectId,
-        prompt,
-        style,
-        ratio,
-        resolution,
-      });
-      setResults(res.output_urls);
-      if (res.enhanced_prompt) setEnhancedPrompt(res.enhanced_prompt);
-    } catch (err) {
-      console.error('Generation failed:', err);
-    } finally {
-      setLoading(false);
-    }
+    await submitTask('text_to_image', {
+      prompt,
+      style,
+      ratio,
+      resolution,
+    });
   };
 
   const paramsPanel = (
@@ -56,75 +46,23 @@ export default function TextToImagePage() {
       <ResolutionSelector value={resolution} onChange={setResolution} />
       <button
         onClick={handleGenerate}
-        disabled={loading || !prompt.trim()}
+        disabled={submitting || !prompt.trim()}
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-0.5"
       >
-        {loading ? (
+        {submitting ? (
           <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            生成中...
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            提交中...
           </>
         ) : (
           <>
             <Sparkles className="h-4 w-4" />
-            生成图片
+            生成
           </>
         )}
       </button>
+      <PromptEditor toolKey="text_to_image" toolName="文生图" />
     </>
-  );
-
-  const canvas = (
-    <div className="flex h-full flex-col">
-      {enhancedPrompt && (
-        <div className="mb-4 rounded-lg border border-border bg-card/50 p-3">
-          <p className="text-xs text-muted-foreground mb-1">增强后的提示词：</p>
-          <p className="text-sm text-foreground">{enhancedPrompt}</p>
-        </div>
-      )}
-      {loading ? (
-        <div className="flex flex-1 items-center justify-center">
-          <div className="text-center">
-            <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
-            <p className="mt-4 text-sm text-muted-foreground">AI 正在创作中...</p>
-          </div>
-        </div>
-      ) : results.length > 0 ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {results.map((url, i) => (
-            <div key={i} className="group relative overflow-hidden rounded-xl border border-border bg-card">
-              <img
-                src={url}
-                alt={`Generated ${i + 1}`}
-                className="w-full object-contain"
-              />
-              <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <a
-                  href={url}
-                  download
-                  target="_blank"
-                  className="rounded-lg bg-card/80 p-2 text-foreground backdrop-blur-sm hover:bg-card transition-colors"
-                >
-                  <Download className="h-4 w-4" />
-                </a>
-              </div>
-              <div className="p-3 border-t border-border">
-                <GenerationResultActions projectId={String(projectId)} imageUrl={url} showAddToLibrary />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="flex flex-1 items-center justify-center">
-          <div className="text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-accent">
-              <Sparkles className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <p className="text-sm text-muted-foreground">输入描述，点击生成开始创作</p>
-          </div>
-        </div>
-      )}
-    </div>
   );
 
   return (
@@ -134,7 +72,22 @@ export default function TextToImagePage() {
       toolKey="text_to_image"
       toolName="文生图"
       params={paramsPanel}
-      canvas={canvas}
+      canvas={
+        <div className="flex h-full flex-col">
+          <div className="flex-1 rounded-xl border border-border bg-muted/30 p-8">
+            <div className="flex h-full flex-col items-center justify-center text-center">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+                <Sparkles className="h-8 w-8 text-primary" />
+              </div>
+              <h3 className="mb-2 text-lg font-semibold text-foreground">文生图</h3>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                输入描述，选择风格和比例，AI 将为你生成对应的游戏美术资产。
+              </p>
+            </div>
+          </div>
+          <TaskQueuePanel projectId={projectId} />
+        </div>
+      }
     />
   );
 }
