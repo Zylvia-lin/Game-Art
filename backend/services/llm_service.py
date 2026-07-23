@@ -49,7 +49,18 @@ async def optimize_prompt(
         ]
 
         response = await llm.ainvoke(messages)
-        return response.content.strip()
+        content = response.content
+        # LangChain may return content as a list of blocks or an object
+        if isinstance(content, list):
+            content = "".join(
+                block.get("text", "") if isinstance(block, dict)
+                else str(block)
+                for block in content
+            )
+        elif not isinstance(content, str):
+            content = str(content)
+        return content.strip()
     except Exception as e:
-        print(f"Prompt optimization failed: {e}")
-        raise Exception(f"提示词优化失败: {str(e)}")
+        err_msg = str(e) if str(e) else repr(e)
+        print(f"Prompt optimization failed: {err_msg}")
+        raise Exception(f"提示词优化失败: {err_msg}")

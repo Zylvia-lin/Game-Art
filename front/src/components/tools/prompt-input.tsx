@@ -30,9 +30,11 @@ export function PromptInput({
     setError(null);
     try {
       const result = await generateApi.optimizePrompt(value, toolKey);
-      onChange(result.optimized_prompt);
+      const optimized = result.optimized_prompt;
+      onChange(typeof optimized === 'string' ? optimized : JSON.stringify(optimized));
     } catch (err) {
-      setError(err instanceof Error ? err.message : '优化失败，请重试');
+      const msg = err instanceof Error ? err.message : (typeof err === 'string' ? err : '优化失败，请重试');
+      setError(msg);
     } finally {
       setOptimizing(false);
     }
