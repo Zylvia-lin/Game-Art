@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Save, Loader2, FileText, Check } from 'lucide-react';
+import { Save, Loader2, FileText, Check, ArrowLeft } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { promptsApi } from '@/lib/api';
 import type { SystemPrompt } from '@/lib/types';
 
 export default function PromptsSettingsPage() {
+  const router = useRouter();
   const [prompts, setPrompts] = useState<SystemPrompt[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -71,6 +73,13 @@ export default function PromptsSettingsPage() {
       {/* Prompt list */}
       <div className="w-[260px] shrink-0 border-r border-border overflow-y-auto">
         <div className="p-4">
+          <button
+            onClick={() => router.back()}
+            className="mb-3 flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:border-primary/50 hover:text-foreground"
+          >
+            <ArrowLeft className="h-3 w-3" />
+            返回
+          </button>
           <h2 className="mb-1 text-lg font-semibold text-foreground">系统提示词</h2>
           <p className="mb-4 text-xs text-muted-foreground">每个功能的提示词独立管理，修改后实时生效</p>
           {groups.map((group) => (

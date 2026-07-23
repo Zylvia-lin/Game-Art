@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, Trash2, Star, Loader2, Settings, Key, Server } from 'lucide-react';
+import { Plus, Trash2, Star, Loader2, Settings, Key, Server, ArrowLeft } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { modelsApi } from '@/lib/api';
 import type { ModelConfig, ModelConfigCreate } from '@/lib/types';
 
@@ -29,6 +30,7 @@ const PROVIDER_CONFIG = {
 type ModelType = keyof typeof PROVIDER_CONFIG;
 
 export default function ModelsSettingsPage() {
+  const router = useRouter();
   const [configs, setConfigs] = useState<ModelConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -166,9 +168,18 @@ export default function ModelsSettingsPage() {
   return (
     <div className="mx-auto max-w-4xl p-6">
       <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">模型配置</h1>
-          <p className="mt-1 text-sm text-muted-foreground">配置 AI 文本模型和图片模型的 API 信息</p>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => router.back()}
+            className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted-foreground transition-all hover:border-primary/50 hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            返回
+          </button>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">模型配置</h1>
+            <p className="mt-1 text-sm text-muted-foreground">配置 AI 文本模型和图片模型的 API 信息</p>
+          </div>
         </div>
         <button
           onClick={() => { resetForm(); setShowForm(true); }}
