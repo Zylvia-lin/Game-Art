@@ -222,10 +222,10 @@ export async function getAsset(id: number): Promise<Asset | undefined> {
   return rows[0] ? toAsset(rows[0] as unknown as Record<string, unknown>) : undefined;
 }
 
-export async function createAsset(data: { project_id: number; name: string; type: string; url: string; metadata_?: Record<string, unknown>; generation_id?: number }): Promise<Asset> {
+export async function createAsset(data: { project_id: number; name: string; type: string; url: string; metadata_?: Record<string, unknown> }): Promise<Asset> {
   const rows = await sql`
-    INSERT INTO assets (project_id, generation_id, name, type, url, metadata)
-    VALUES (${data.project_id}, ${data.generation_id ?? null}, ${data.name}, ${data.type}, ${data.url}, ${JSON.stringify(data.metadata_ || {})}::jsonb)
+    INSERT INTO assets (project_id, name, type, url, metadata)
+    VALUES (${data.project_id}, ${data.name}, ${data.type}, ${data.url}, ${JSON.stringify(data.metadata_ || {})}::jsonb)
     RETURNING *
   `;
   return toAsset(rows[0] as unknown as Record<string, unknown>);
