@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Paintbrush, Film, Scissors, Rotate3D, Layers, Check, X, Download, FolderPlus } from 'lucide-react';
-import { projectsApi } from '@/lib/api';
+import { projectsApi, assetsApi } from '@/lib/api';
 
 interface GenerationResultActionsProps {
   projectId: string;
@@ -51,24 +51,18 @@ export function GenerationResultActions({
   };
 
   const handleAddToLibrary = async () => {
+    if (!projectId || isNaN(Number(projectId))) return;
     setAddingToLibrary(true);
     try {
-      const res = await fetch('/api/assets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          project_id: Number(projectId),
-          name: `生成图片 ${new Date().toLocaleString()}`,
-          type: imageType === 'general' ? 'prop' : imageType,
-          url: imageUrl,
-          metadata: { source: 'toolbox' },
-        }),
+      const asset = await assetsApi.create({
+        project_id: Number(projectId),
+        name: `生成图片 ${new Date().toLocaleString()}`,
+        type: imageType === 'general' ? 'prop' : imageType,
+        url: imageUrl,
+        metadata: { source: 'toolbox' },
       });
-      if (res.ok) {
-        const asset = await res.json();
-        setAdded(true);
-        onAddedToLibrary?.(asset.id);
-      }
+      setAdded(true);
+      onAddedToLibrary?.(asset.id);
     } catch (err) {
       console.error('Failed to add to library:', err);
     } finally {

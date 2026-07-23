@@ -24,6 +24,7 @@ export function ProjectAssetSelector({ projectId, onSelect, onClose, filterType 
   }, [projectId]);
 
   const loadAssets = async () => {
+    if (!projectId || isNaN(Number(projectId))) return;
     try {
       setLoading(true);
       const data = await projectsApi.assets(Number(projectId));

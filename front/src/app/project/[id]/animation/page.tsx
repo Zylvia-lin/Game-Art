@@ -7,7 +7,7 @@ import { ToolLayout } from '@/components/tools/tool-layout';
 import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { useTaskQueue } from '@/hooks/use-task-queue';
-import { resolveImageUrl } from '@/lib/api';
+import { resolveImageUrl, toolsApi } from '@/lib/api';
 import { TaskQueuePanel } from '@/components/tools/task-queue-panel';
 import { PromptEditor } from '@/components/tools/prompt-editor';
 import type { Task } from '@/lib/types';
@@ -95,23 +95,12 @@ export default function AnimationPage() {
     setExtractedFrames([]);
 
     try {
-      const response = await fetch('/api/tools/extract-frames', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          image_url: imageUrl,
-          rows: extractRows,
-          cols: extractCols,
-        }),
+      const data = await toolsApi.extractFrames({
+        image_url: imageUrl,
+        rows: extractRows,
+        cols: extractCols,
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || '帧提取失败');
-      }
-
-      const data = await response.json();
-      const frames = (data.frames as string[]).map((url) => ({ url }));
+      const frames = data.frames.map((url) => ({ url }));
       setExtractedFrames(frames);
     } catch (err) {
       setError(err instanceof Error ? err.message : '帧提取失败');
