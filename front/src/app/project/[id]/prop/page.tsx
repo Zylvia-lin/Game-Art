@@ -6,6 +6,7 @@ import { Sparkles, Loader2, Sword } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
+import { PromptInput } from '@/components/tools/prompt-input';
 import { GenerationResultActions } from '@/components/tools/generation-result-actions';
 import { resolveImageUrl, projectsApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
@@ -118,16 +119,14 @@ export default function PropPage() {
           assetType="prop"
         />
       )}
-      <div>
-        <label className="mb-1.5 block text-sm font-medium text-foreground">道具描述</label>
-        <textarea
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          rows={4}
-          placeholder={subTool === 'variant' ? '描述变体方向，如：不同颜色、材质、品质等级...' : '描述你想要的道具，如：一把燃烧着火焰的传说之剑...'}
-          className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors resize-none"
-        />
-      </div>
+      <PromptInput
+        value={prompt}
+        onChange={setPrompt}
+        toolKey="prop"
+        label="道具描述"
+        placeholder={subTool === 'variant' ? '描述变体方向，如：不同颜色、材质、品质等级...' : '描述你想要的道具，如：一把燃烧着火焰的传说之剑...'}
+        rows={4}
+      />
       <StyleSelector value={style} onChange={setStyle} />
       {subTool === 'variant' && (
         <div>

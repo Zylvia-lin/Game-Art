@@ -1,51 +1,55 @@
 """
-LLM service for prompt enhancement.
+LLM service for on-demand prompt optimization.
 Uses LangChain to call text generation models (DeepSeek, OpenAI, etc.).
 """
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
 
-async def enhance_prompt(
-    system_prompt_content: str,
+async def optimize_prompt(
     user_prompt: str,
     model: dict,
-    context: dict,
+    tool_key: str | None = None,
 ) -> str:
     """
-    Enhance a user prompt using an LLM via LangChain.
-    Replaces placeholders in system prompt, adds context, calls LLM.
+    Optimize a user prompt using an LLM via LangChain.
+    This is called on-demand when the user clicks the optimize button.
+
+    Args:
+        user_prompt: The user's raw prompt text
+        model: Model config dict with model_name, api_key, api_base_url
+        tool_key: Optional tool key for context-aware optimization
     """
-    # Replace placeholders
-    final_prompt = system_prompt_content.replace("{user_prompt}", user_prompt)
-
-    # Add context info
-    if context.get("style"):
-        final_prompt += f"\n风格要求：{context['style']}"
-    if context.get("ratio"):
-        final_prompt += f"\n图片比例：{context['ratio']}"
-    if context.get("resolution"):
-        final_prompt += f"\n分辨率：{context['resolution']}"
-    if context.get("pose"):
-        final_prompt += f"\n角色姿势：{context['pose']}"
-
     try:
-        # Initialize LangChain ChatOpenAI (works with any OpenAI-compatible API)
+        # Build system instruction based on tool type
+        if tool_key:
+            system_content = (
+                f"你是专业的游戏美术提示词工程师，擅长为{tool_key}场景优化提示词。"
+                "请根据用户输入的提示词，补充细节、丰富描述、增强画面感。"
+                "直接输出优化后的提示词，不要解释，不要添加多余标记。"
+            )
+        else:
+            system_content = (
+                "你是专业的游戏美术提示词工程师。"
+                "请根据用户输入的提示词，补充细节、丰富描述、增强画面感。"
+                "直接输出优化后的提示词，不要解释，不要添加多余标记。"
+            )
+
         llm = ChatOpenAI(
             model=model["model_name"],
             openai_api_key=model["api_key"],
             openai_api_base=model["api_base_url"].rstrip("/"),
             temperature=0.7,
-            max_tokens=500,
+            max_tokens=800,
         )
 
         messages = [
-            SystemMessage(content="你是专业的游戏美术提示词工程师。请根据用户描述生成详细的图片生成提示词。直接输出提示词，不要解释。"),
-            HumanMessage(content=final_prompt),
+            SystemMessage(content=system_content),
+            HumanMessage(content=user_prompt),
         ]
 
         response = await llm.ainvoke(messages)
-        return response.content
+        return response.content.strip()
     except Exception as e:
-        print(f"Prompt enhancement failed: {e}")
-        return user_prompt
+        print(f"Prompt optimization failed: {e}")
+        raise Exception(f"提示词优化失败: {str(e)}")

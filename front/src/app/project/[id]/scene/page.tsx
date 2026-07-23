@@ -6,6 +6,7 @@ import { Sparkles, Loader2, Map } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
+import { PromptInput } from '@/components/tools/prompt-input';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { PromptEditor } from '@/components/tools/prompt-editor';
 import type { Task } from '@/lib/types';
@@ -103,16 +104,14 @@ export default function ScenePage() {
           assetType="scene"
         />
       )}
-      <div>
-        <label className="mb-1.5 block text-sm font-medium text-foreground">场景描述</label>
-        <textarea
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          rows={4}
-          placeholder="描述你想要的游戏场景，如：一片神秘的精灵森林，有发光的蘑菇和古老的树木..."
-          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-primary"
-        />
-      </div>
+      <PromptInput
+        value={prompt}
+        onChange={setPrompt}
+        toolKey="scene"
+        label="场景描述"
+        placeholder="描述你想要的游戏场景，如：一片神秘的精灵森林，有发光的蘑菇和古老的树木..."
+        rows={4}
+      />
       <div>
         <label className="mb-1.5 block text-sm font-medium text-foreground">视角</label>
         <div className="flex gap-2">

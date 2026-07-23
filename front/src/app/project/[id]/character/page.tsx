@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
+import { PromptInput } from '@/components/tools/prompt-input';
 import { GenerationResultActions } from '@/components/tools/generation-result-actions';
 import { resolveImageUrl, projectsApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
@@ -149,18 +150,14 @@ export default function CharacterPage() {
         />
       )}
 
-      <div>
-        <label className="mb-1.5 block text-sm font-medium text-foreground">
-          {needsImage ? '补充描述（可选）' : optionalImage && sourceImage ? '补充描述（可选）' : '角色描述'}
-        </label>
-        <textarea
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          rows={3}
-          placeholder={needsImage ? '描述需要调整的内容...' : optionalImage && sourceImage ? '描述需要调整的内容...' : '描述角色外观，如：身穿银色铠甲的女骑士，手持长剑...'}
-          className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors resize-none"
-        />
-      </div>
+      <PromptInput
+        value={prompt}
+        onChange={setPrompt}
+        toolKey="character"
+        label={needsImage ? '补充描述（可选）' : optionalImage && sourceImage ? '补充描述（可选）' : '角色描述'}
+        placeholder={needsImage ? '描述需要调整的内容...' : optionalImage && sourceImage ? '描述需要调整的内容...' : '描述角色外观，如：身穿银色铠甲的女骑士，手持长剑...'}
+        rows={3}
+      />
       <StyleSelector value={style} onChange={setStyle} />
       {subTool === 'tpose' && (
         <div className="space-y-3">

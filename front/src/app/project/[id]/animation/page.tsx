@@ -6,6 +6,7 @@ import { Play, Loader2, Scissors, Grid3X3 } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
+import { PromptInput } from '@/components/tools/prompt-input';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { resolveImageUrl, toolsApi } from '@/lib/api';
 import { PromptEditor } from '@/components/tools/prompt-editor';
@@ -150,16 +151,7 @@ export default function AnimationPage() {
 
       {subTool === 'text' && (
         <>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">动作描述</label>
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              rows={3}
-              placeholder="描述角色动作，如：挥剑攻击、跳跃翻转..."
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-primary"
-            />
-          </div>
+          <PromptInput value={prompt} onChange={setPrompt} toolKey="animation" label="动作描述" placeholder="描述角色动作，如：挥剑攻击、跳跃翻转..." rows={3} />
 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-foreground">动画类型</label>

@@ -6,6 +6,7 @@ import { Sparkles, Loader2, Undo2, Redo2, Eraser, Paintbrush } from 'lucide-reac
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
+import { PromptInput } from '@/components/tools/prompt-input';
 import { GenerationResultActions } from '@/components/tools/generation-result-actions';
 import { resolveImageUrl, generateApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
@@ -232,16 +233,7 @@ export default function InpaintPage() {
           重做
         </button>
       </div>
-      <div>
-        <label className="mb-1.5 block text-sm font-medium text-foreground">替换描述</label>
-        <textarea
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          rows={3}
-          placeholder="描述遮罩区域要替换成什么，如：替换为金色皇冠..."
-          className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors resize-none"
-        />
-      </div>
+      <PromptInput value={prompt} onChange={setPrompt} toolKey="inpaint" label="替换描述" placeholder="描述遮罩区域要替换成什么，如：替换为金色皇冠..." rows={3} />
       <RatioSelector value={ratio} onChange={setRatio} />
       <ResolutionSelector ratio={ratio} value={resolution} onChange={setResolution} />
       <button

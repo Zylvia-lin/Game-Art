@@ -6,6 +6,7 @@ import { Sparkles, Loader2, Layout, Plus, Trash2, GripHorizontal } from 'lucide-
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
+import { PromptInput } from '@/components/tools/prompt-input';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import type { Task } from '@/lib/types';
 
@@ -154,15 +155,14 @@ export default function UIPage() {
         />
       )}
 
-      <div>
-        <label className="text-sm font-medium text-foreground">描述</label>
-        <textarea
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          placeholder={subTool === 'layout_generate' ? '描述UI类型，如：RPG游戏背包界面，包含物品格子、金币显示、关闭按钮...' : subTool === 'component_split' ? '描述需要拆分的组件类型...' : '描述组件摆放需求...'}
-          className="mt-2 h-24 w-full rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-        />
-      </div>
+      <PromptInput
+        value={prompt}
+        onChange={setPrompt}
+        toolKey="ui"
+        label="描述"
+        placeholder={subTool === 'layout_generate' ? '描述UI类型，如：RPG游戏背包界面，包含物品格子、金币显示、关闭按钮...' : subTool === 'component_split' ? '描述需要拆分的组件类型...' : '描述组件摆放需求...'}
+        rows={6}
+      />
 
       <RatioSelector value={ratio} onChange={setRatio} />
       <ResolutionSelector ratio={ratio} value={resolution} onChange={setResolution} />

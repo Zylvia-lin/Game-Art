@@ -1,6 +1,7 @@
 """
 Generation endpoints.
 Task submission and management via async task queue.
+On-demand prompt optimization endpoint.
 """
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -10,6 +11,7 @@ from services.task_queue import (
     create_task, get_task, get_project_tasks, get_queue_stats, cancel_task,
     delete_project_tasks,
 )
+from services.llm_service import optimize_prompt
 
 router = APIRouter(prefix="/api/generate", tags=["generate"])
 
@@ -124,3 +126,33 @@ async def delete_tasks(
     If no status, delete all completed and failed tasks."""
     deleted = await delete_project_tasks(project_id, status)
     return {"deleted": deleted}
+
+
+class OptimizePromptRequest(BaseModel):
+    prompt: str
+    tool_key: Optional[str] = None
+
+
+@router.post("/optimize-prompt")
+async def optimize_user_prompt(data: OptimizePromptRequest):
+    """On-demand prompt optimization using LLM (DeepSeek etc.).
+    Called when user clicks the optimize button next to the prompt input."""
+    if not data.prompt or not data.prompt.strip():
+        raise HTTPException(status_code=400, detail="提示词不能为空")
+
+    # Load default text model config
+    model = await fetch_one(
+        "SELECT model_name, api_key, api_base_url FROM model_configs WHERE type = 'text' AND is_default = true LIMIT 1"
+    )
+    if not model:
+        raise HTTPException(
+            status_code=400,
+            detail="未配置文本模型，请先在「模型配置」页面添加文本模型API密钥",
+        )
+
+    optimized = await optimize_prompt(
+        user_prompt=data.prompt,
+        model=model,
+        tool_key=data.tool_key,
+    )
+    return {"optimized_prompt": optimized}

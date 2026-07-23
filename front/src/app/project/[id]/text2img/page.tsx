@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { Sparkles, Loader2 } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
+import { PromptInput } from '@/components/tools/prompt-input';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { projectsApi } from '@/lib/api';
 import { computeSize } from '@/lib/types';
@@ -53,16 +54,7 @@ export default function TextToImagePage() {
 
   const paramsPanel = (
     <>
-      <div>
-        <label className="mb-1.5 block text-sm font-medium text-foreground">提示词</label>
-        <textarea
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          rows={4}
-          placeholder="描述你想要生成的游戏美术资产..."
-          className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors resize-none"
-        />
-      </div>
+      <PromptInput value={prompt} onChange={setPrompt} toolKey="text_to_image" />
       <StyleSelector value={style} onChange={setStyle} />
       <RatioSelector value={ratio} onChange={setRatio} />
       <ResolutionSelector ratio={ratio} value={resolution} onChange={setResolution} />

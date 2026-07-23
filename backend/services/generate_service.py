@@ -1,6 +1,7 @@
 """
 Generation orchestration service.
-Coordinates: system prompt loading → LLM enhancement → image generation → post-processing.
+Pipeline: system prompt injection (no LLM) -> image generation -> post-processing.
+LLM-based prompt optimization is available via a separate on-demand API.
 """
 import os
 import time
@@ -9,7 +10,6 @@ import string
 import base64
 import httpx
 from database import fetch_one
-from services.llm_service import enhance_prompt
 from services.image_service import generate_image
 from services.image_processor import remove_green_background, ensure_upload_dir, UPLOAD_DIR
 
@@ -21,7 +21,8 @@ async def execute_generation(
 ) -> dict:
     """
     Execute a generation task.
-    Returns {"output_urls": [...], "enhanced_prompt": "..."}
+    System prompt is directly injected into user prompt (no LLM call).
+    Returns {"output_urls": [...], "final_prompt": "..."}
     """
     async def report(pct: int):
         if on_progress:
@@ -29,38 +30,23 @@ async def execute_generation(
 
     await report(10)
 
-    # Get system prompt
+    # Load system prompt from DB
     prompt_row = await fetch_one(
         "SELECT * FROM system_prompts WHERE tool_key = $1", tool_key
     )
-    if not prompt_row:
-        raise Exception(f"No system prompt found for tool: {tool_key}")
+    system_prompt = prompt_row["prompt_content"] if prompt_row else ""
 
     await report(20)
-
-    # Get default text model for prompt enhancement
-    text_model = await fetch_one(
-        "SELECT * FROM model_configs WHERE type = 'text' AND is_default = true LIMIT 1"
-    )
-    if not text_model:
-        raise Exception("No text model configured. Please add a text model in settings.")
-
-    await report(30)
 
     # Get user prompt
     user_prompt = input_params.get("prompt", "")
     if not user_prompt:
         raise Exception("No prompt provided")
 
-    # Enhance prompt using LLM
-    enhanced_prompt = await enhance_prompt(
-        prompt_row["prompt_content"],
-        user_prompt,
-        text_model,
-        input_params,
-    )
+    # Directly inject system prompt (no LLM enhancement)
+    final_prompt = _build_final_prompt(system_prompt, user_prompt, input_params)
 
-    await report(50)
+    await report(30)
 
     # Get default image model
     image_model = await fetch_one(
@@ -69,12 +55,12 @@ async def execute_generation(
     if not image_model:
         raise Exception("No image model configured. Please add an image model in settings.")
 
-    await report(60)
+    await report(40)
 
     # Generate image
-    output_urls = await generate_image(enhanced_prompt, image_model, input_params)
+    output_urls = await generate_image(final_prompt, image_model, input_params)
 
-    await report(80)
+    await report(70)
 
     # Post-process: download images and remove green background
     processed_urls = await _post_process_images(output_urls)
@@ -83,8 +69,47 @@ async def execute_generation(
 
     return {
         "output_urls": processed_urls,
-        "enhanced_prompt": enhanced_prompt,
+        "final_prompt": final_prompt,
     }
+
+
+def _build_final_prompt(system_prompt: str, user_prompt: str, input_params: dict) -> str:
+    """
+    Build the final prompt by injecting system prompt + context into user prompt.
+    System prompt may contain {user_prompt} placeholder.
+    """
+    # Collect context info
+    context_parts = []
+
+    style = input_params.get("style")
+    if style and style != "none":
+        context_parts.append(f"Style: {style}")
+
+    ratio = input_params.get("ratio")
+    if ratio:
+        context_parts.append(f"Aspect ratio: {ratio}")
+
+    resolution = input_params.get("resolution")
+    if resolution:
+        context_parts.append(f"Resolution: {resolution}")
+
+    context_str = ", ".join(context_parts) if context_parts else ""
+
+    # If system prompt has {user_prompt} placeholder, replace it
+    if "{user_prompt}" in system_prompt:
+        # Inject context before user prompt
+        if context_str:
+            final = system_prompt.replace("{user_prompt}", f"{user_prompt}\n\n[{context_str}]")
+        else:
+            final = system_prompt.replace("{user_prompt}", user_prompt)
+    else:
+        # Prepend system prompt
+        if context_str:
+            final = f"{system_prompt}\n\n{user_prompt}\n\n[{context_str}]"
+        else:
+            final = f"{system_prompt}\n\n{user_prompt}" if system_prompt else user_prompt
+
+    return final.strip()
 
 
 async def _post_process_images(urls: list[str]) -> list[str]:

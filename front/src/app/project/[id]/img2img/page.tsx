@@ -6,6 +6,7 @@ import { Sparkles, Loader2, ImageIcon } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
+import { PromptInput } from '@/components/tools/prompt-input';
 import { GenerationResultActions } from '@/components/tools/generation-result-actions';
 import { resolveImageUrl, projectsApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
@@ -71,16 +72,7 @@ export default function ImageToImagePage() {
         onImageChange={(url) => setImageUrl(url || '')}
         label="参考图片"
       />
-      <div>
-        <label className="mb-1.5 block text-sm font-medium text-foreground">编辑描述</label>
-        <textarea
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          rows={3}
-          placeholder="描述你想要的修改，如：将颜色改为暖色调..."
-          className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors resize-none"
-        />
-      </div>
+      <PromptInput value={prompt} onChange={setPrompt} toolKey="image_to_image" label="编辑描述" placeholder="描述你想要的修改，如：将颜色改为暖色调..." rows={3} />
       <div>
         <label className="mb-1.5 block text-sm font-medium text-foreground">
           编辑强度: {strength.toFixed(2)}
