@@ -11,6 +11,7 @@ import { generateApi, projectsApi } from '@/lib/api';
 
 const SUB_TOOLS = [
   { key: 'tpose', label: 'T-pose 生成', desc: '生成标准站姿角色' },
+  { key: 'three_view', label: '三视图生成', desc: '生成正面/侧面/背面三视图' },
   { key: 'directions', label: '多方向生成', desc: '生成四/八方向视图' },
   { key: 'part_split', label: '部件拆分', desc: '拆分为独立部件层' },
 ] as const;
@@ -46,11 +47,13 @@ export default function CharacterPage() {
 
   const toolKeyMap: Record<string, string> = {
     tpose: 'character_tpose',
+    three_view: 'character_three_view',
     directions: 'character_directions',
     part_split: 'character_part_split',
   };
   const toolNameMap: Record<string, string> = {
     tpose: 'T-pose角色生成',
+    three_view: '三视图角色生成',
     directions: '多方向角色生成',
     part_split: '角色部件拆分',
   };
@@ -58,6 +61,7 @@ export default function CharacterPage() {
   const handleGenerate = async () => {
     if (subTool === 'tpose' && !prompt.trim()) return;
     if ((subTool === 'directions' || subTool === 'part_split') && !sourceImage) return;
+    if (subTool === 'three_view' && !prompt.trim() && !sourceImage) return;
     setLoading(true);
     try {
       const res = await fetch(`/api/generate/${toolKeyMap[subTool]}`, {
@@ -86,6 +90,7 @@ export default function CharacterPage() {
   };
 
   const needsImage = subTool === 'directions' || subTool === 'part_split';
+  const optionalImage = subTool === 'three_view';
 
   const paramsPanel = (
     <>
@@ -109,25 +114,25 @@ export default function CharacterPage() {
         </div>
       </div>
 
-      {needsImage && (
+      {(needsImage || optionalImage) && (
         <ImageSourceSelector
           projectId={projectId}
           imageUrl={sourceImage}
           onImageChange={setSourceImage}
-          label="角色图片"
+          label={needsImage ? '角色图片' : '参考图片（可选）'}
           assetType="character"
         />
       )}
 
       <div>
         <label className="mb-1.5 block text-sm font-medium text-foreground">
-          {needsImage ? '补充描述（可选）' : '角色描述'}
+          {needsImage ? '补充描述（可选）' : optionalImage && sourceImage ? '补充描述（可选）' : '角色描述'}
         </label>
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           rows={3}
-          placeholder={needsImage ? '描述需要调整的内容...' : '描述角色外观，如：身穿银色铠甲的女骑士，手持长剑...'}
+          placeholder={needsImage ? '描述需要调整的内容...' : optionalImage && sourceImage ? '描述需要调整的内容...' : '描述角色外观，如：身穿银色铠甲的女骑士，手持长剑...'}
           className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors resize-none"
         />
       </div>
