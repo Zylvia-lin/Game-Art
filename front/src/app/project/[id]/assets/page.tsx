@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback, DragEvent } from 'react';
 import { useParams } from 'next/navigation';
 import { FolderOpen, Trash2, Download, Filter, Check, CheckSquare, Square, Upload, X, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { projectsApi, assetsApi, generateApi, resolveImageUrl, downloadImage } from '@/lib/api';
 import type { Asset } from '@/lib/types';
 
@@ -103,8 +104,10 @@ export default function AssetsPage() {
       await assetsApi.delete(id);
       setAssets(assets.filter((a) => a.id !== id));
       setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+      toast.success('资产已删除');
     } catch (err) {
       console.error('Failed to delete asset:', err);
+      toast.error(err instanceof Error ? err.message : '删除资产失败');
     }
   };
 
@@ -149,15 +152,24 @@ export default function AssetsPage() {
 
   const handleBatchDelete = async () => {
     if (!confirm(`确定要删除选中的 ${selectedIds.size} 个资产吗？`)) return;
+    let successCount = 0;
+    let failCount = 0;
     for (const id of selectedIds) {
       try {
         await assetsApi.delete(id);
+        successCount++;
       } catch (err) {
         console.error('Failed to delete:', err);
+        failCount++;
       }
     }
     setAssets(assets.filter(a => !selectedIds.has(a.id)));
     setSelectedIds(new Set());
+    if (failCount > 0) {
+      toast.error(`${successCount} 个删除成功，${failCount} 个删除失败`);
+    } else {
+      toast.success(`已删除 ${successCount} 个资产`);
+    }
   };
 
   const finalizedCount = assets.filter(a => a.finalized).length;

@@ -64,7 +64,11 @@ async def create_asset(data: AssetCreate):
 
 @router.get("/{asset_id}")
 async def get_asset(asset_id: str):
-    row = await fetch_one("SELECT * FROM assets WHERE id = $1", asset_id)
+    try:
+        asset_id_int = int(asset_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid asset ID")
+    row = await fetch_one("SELECT * FROM assets WHERE id = $1", asset_id_int)
     if not row:
         raise HTTPException(status_code=404, detail="Asset not found")
     return _to_asset(row)
@@ -72,13 +76,17 @@ async def get_asset(asset_id: str):
 
 @router.put("/{asset_id}")
 async def update_asset(asset_id: str, data: AssetUpdate):
+    try:
+        asset_id_int = int(asset_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid asset ID")
     update_data = data.model_dump(exclude_unset=True)
 
     pool = await get_pool()
     async with pool.acquire() as conn:
         # If updating finalized, also update metadata
         if "finalized" in update_data:
-            existing = await conn.fetchrow("SELECT metadata FROM assets WHERE id = $1", asset_id)
+            existing = await conn.fetchrow("SELECT metadata FROM assets WHERE id = $1", asset_id_int)
             if existing:
                 metadata = existing["metadata"]
                 if isinstance(metadata, str):
@@ -98,7 +106,7 @@ async def update_asset(asset_id: str, data: AssetUpdate):
                          updated_at = NOW()
                        WHERE id = $1
                        RETURNING *""",
-                    asset_id,
+                    asset_id_int,
                     update_data.get("name"),
                     update_data.get("type"),
                     update_data.get("finalized"),
@@ -114,7 +122,7 @@ async def update_asset(asset_id: str, data: AssetUpdate):
                      updated_at = NOW()
                    WHERE id = $1
                    RETURNING *""",
-                asset_id,
+                asset_id_int,
                 update_data.get("name"),
                 update_data.get("type"),
             )
@@ -126,7 +134,11 @@ async def update_asset(asset_id: str, data: AssetUpdate):
 
 @router.delete("/{asset_id}")
 async def delete_asset(asset_id: str):
-    result = await execute("DELETE FROM assets WHERE id = $1", asset_id)
+    try:
+        asset_id_int = int(asset_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid asset ID")
+    result = await execute("DELETE FROM assets WHERE id = $1", asset_id_int)
     if "DELETE 0" in result:
         raise HTTPException(status_code=404, detail="Asset not found")
     return {"success": True}
