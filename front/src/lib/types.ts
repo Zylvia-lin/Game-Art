@@ -191,7 +191,6 @@ export const TOOLBOX_ITEMS = [
   { key: 'text2img', label: '文生图', href: '/text2img', icon: 'Image' },
   { key: 'img2img', label: '图生图', href: '/img2img', icon: 'ImagePlus' },
   { key: 'image-edit', label: '图片编辑', href: '/image-edit', icon: 'Paintbrush' },
-  { key: 'animation', label: '帧提取', href: '/animation', icon: 'Film' },
 ] as const;
 
 // 工具页面 key 映射
