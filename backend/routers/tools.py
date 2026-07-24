@@ -84,44 +84,120 @@ class AIRemoveBgRequest(BaseModel):
 
 def _upload_to_tos(local_path: str, storage_cfg: dict) -> str:
     """
-    Upload a local file to TOS (S3-compatible) and return tos:// URL.
-    TOS S3-compatible API requires:
-    - Endpoint: tos-s3-{region}.volces.com (NOT tos-{region}, that's native TOS API)
-    - Addressing style: virtual-hosted (host becomes bucket.tos-s3-{region}.volces.com)
-    - Signature: SigV4
+    Upload a local file to TOS via native HTTP API (SigV4).
+    Avoids boto3 endpoint/host mismatch issues by using raw HTTP requests.
     """
-    from botocore.config import Config as BotoConfig
+    import hashlib
+    import hmac
+    import time
+    from urllib.parse import quote
 
-    endpoint = storage_cfg["endpoint"]
-
-    s3_client = boto3.client(
-        "s3",
-        endpoint_url=f"https://{endpoint}",
-        aws_access_key_id=storage_cfg["access_key"],
-        aws_secret_access_key=storage_cfg["secret_key"],
-        region_name=storage_cfg["region"],
-        config=BotoConfig(
-            s3={"addressing_style": "virtual"},
-            signature_version="s3v4",
-        ),
-    )
+    endpoint = storage_cfg["endpoint"]  # e.g. tos-s3-cn-guangzhou.volces.com
+    bucket = storage_cfg["bucket"]
+    region = storage_cfg["region"]
+    ak = storage_cfg["access_key"]
+    sk = storage_cfg["secret_key"]
     key = f"gameart/{uuid.uuid4().hex[:12]}_{os.path.basename(local_path)}"
-    try:
-        with open(local_path, "rb") as f:
-            s3_client.put_object(
-                Bucket=storage_cfg["bucket"],
-                Key=key,
-                Body=f,
-            )
-    except Exception as e:
-        import traceback
-        detail = traceback.format_exc()
-        # Extract botocore response details if available
-        if hasattr(e, 'response'):
-            resp = e.response
-            detail += f"\n--- Response Metadata ---\n{resp}"
-        raise RuntimeError(f"上传图片到对象存储失败: {e}\n详情:\n{detail}\nendpoint={endpoint}, bucket={storage_cfg['bucket']}, region={storage_cfg['region']}")
-    return f"tos://{storage_cfg['bucket']}/{key}"
+
+    # Read file content
+    with open(local_path, "rb") as f:
+        body = f.read()
+
+    # Determine content type
+    ext = os.path.splitext(local_path)[1].lower()
+    content_type = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+        ".gif": "image/gif",
+    }.get(ext, "application/octet-stream")
+
+    # Build the URL: use path-style to avoid DNS issues with virtual-hosted
+    # https://{endpoint}/{bucket}/{key}
+    host = endpoint
+    object_path = f"/{bucket}/{key}"
+    url = f"https://{host}{object_path}"
+
+    # AWS SigV4 signing
+    amz_date = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    date_stamp = time.strftime("%Y%m%d", time.gmtime())
+
+    # Step 1: Create canonical request
+    payload_hash = hashlib.sha256(body).hexdigest()
+
+    # Headers to sign (must be lowercase, sorted)
+    headers_to_sign = {
+        "host": host,
+        "x-tos-content-sha256": payload_hash,
+        "x-tos-date": amz_date,
+    }
+
+    canonical_headers = "".join(
+        f"{k}:{v}\n" for k, v in sorted(headers_to_sign.items())
+    )
+    signed_headers = ";".join(k for k in sorted(headers_to_sign.keys()))
+
+    canonical_request = (
+        f"PUT\n"
+        f"/{key}\n"  # resource path (without bucket)
+        f"\n"  # canonical query string (empty)
+        f"{canonical_headers}\n"
+        f"{signed_headers}\n"
+        f"{payload_hash}"
+    )
+
+    # Step 2: Create string to sign
+    credential_scope = f"{date_stamp}/{region}/tos/request"
+    string_to_sign = (
+        f"TOS4-HMAC-SHA256\n"
+        f"{amz_date}\n"
+        f"{credential_scope}\n"
+        f"{hashlib.sha256(canonical_request.encode()).hexdigest()}"
+    )
+
+    # Step 3: Calculate signature
+    def _hmac(key, msg):
+        return hmac.new(key, msg.encode(), hashlib.sha256).digest()
+
+    k_date = _hmac(("TOS4" + sk).encode(), date_stamp)
+    k_region = _hmac(k_date, region)
+    k_service = _hmac(k_region, "tos")
+    k_signing = _hmac(k_service, "request")
+    signature = hmac.new(k_signing, string_to_sign.encode(), hashlib.sha256).hexdigest()
+
+    # Step 4: Build Authorization header
+    authorization = (
+        f"TOS4-HMAC-SHA256 "
+        f"Credential={ak}/{credential_scope}, "
+        f"SignedHeaders={signed_headers}, "
+        f"Signature={signature}"
+    )
+
+    # Step 5: Send request (path-style: bucket in URL path)
+    import httpx
+
+    headers = {
+        "Host": host,
+        "x-tos-date": amz_date,
+        "x-tos-content-sha256": payload_hash,
+        "Authorization": authorization,
+        "Content-Type": content_type,
+        "Content-Length": str(len(body)),
+    }
+
+    full_url = f"https://{host}/{bucket}/{key}"
+    resp = httpx.put(full_url, content=body, headers=headers, timeout=30.0)
+
+    if resp.status_code != 200:
+        raise RuntimeError(
+            f"上传图片到对象存储失败: HTTP {resp.status_code}\n"
+            f"URL: {full_url}\n"
+            f"Response: {resp.text}\n"
+            f"endpoint={host}, bucket={bucket}, region={region}"
+        )
+
+    return f"tos://{bucket}/{key}"
 
 
 @router.post("/ai-remove-bg")
