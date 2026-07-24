@@ -70,9 +70,8 @@ export default function RemoveBgPage() {
     setProcessing(true);
     setError(null);
     try {
-      const resolvedUrl = resolveImageUrl(imageUrl);
       const result = await toolsApi.removeBackgroundAI({
-        image_url: resolvedUrl,
+        image_url: imageUrl,
         scene,
       });
 
