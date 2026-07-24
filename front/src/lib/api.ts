@@ -377,11 +377,11 @@ export function downloadImage(url: string, filename?: string): void {
 // ============================================
 
 export const billingApi = {
-  getSummary: () => request(`${API_BASE}/api/billing/summary`),
+  getSummary: () => request(`/api/billing/summary`),
 
   getStats: (period: 'daily' | 'monthly' = 'daily', days = 30) =>
-    request(`${API_BASE}/api/billing/stats?period=${period}&days=${days}`),
+    request(`/api/billing/stats?period=${period}&days=${days}`),
 
   getRecords: (limit = 50, offset = 0) =>
-    request(`${API_BASE}/api/billing/records?limit=${limit}&offset=${offset}`),
+    request(`/api/billing/records?limit=${limit}&offset=${offset}`),
 };
