@@ -315,9 +315,12 @@ export function TaskQueuePanel({ projectId, onTaskComplete }: TaskQueuePanelProp
                       <div className="text-xs font-medium text-foreground">
                         {toolLabel(task.tool_key)}
                       </div>
-                      <div className="truncate text-[11px] text-muted-foreground">
+                      <div
+                        className="truncate text-[11px] text-muted-foreground"
+                        title={task.error_message || undefined}
+                      >
                         {task.error_message
-                          ? task.error_message.slice(0, 50) + (task.error_message.length > 50 ? '...' : '')
+                          ? task.error_message.slice(0, 200) + (task.error_message.length > 200 ? '...' : '')
                           : task.input_params?.prompt
                             ? String(task.input_params.prompt).slice(0, 40) + (String(task.input_params.prompt).length > 40 ? '...' : '')
                             : formatTime(task.completed_at || task.created_at)}

@@ -121,16 +121,16 @@ export const RATIO_OPTIONS = [
 ] as const;
 
 // 分辨率档位（总像素目标值）
-// API 约束: 总像素 [921600, 16777216], 宽高比 [1/16, 16]
+// API 约束: 总像素 [921600, 4194304], 宽高比 [1/16, 16]
 export const RESOLUTION_TIERS = [
   { value: '720p', label: '720p', targetPixels: 921600 },
   { value: '1080p', label: '1080p', targetPixels: 2073600 },
   { value: '2K', label: '2K', targetPixels: 3686400 },
-  { value: '4K', label: '4K', targetPixels: 8294400 },
+  { value: '4K', label: '4K', targetPixels: 4194304 },
 ] as const;
 
 const MIN_PIXELS = 921600;
-const MAX_PIXELS = 16777216;
+const MAX_PIXELS = 4194304;
 
 /**
  * 根据宽高比和分辨率档位，计算实际的宽x高像素值。
@@ -307,7 +307,8 @@ export function deriveRatio(w: number, h: number): string {
 }
 
 /**
- * 将宽高 clamp 到 API 允许范围 [921600, 16777216] 像素，并四舍五入到 8 的倍数
+ * 将宽高 clamp 到 API 允许范围 [921600, 4194304] 像素，宽高比 [1/16, 16]，
+ * 并四舍五入到 8 的倍数
  */
 export function clampDimensions(w: number, h: number): { w: number; h: number } {
   let rw = Math.round(w / 8) * 8;
@@ -315,6 +316,15 @@ export function clampDimensions(w: number, h: number): { w: number; h: number } 
   if (rw <= 0) rw = 8;
   if (rh <= 0) rh = 8;
 
+  // 限制宽高比在 [1/16, 16] 范围内
+  const aspectRatio = rw / rh;
+  if (aspectRatio > 16) {
+    rh = Math.round(rw / 16 / 8) * 8;
+  } else if (aspectRatio < 1 / 16) {
+    rw = Math.round(rh / 16 / 8) * 8;
+  }
+
+  // 限制总像素在 [MIN_PIXELS, MAX_PIXELS] 范围内
   const total = rw * rh;
   if (total < MIN_PIXELS) {
     const scale = Math.sqrt(MIN_PIXELS / total);
@@ -325,6 +335,7 @@ export function clampDimensions(w: number, h: number): { w: number; h: number } 
     rh = Math.round((rh * scale) / 8) * 8;
     rw = Math.round((rh * (w / h)) / 8) * 8;
   }
+
   return { w: rw, h: rh };
 }
 

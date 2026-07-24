@@ -156,6 +156,27 @@ async def delete_project(project_id: str):
     return {"message": "Project deleted"}
 
 
+# Map asset_type filter to matching tool_key patterns for generated images
+_TOOL_KEY_PATTERNS = {
+    "image": ["text_to_image", "image_to_image", "inpaint"],
+    "character": ["character_tpose", "character_directions", "character_three_view", "character_part_split"],
+    "prop": ["prop_generate", "prop_variant"],
+    "ui": ["ui_layout_generate", "ui_component_place", "ui_component_split"],
+    "scene": ["scene_map_generate", "scene_map_split"],
+    "animation_frame": ["animation_text", "animation_frame_extract"],
+}
+
+
+def _build_tool_key_filter(asset_type: str, params: list, param_offset: int) -> tuple[str | None, list]:
+    """Build SQL WHERE clause fragment for filtering tool_key by asset_type."""
+    patterns = _TOOL_KEY_PATTERNS.get(asset_type)
+    if not patterns:
+        return None, params
+    placeholders = ", ".join(f"${param_offset + i}" for i in range(len(patterns)))
+    params.extend(patterns)
+    return f"AND tool_key IN ({placeholders})", params
+
+
 @router.get("/{project_id}/assets")
 async def list_project_assets(project_id: str, asset_type: Optional[str] = Query(None)):
     """Return both archived assets and generated images (from generations table)."""
@@ -174,12 +195,19 @@ async def list_project_assets(project_id: str, asset_type: Optional[str] = Query
 
     # 2. Load generated images from tasks table (completed tasks with output_urls)
     #    tasks table is the primary source of truth (same as text2img page uses)
+    task_params = [project_id]
+    task_tool_filter = ""
+    if asset_type:
+        task_tool_filter, task_params = _build_tool_key_filter(asset_type, task_params, 2)
+        if task_tool_filter:
+            task_tool_filter = f" {task_tool_filter}"
+
     task_rows = await fetch_all(
-        """SELECT * FROM tasks
+        f"""SELECT * FROM tasks
            WHERE project_id = $1 AND status = 'completed'
-           AND output_urls IS NOT NULL
+           AND output_urls IS NOT NULL{task_tool_filter}
            ORDER BY created_at DESC""",
-        project_id,
+        *task_params,
     )
     seen_task_ids = set()
     for t in task_rows:
@@ -225,12 +253,19 @@ async def list_project_assets(project_id: str, asset_type: Optional[str] = Query
             })
 
     # 3. Also check generations table for any records not in tasks table
+    gen_params = [project_id]
+    gen_tool_filter = ""
+    if asset_type:
+        gen_tool_filter, gen_params = _build_tool_key_filter(asset_type, gen_params, 2)
+        if gen_tool_filter:
+            gen_tool_filter = f" {gen_tool_filter}"
+
     gen_rows = await fetch_all(
-        """SELECT * FROM generations
+        f"""SELECT * FROM generations
            WHERE project_id = $1 AND status = 'completed'
-           AND output_urls IS NOT NULL
+           AND output_urls IS NOT NULL{gen_tool_filter}
            ORDER BY created_at DESC""",
-        project_id,
+        *gen_params,
     )
     for g in gen_rows:
         task_id_str = str(g.get("task_id")) if g.get("task_id") else None

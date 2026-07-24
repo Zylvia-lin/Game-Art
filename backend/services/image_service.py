@@ -54,22 +54,54 @@ def _compute_size(ratio: str, tier: str) -> str:
     return f"{width}x{height}"
 
 
+def _clamp_dimensions(w: int, h: int) -> tuple[int, int]:
+    """Clamp dimensions to Volcano Engine Seedream API limits:
+    - Total pixels: [921600, 4194304]
+    - Aspect ratio: [1/16, 16]
+    - Rounded to multiples of 8
+    """
+    rw = max(8, round(w / 8) * 8)
+    rh = max(8, round(h / 8) * 8)
+
+    # Clamp aspect ratio to [1/16, 16]
+    ar = rw / rh
+    if ar > 16:
+        rh = max(8, round(rw / 16 / 8) * 8)
+    elif ar < 1 / 16:
+        rw = max(8, round(rh / 16 / 8) * 8)
+
+    # Clamp total pixels
+    MIN_PX, MAX_PX = 921600, 4194304
+    total = rw * rh
+    if total < MIN_PX:
+        scale = (MIN_PX / total) ** 0.5
+        rh = max(8, round(rh * scale / 8) * 8)
+        rw = max(8, round(rh * (w / h) / 8) * 8)
+    elif total > MAX_PX:
+        scale = (MAX_PX / total) ** 0.5
+        rh = max(8, round(rh * scale / 8) * 8)
+        rw = max(8, round(rh * (w / h) / 8) * 8)
+
+    return rw, rh
+
+
 def resolve_size(input_params: dict) -> str:
     """
     Resolve size string from input params.
     Accepts either:
-    - WxH format (e.g. "2048x1024") → used directly
+    - WxH format (e.g. "2048x1024") → clamped to API limits
     - Tier label (e.g. "2K", "1080p") → computed from ratio
     """
     resolution = str(input_params.get("resolution", "2K"))
 
-    # Already WxH format
+    # Already WxH format → validate and clamp
     parts = resolution.split("x")
     if len(parts) == 2:
         try:
             w, h = int(parts[0]), int(parts[1])
             if w > 0 and h > 0:
-                return f"{w}x{h}"
+                cw, ch = _clamp_dimensions(w, h)
+                return f"{cw}x{ch}"
         except ValueError:
             pass
 
@@ -111,11 +143,29 @@ async def generate_image(
         "Content-Type": "application/json",
     }
 
+    print(f"[Image API] Request: model={model['model_name']}, size={size}, "
+          f"has_image={bool(image_url)}, has_mask={bool(mask_url)}")
+
     async with httpx.AsyncClient(timeout=120.0) as client:
         response = await client.post(url, json=body, headers=headers)
         if response.status_code != 200:
             error_text = response.text
-            raise Exception(f"Image API error: {response.status_code} - {error_text}")
+            print(f"[Image API] Error {response.status_code}: {error_text}")
+            print(f"[Image API] Request body: size={body.get('size')}, has_image={bool(body.get('image'))}")
+            # Try to extract a human-readable message from the API error
+            try:
+                error_json = response.json()
+                if isinstance(error_json, dict):
+                    err = error_json.get("error", error_json)
+                    if isinstance(err, dict):
+                        msg = err.get("message") or err.get("code") or str(err)
+                    else:
+                        msg = str(err)
+                else:
+                    msg = error_text
+            except Exception:
+                msg = error_text[:300]
+            raise Exception(f"Image API error {response.status_code}: {msg}")
 
         data = response.json()
 
