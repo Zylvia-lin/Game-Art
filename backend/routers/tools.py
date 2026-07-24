@@ -3,6 +3,7 @@ Local tool endpoints.
 Frame extraction, background removal (local + AI), and mask-based background fill.
 """
 import os
+import base64
 import uuid
 import httpx
 from fastapi import APIRouter, HTTPException
