@@ -85,18 +85,22 @@ async def ai_remove_bg_endpoint(data: AIRemoveBgRequest):
     AI-powered background removal using Volcengine MediaKit.
     Returns transparent PNG URL.
     """
-    # Load API key from model_configs (type = 'bg_remove')
+    # Load API key from model_configs (type = 'tool' - 火山工具模型)
     config = await fetch_one(
-        "SELECT * FROM model_configs WHERE type = 'bg_remove' AND is_active = true LIMIT 1"
+        "SELECT * FROM model_configs WHERE type = 'tool' AND is_active = true LIMIT 1"
     )
     if not config:
         raise HTTPException(
             status_code=400,
-            detail="No active bg_remove model configuration found. Please configure one in Model Settings."
+            detail="未找到工具模型配置。请在模型设置中添加一个 type=tool 的配置，填入火山引擎 API Key。"
         )
 
     api_key = config.get("api_key", "")
     api_base = config.get("api_base_url", "") or "https://mediakit.cn-beijing.volces.com"
+    # MediaKit API base is different from general volcengine API base
+    # If user configured visual.volcengineapi.com, use MediaKit endpoint instead
+    if "visual.volcengineapi.com" in api_base:
+        api_base = "https://mediakit.cn-beijing.volces.com"
     if not api_key:
         raise HTTPException(
             status_code=400,

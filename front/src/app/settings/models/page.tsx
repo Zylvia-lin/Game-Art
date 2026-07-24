@@ -26,7 +26,11 @@ const PROVIDER_CONFIG = {
     custom: { name: '自定义', apiUrl: '', defaultModel: '' },
   },
   bg_remove: {
-    volcengine: { name: '火山引擎', apiUrl: 'https://mediakit.cn-beijing.volces.com/api/v1/tools-sync/remove-image-background', defaultModel: 'remove-image-background' },
+    volcengine: { name: '火山引擎', apiUrl: 'https://mediakit.cn-beijing.volces.com/api/v1/tools-sync/remove-image-background', defaultModel: '' },
+    custom: { name: '自定义', apiUrl: '', defaultModel: '' },
+  },
+  tool: {
+    volcengine: { name: '火山引擎', apiUrl: 'https://mediakit.cn-beijing.volces.com', defaultModel: '' },
     custom: { name: '自定义', apiUrl: '', defaultModel: '' },
   },
 } as const;
@@ -266,6 +270,7 @@ export default function ModelsSettingsPage() {
                   <p className="mt-1 text-xs text-muted-foreground">编辑模式下留空表示不修改已有密钥</p>
                 )}
               </div>
+              {form.type !== 'tool' && (
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-foreground">模型名称</label>
                 <input
@@ -276,6 +281,7 @@ export default function ModelsSettingsPage() {
                 />
                 <p className="mt-1 text-xs text-muted-foreground">切换提供商时会自动填充默认模型名</p>
               </div>
+              )}
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"

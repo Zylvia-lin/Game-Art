@@ -189,11 +189,15 @@ export const CREATION_ITEMS = [
   { key: 'scene', label: '场景生成', href: '/scene', icon: 'Map' },
 ] as const;
 
-// 侧边栏 - 工具箱
-export const TOOLBOX_ITEMS = [
+// 侧边栏 - 基础工具
+export const BASIC_TOOLS_ITEMS = [
   { key: 'text2img', label: '文生图', href: '/text2img', icon: 'Image' },
   { key: 'img2img', label: '图生图', href: '/img2img', icon: 'ImagePlus' },
   { key: 'image-edit', label: '图片编辑', href: '/image-edit', icon: 'Paintbrush' },
+] as const;
+
+// 侧边栏 - 工具箱
+export const TOOLBOX_ITEMS = [
   { key: 'remove-bg', label: '去除背景', href: '/remove-bg', icon: 'Eraser' },
 ] as const;
 
