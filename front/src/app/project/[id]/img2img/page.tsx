@@ -11,7 +11,7 @@ import { PromptInput } from '@/components/tools/prompt-input';
 import { GenerationResultActions } from '@/components/tools/generation-result-actions';
 import { resolveImageUrl, projectsApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
-import { computeSize, estimateCost, estimateCostFromPixels, formatCostDisplay, deriveRatio, clampDimensions } from '@/lib/types';
+import { computeSize, estimateCost, formatCostDisplay, deriveRatio, findClosestTier } from '@/lib/types';
 import type { Task } from '@/lib/types';
 
 export default function ImageToImagePage() {
@@ -76,18 +76,19 @@ export default function ImageToImagePage() {
   const handleGenerate = async () => {
     if (!imageUrl || !prompt.trim()) return;
     try {
-      // Resolve ratio: 'original' → derive from source image dimensions
+      // Resolve ratio: 'original' → match to closest preset ratio
       const actualRatio = ratio === 'original' && originalDimensions
         ? deriveRatio(originalDimensions.w, originalDimensions.h)
         : ratio === 'original'
           ? '1:1'
           : ratio;
 
-      // Resolve resolution: 'original' → use source image dimensions (clamped to API range)
+      // Resolve resolution: 'original' → find the preset tier closest to source image pixel count
       let actualResolution: string;
       if (resolution === 'original' && originalDimensions) {
-        const clamped = clampDimensions(originalDimensions.w, originalDimensions.h);
-        actualResolution = `${clamped.w}x${clamped.h}`;
+        const sourcePixels = originalDimensions.w * originalDimensions.h;
+        const tier = findClosestTier(sourcePixels);
+        actualResolution = computeSize(actualRatio, tier);
       } else if (resolution === 'original') {
         actualResolution = computeSize(actualRatio, '2K');
       } else {
@@ -144,7 +145,7 @@ export default function ImageToImagePage() {
       >
         {submitting ? <><Loader2 className="h-4 w-4 animate-spin" />提交中...</> : <><Sparkles className="h-4 w-4" />开始编辑<span className="ml-1 text-xs opacity-80">≈{formatCostDisplay(
           resolution === 'original' && originalDimensions
-            ? estimateCostFromPixels(originalDimensions.w * originalDimensions.h, 1, 1)
+            ? estimateCost(findClosestTier(originalDimensions.w * originalDimensions.h), 1, 1)
             : estimateCost(resolution === 'original' ? '2K' : resolution, 1, 1)
         )}</span></>}
       </button>

@@ -129,6 +129,8 @@ export const RESOLUTION_TIERS = [
   { value: '4K', label: '4K', targetPixels: 4194304 },
 ] as const;
 
+export type ResolutionTier = typeof RESOLUTION_TIERS[number]['value'];
+
 const MIN_PIXELS = 921600;
 const MAX_PIXELS = 4194304;
 
@@ -356,6 +358,24 @@ export function clampDimensions(w: number, h: number): { w: number; h: number } 
 export function estimateCostFromPixels(totalPixels: number, outputCount = 1, inputCount = 0): number {
   const outputPrice = totalPixels <= PIXEL_THRESHOLD ? OUTPUT_PRICE_LOW : OUTPUT_PRICE_HIGH;
   return round(inputCount * INPUT_PRICE + outputCount * outputPrice);
+}
+
+/**
+ * 找到最接近给定像素数的预设分辨率档位
+ * 用于"默认分辨率"模式：将原图像素匹配到最接近的标准档位
+ */
+export function findClosestTier(targetPixels: number): ResolutionTier {
+  let best: ResolutionTier = '1080p';
+  let bestDiff = Infinity;
+  for (const tier of RESOLUTION_TIERS) {
+    const tierPixels = tier.targetPixels;
+    const diff = Math.abs(tierPixels - targetPixels);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = tier.value;
+    }
+  }
+  return best;
 }
 
 // 工具名称映射

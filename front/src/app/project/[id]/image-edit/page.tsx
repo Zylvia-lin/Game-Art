@@ -12,7 +12,7 @@ import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors'
 import { PromptInput } from '@/components/tools/prompt-input';
 import { resolveImageUrl, toolsApi, downloadImage } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
-import { computeSize, estimateCost, estimateCostFromPixels, formatCostDisplay, deriveRatio, clampDimensions } from '@/lib/types';
+import { computeSize, estimateCost, formatCostDisplay, deriveRatio, findClosestTier } from '@/lib/types';
 import { toast } from 'sonner';
 
 type TabKey = 'inpaint' | 'remove-bg';
@@ -195,11 +195,12 @@ export default function ImageEditPage() {
         : ratio === 'original'
           ? '1:1'
           : ratio;
-      // Resolve resolution: 'original' → use source image dimensions (clamped to API range)
+      // Resolve resolution: 'original' → find the preset tier closest to source image pixel count
       let actualResolution: string;
       if (resolution === 'original' && originalDimensions) {
-        const clamped = clampDimensions(originalDimensions.w, originalDimensions.h);
-        actualResolution = `${clamped.w}x${clamped.h}`;
+        const sourcePixels = originalDimensions.w * originalDimensions.h;
+        const tier = findClosestTier(sourcePixels);
+        actualResolution = computeSize(actualRatio, tier);
       } else if (resolution === 'original') {
         actualResolution = computeSize(actualRatio, '2K');
       } else {
@@ -363,7 +364,7 @@ export default function ImageEditPage() {
               <>
                 <Sparkles className="h-4 w-4" />
                 局部重绘
-                <span className="ml-1 text-xs opacity-80">≈{formatCostDisplay(resolution === 'original' && originalDimensions ? estimateCostFromPixels(originalDimensions.w * originalDimensions.h, 1, 1) : estimateCost(resolution, 1, 1))}</span>
+                <span className="ml-1 text-xs opacity-80">≈{formatCostDisplay(resolution === 'original' && originalDimensions ? estimateCost(findClosestTier(originalDimensions.w * originalDimensions.h), 1, 1) : estimateCost(resolution, 1, 1))}</span>
               </>
             )}
           </button>
