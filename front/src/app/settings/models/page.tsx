@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, Trash2, Star, Loader2, Settings, Key, Server, ArrowLeft } from 'lucide-react';
+import { Plus, Trash2, Star, Loader2, Settings, Key, Server, ArrowLeft, Eraser } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { modelsApi } from '@/lib/api';
 import type { ModelConfig, ModelConfigCreate } from '@/lib/types';
@@ -23,6 +23,10 @@ const PROVIDER_CONFIG = {
     pika: { name: 'Pika', apiUrl: 'https://api.pika.art/v1', defaultModel: 'pika-1.0' },
     kling: { name: '可灵(Kling)', apiUrl: 'https://api.klingai.com/v1', defaultModel: 'kling-v1' },
     luma: { name: 'Luma AI', apiUrl: 'https://api.lumalabs.ai/v1', defaultModel: 'dream-machine' },
+    custom: { name: '自定义', apiUrl: '', defaultModel: '' },
+  },
+  bg_remove: {
+    volcengine: { name: '火山引擎', apiUrl: 'https://mediakit.cn-beijing.volces.com/api/v1/tools-sync/remove-image-background', defaultModel: 'remove-image-background' },
     custom: { name: '自定义', apiUrl: '', defaultModel: '' },
   },
 } as const;
@@ -169,6 +173,7 @@ export default function ModelsSettingsPage() {
 
   const textConfigs = configs.filter((c) => c.type === 'text');
   const imageConfigs = configs.filter((c) => c.type === 'image');
+  const bgRemoveConfigs = configs.filter((c) => c.type === 'bg_remove');
 
   return (
     <div className="mx-auto max-w-4xl p-6">
@@ -204,7 +209,7 @@ export default function ModelsSettingsPage() {
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-foreground">模型类型</label>
                 <div className="flex gap-2">
-                  {(['text', 'image'] as const).map((t) => (
+                  {(['text', 'image', 'bg_remove'] as const).map((t) => (
                     <button
                       key={t}
                       onClick={() => handleTypeChange(t)}
@@ -212,7 +217,7 @@ export default function ModelsSettingsPage() {
                         form.type === t ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-primary/50'
                       }`}
                     >
-                      {t === 'text' ? '文本模型' : '图片模型'}
+                      {t === 'text' ? '文本模型' : t === 'image' ? '图片模型' : t === 'bg_remove' ? '去背景' : t}
                     </button>
                   ))}
                 </div>
@@ -387,6 +392,46 @@ export default function ModelsSettingsPage() {
           </div>
         )}
       </div>
+
+      {bgRemoveConfigs.length > 0 && (
+        <div>
+          <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-foreground">
+            <Eraser className="h-5 w-5 text-primary" />
+            去背景模型
+          </h2>
+          <div className="space-y-3">
+            {bgRemoveConfigs.map((config) => (
+              <div key={config.id} className="flex items-center justify-between rounded-xl border border-border bg-card p-4 hover:border-primary/30 transition-all">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                    <Eraser className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-foreground">{config.name}</span>
+                      {config.is_default && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">默认</span>}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{config.provider} / {config.model_name}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {!config.is_default && (
+                    <button onClick={() => handleSetDefault(config.id)} className="rounded-lg p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all" title="设为默认">
+                      <Star className="h-4 w-4" />
+                    </button>
+                  )}
+                  <button onClick={() => handleEdit(config)} className="rounded-lg px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-all">
+                    编辑
+                  </button>
+                  <button onClick={() => handleDelete(config.id)} className="rounded-lg p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

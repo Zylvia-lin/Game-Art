@@ -1,547 +1,233 @@
-"use client";
+'use client';
 
-import { useEffect, useState, useRef, useCallback } from "react";
-import { X, Download, Pipette, Undo2, Check, Loader2, Eraser, Save, ArrowLeft } from "lucide-react";
-import { resolveImageUrl, API_BASE } from "@/lib/api";
+import { useState, useCallback } from 'react';
+import { Button } from '@/components/ui/button';
+import { Loader2, Download, Check, ArrowLeft, Wand2, RefreshCw } from 'lucide-react';
+import { toolsApi, resolveImageUrl } from '@/lib/api';
 
 interface ColorPickerBgRemovalProps {
   imageUrl: string;
   onClose: () => void;
-  onComplete: (resultUrl: string) => void;
-  onSave?: (resultBlob: Blob) => Promise<void>;
+  onComplete: (url: string) => void;
+  onSave?: (blob: Blob) => void;
 }
 
-interface PickedColor {
-  r: number;
-  g: number;
-  b: number;
-}
+type Scene = 'general' | 'human' | 'product';
 
 export function ColorPickerBgRemoval({ imageUrl, onClose, onComplete, onSave }: ColorPickerBgRemovalProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
-  const imageRef = useRef<HTMLImageElement | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [resultUrl, setResultUrl] = useState<string | null>(null);
+  const [resultDims, setResultDims] = useState<{ width: number; height: number } | null>(null);
+  const [scene, setScene] = useState<Scene>('general');
+  const [saved, setSaved] = useState(false);
 
-  const [pickedColors, setPickedColors] = useState<PickedColor[]>([]);
-  const [tolerance, setTolerance] = useState(30);
-  const [feather, setFeather] = useState(2);
-  const [isLoading, setIsLoading] = useState(true);
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [displayScale, setDisplayScale] = useState(1);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [showOriginal, setShowOriginal] = useState(false);
+  const resolvedUrl = resolveImageUrl(imageUrl);
 
-  // Load image and draw to canvas
-  useEffect(() => {
-    if (!imageUrl) return;
-    let cancelled = false;
-    let objectUrl: string | null = null;
-
-    const loadImg = (src: string) => {
-      const img = new Image();
-      img.onload = () => {
-        if (cancelled) return;
-        imageRef.current = img;
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.drawImage(img, 0, 0);
-        }
-        setIsLoading(false);
-        setImageLoaded(true);
-        // Calculate display scale after canvas is ready
-        requestAnimationFrame(() => updateDisplayScale());
-      };
-      img.onerror = () => {
-        if (cancelled) return;
-        setIsLoading(false);
-        setImageLoaded(false);
-      };
-      img.src = src;
-    };
-
-    // Fetch image via backend proxy to avoid CORS canvas taint.
-    // StaticFiles mount bypasses CORSMiddleware, so we use the
-    // /api/proxy-image endpoint which is a normal route with CORS.
-    const resolved = resolveImageUrl(imageUrl);
-    // Convert /uploads/xxx to /api/proxy-image?url=/uploads/xxx
-    const proxyUrl = `${API_BASE}/api/proxy-image?url=${encodeURIComponent(resolved.startsWith(API_BASE) ? resolved.slice(API_BASE.length) : resolved)}`;
-    fetch(proxyUrl)
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.blob();
-      })
-      .then((blob) => {
-        if (cancelled) return;
-        objectUrl = URL.createObjectURL(blob);
-        loadImg(objectUrl);
-      })
-      .catch(() => {
-        // Last resort: try direct fetch of the original URL
-        fetch(resolved)
-          .then((res) => res.blob())
-          .then((blob) => {
-            if (cancelled) return;
-            objectUrl = URL.createObjectURL(blob);
-            loadImg(objectUrl);
-          })
-          .catch(() => {
-            if (!cancelled) {
-              setIsLoading(false);
-              setImageLoaded(false);
-            }
-          });
-      });
-
-    return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [imageUrl]);
-
-  const updateDisplayScale = useCallback(() => {
-    const img = imageRef.current;
-    const container = containerRef.current;
-    if (!img || !container) return;
-    const maxW = container.clientWidth - 48;
-    const maxH = container.clientHeight - 48;
-    const scaleW = maxW / img.naturalWidth;
-    const scaleH = maxH / img.naturalHeight;
-    setDisplayScale(Math.min(scaleW, scaleH, 1));
-  }, []);
-
-  useEffect(() => {
-    if (!imageLoaded) return;
-    const handleResize = () => updateDisplayScale();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [imageLoaded, updateDisplayScale]);
-
-  // Process image: remove background based on picked colors
-  const processImage = useCallback(() => {
-    const canvas = canvasRef.current;
-    const previewCanvas = previewCanvasRef.current;
-    if (!canvas || !previewCanvas) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // Copy original image to preview canvas
-    previewCanvas.width = canvas.width;
-    previewCanvas.height = canvas.height;
-    const previewCtx = previewCanvas.getContext("2d");
-    if (!previewCtx) return;
-
-    previewCtx.drawImage(canvas, 0, 0);
-    const imageData = previewCtx.getImageData(0, 0, previewCanvas.width, previewCanvas.height);
-    const data = imageData.data;
-
-    if (pickedColors.length === 0) {
-      // No colors picked, just show original
-      previewCtx.putImageData(imageData, 0, 0);
-      return;
-    }
-
-    const toleranceSq = tolerance * tolerance * 3; // squared distance threshold
-    const featherSq = (tolerance + feather * 10) * (tolerance + feather * 10) * 3;
-
-    for (let i = 0; i < data.length; i += 4) {
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
-
-      // Check if pixel matches any picked color
-      let minDistSq = Infinity;
-      for (const pc of pickedColors) {
-        const dr = r - pc.r;
-        const dg = g - pc.g;
-        const db = b - pc.b;
-        const distSq = dr * dr + dg * dg + db * db;
-        if (distSq < minDistSq) minDistSq = distSq;
-      }
-
-      if (minDistSq <= toleranceSq) {
-        // Fully transparent
-        data[i + 3] = 0;
-      } else if (minDistSq <= featherSq) {
-        // Feather: interpolate alpha based on distance
-        const ratio = (minDistSq - toleranceSq) / (featherSq - toleranceSq);
-        data[i + 3] = Math.round(ratio * 255);
-      }
-    }
-
-    previewCtx.putImageData(imageData, 0, 0);
-  }, [pickedColors, tolerance, feather]);
-
-  // Re-process whenever colors or tolerance change
-  useEffect(() => {
-    if (imageLoaded) {
-      processImage();
-    }
-  }, [imageLoaded, pickedColors, tolerance, feather, processImage]);
-
-  // Handle click on canvas to pick color
-  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = previewCanvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const x = Math.floor((e.clientX - rect.left) * scaleX);
-    const y = Math.floor((e.clientY - rect.top) * scaleY);
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const pixel = ctx.getImageData(x, y, 1, 1).data;
-    const newColor = { r: pixel[0], g: pixel[1], b: pixel[2] };
-
-    // Avoid duplicates (similar colors)
-    const isDuplicate = pickedColors.some(
-      (c) =>
-        Math.abs(c.r - newColor.r) < 5 &&
-        Math.abs(c.g - newColor.g) < 5 &&
-        Math.abs(c.b - newColor.b) < 5
-    );
-
-    if (!isDuplicate) {
-      setPickedColors([...pickedColors, newColor]);
-    }
-  };
-
-  const handleUndoColor = () => {
-    setPickedColors(pickedColors.slice(0, -1));
-  };
-
-  const handleClearColors = () => {
-    setPickedColors([]);
-  };
-
-  const handleDownload = async () => {
-    const canvas = previewCanvasRef.current;
-    if (!canvas) return;
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/png")
-    );
-    if (!blob) return;
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `bg-removed-${Date.now()}.png`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleConfirm = async () => {
-    setIsProcessing(true);
-    const canvas = previewCanvasRef.current;
-    if (!canvas) {
-      setIsProcessing(false);
-      return;
-    }
-    // Convert canvas to blob and create a local URL
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/png")
-    );
-    if (!blob) {
-      setIsProcessing(false);
-      return;
-    }
-    const url = URL.createObjectURL(blob);
-    setIsProcessing(false);
-    onComplete(url);
-  };
-
-  const handleSave = async () => {
-    if (!onSave) return;
-    const canvas = previewCanvasRef.current;
-    if (!canvas) return;
-    setIsSaving(true);
+  const handleRemoveBg = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    setResultUrl(null);
+    setSaved(false);
     try {
-      const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob(resolve, "image/png")
-      );
-      if (!blob) return;
-      await onSave(blob);
+      const res = await toolsApi.removeBackgroundAI({
+        image_url: resolvedUrl,
+        scene,
+      });
+      setResultUrl(res.url);
+      setResultDims({ width: res.width, height: res.height });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '处理失败';
+      setError(msg);
     } finally {
-      setIsSaving(false);
+      setLoading(false);
     }
-  };
+  }, [resolvedUrl, scene]);
 
-  const colorToHex = (c: PickedColor) =>
-    `#${c.r.toString(16).padStart(2, "0")}${c.g.toString(16).padStart(2, "0")}${c.b.toString(16).padStart(2, "0")}`;
+  const handleDownload = useCallback(async () => {
+    if (!resultUrl) return;
+    try {
+      const resp = await fetch(resultUrl);
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `removed-bg-${Date.now()}.png`;
+      a.click();
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+      setError('下载失败');
+    }
+  }, [resultUrl]);
+
+  const handleSave = useCallback(async () => {
+    if (!resultUrl || !onSave) return;
+    try {
+      const resp = await fetch(resultUrl);
+      const blob = await resp.blob();
+      await onSave(blob);
+      setSaved(true);
+    } catch {
+      setError('保存失败');
+    }
+  }, [resultUrl, onSave]);
+
+  const handleApplyAndContinue = useCallback(() => {
+    if (resultUrl) {
+      onComplete(resultUrl);
+    }
+  }, [resultUrl, onComplete]);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/80">
+    <div className="flex flex-col h-full bg-[#0a0a0f]">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-3 bg-card">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onClose}
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            返回
-          </button>
-          <div className="w-px h-5 bg-border" />
-          <Eraser className="h-5 w-5 text-primary" />
-          <h3 className="text-sm font-semibold text-foreground">去除背景 — 颜色拾取</h3>
-          <span className="text-xs text-muted-foreground">
-            点击图片背景区域拾取颜色，可多次拾取
+      <div className="flex items-center gap-3 px-6 py-4 border-b border-zinc-800">
+        <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 text-zinc-400 hover:text-white">
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <h2 className="text-lg font-semibold text-zinc-200">AI 去除背景</h2>
+        {resultDims && (
+          <span className="text-xs text-zinc-500 ml-auto">
+            {resultDims.width} x {resultDims.height}px
           </span>
-        </div>
-        <button
-          onClick={onClose}
-          className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-        >
-          <X className="h-5 w-5" />
-        </button>
+        )}
       </div>
 
-      {/* Body: left sidebar + canvas */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left sidebar: controls */}
-        <div className="w-72 shrink-0 overflow-y-auto border-r border-border bg-card p-4 space-y-4">
-          {/* Picked colors */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium text-foreground">已拾取颜色</label>
-              <div className="flex gap-1">
+      {/* Main content */}
+      <div className="flex-1 overflow-auto p-6">
+        <div className="max-w-5xl mx-auto space-y-6">
+          {/* Scene selector */}
+          <div className="space-y-2">
+            <label className="text-sm text-zinc-400">抠图场景</label>
+            <div className="flex gap-2">
+              {([
+                { value: 'general', label: '通用' },
+                { value: 'human', label: '人像' },
+                { value: 'product', label: '商品' },
+              ] as { value: Scene; label: string }[]).map((opt) => (
                 <button
-                  onClick={handleUndoColor}
-                  disabled={pickedColors.length === 0}
-                  className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30 transition-all"
-                  title="撤销最后一个颜色"
+                  key={opt.value}
+                  onClick={() => setScene(opt.value)}
+                  className={`px-4 py-2 rounded-lg text-sm transition-all ${
+                    scene === opt.value
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800'
+                  }`}
                 >
-                  <Undo2 className="h-3.5 w-3.5" />
+                  {opt.label}
                 </button>
-                <button
-                  onClick={handleClearColors}
-                  disabled={pickedColors.length === 0}
-                  className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30 transition-all"
-                >
-                  清空
-                </button>
+              ))}
+            </div>
+            <p className="text-xs text-zinc-600">
+              通用场景适合不确定主体类型的图片；人像场景专抠人物；商品场景专抠物品。
+            </p>
+          </div>
+
+          {/* Image comparison */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Original */}
+            <div className="space-y-2">
+              <div className="text-sm text-zinc-400">原图</div>
+              <div
+                className="rounded-lg overflow-hidden border border-zinc-800 bg-zinc-900"
+                style={{
+                  backgroundImage:
+                    'linear-gradient(45deg, #1a1a22 25%, transparent 25%), linear-gradient(-45deg, #1a1a22 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #1a1a22 75%), linear-gradient(-45deg, transparent 75%, #1a1a22 75%)',
+                  backgroundSize: '16px 16px',
+                  backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0px',
+                }}
+              >
+                <img
+                  src={resolvedUrl}
+                  alt="原图"
+                  className="w-full h-auto max-h-[500px] object-contain"
+                />
               </div>
             </div>
-            {pickedColors.length === 0 ? (
-              <div className="flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-3">
-                <Pipette className="h-4 w-4 text-muted-foreground/50" />
-                <span className="text-xs text-muted-foreground/70">
-                  点击图片拾取背景色
-                </span>
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {pickedColors.map((c, i) => (
-                  <div
-                    key={i}
-                    className="group relative h-8 w-8 rounded-lg border-2 border-border"
-                    style={{ backgroundColor: colorToHex(c) }}
-                    title={`RGB(${c.r}, ${c.g}, ${c.b})`}
-                  >
-                    <button
-                      onClick={() => setPickedColors(pickedColors.filter((_, idx) => idx !== i))}
-                      className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                    >
-                      <X className="h-2.5 w-2.5" />
-                    </button>
+
+            {/* Result */}
+            <div className="space-y-2">
+              <div className="text-sm text-zinc-400">结果</div>
+              <div
+                className="rounded-lg overflow-hidden border border-zinc-800 bg-zinc-900 flex items-center justify-center min-h-[200px]"
+                style={{
+                  backgroundImage: resultUrl
+                    ? 'linear-gradient(45deg, #1a1a22 25%, transparent 25%), linear-gradient(-45deg, #1a1a22 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #1a1a22 75%), linear-gradient(-45deg, transparent 75%, #1a1a22 75%)'
+                    : undefined,
+                  backgroundSize: resultUrl ? '16px 16px' : undefined,
+                  backgroundPosition: resultUrl ? '0 0, 0 8px, 8px -8px, -8px 0px' : undefined,
+                }}
+              >
+                {loading ? (
+                  <div className="flex flex-col items-center gap-3 py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+                    <span className="text-sm text-zinc-500">AI 正在处理中...</span>
                   </div>
-                ))}
+                ) : resultUrl ? (
+                  <img
+                    src={resultUrl}
+                    alt="去背景结果"
+                    className="w-full h-auto max-h-[500px] object-contain"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center gap-2 py-12 text-zinc-600">
+                    <Wand2 className="h-8 w-8" />
+                    <span className="text-sm">点击下方按钮开始处理</span>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-
-          {/* Tolerance slider */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium text-foreground">容差</label>
-              <span className="text-xs font-mono text-muted-foreground">{tolerance}</span>
             </div>
-            <input
-              type="range"
-              min={1}
-              max={100}
-              value={tolerance}
-              onChange={(e) => setTolerance(Number(e.target.value))}
-              className="w-full accent-primary"
-            />
-            <p className="mt-1 text-xs text-muted-foreground/70">
-              值越大，匹配的背景颜色范围越广
-            </p>
           </div>
 
-          {/* Feather slider */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium text-foreground">边缘羽化</label>
-              <span className="text-xs font-mono text-muted-foreground">{feather}</span>
-            </div>
-            <input
-              type="range"
-              min={0}
-              max={10}
-              value={feather}
-              onChange={(e) => setFeather(Number(e.target.value))}
-              className="w-full accent-primary"
-            />
-            <p className="mt-1 text-xs text-muted-foreground/70">
-              羽化边缘像素，使过渡更自然
-            </p>
-          </div>
-
-          {/* Preview toggle */}
-          <div>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={!showOriginal}
-                onChange={(e) => setShowOriginal(!e.target.checked)}
-                className="accent-primary"
-              />
-              <span className="text-sm text-foreground">显示透明预览</span>
-            </label>
-            <p className="mt-1 text-xs text-muted-foreground/70">
-              关闭可对比原图效果
-            </p>
-          </div>
-
-          {/* Checkerboard background indicator */}
-          <div className="rounded-lg border border-border bg-muted/30 p-2">
-            <p className="text-xs text-muted-foreground">
-              棋盘格区域表示已去除的透明背景
-            </p>
-          </div>
-
-          {/* Stats */}
-          {imageRef.current && (
-            <div className="text-xs text-muted-foreground/70 space-y-1">
-              <p>图片尺寸: {imageRef.current.naturalWidth} x {imageRef.current.naturalHeight}px</p>
-              <p>已拾取: {pickedColors.length} 个颜色</p>
+          {/* Error */}
+          {error && (
+            <div className="rounded-lg border border-red-800 bg-red-950/50 px-4 py-3 text-sm text-red-300">
+              {error}
             </div>
           )}
-        </div>
 
-        {/* Canvas area */}
-        <div
-          ref={containerRef}
-          className="flex-1 flex items-center justify-center overflow-auto p-6"
-          style={{
-            backgroundColor: "#1a1a22",
-            backgroundImage:
-              "linear-gradient(45deg, #222228 25%, transparent 25%), linear-gradient(-45deg, #222228 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #222228 75%), linear-gradient(-45deg, transparent 75%, #222228 75%)",
-            backgroundSize: "20px 20px",
-            backgroundPosition: "0 0, 0 10px, 10px -10px, 10px 0px",
-          }}
-        >
-          <div className="relative" style={{ width: "fit-content" }}>
-            {/* Hidden source canvas - always rendered to avoid ref null deadlock */}
-            <canvas ref={canvasRef} className="hidden" />
-            {/* Preview canvas (clickable) */}
-            {imageLoaded && (
-              <canvas
-                ref={previewCanvasRef}
-                onClick={handleCanvasClick}
-                className="block cursor-crosshair rounded-lg shadow-2xl"
-                style={{
-                  maxWidth: "100%",
-                  maxHeight: "100%",
-                  width: imageRef.current
-                    ? `${imageRef.current.naturalWidth * displayScale}px`
-                    : "auto",
-                  height: imageRef.current
-                    ? `${imageRef.current.naturalHeight * displayScale}px`
-                    : "auto",
-                }}
-              />
-            )}
-            {/* Show original image overlay when toggled */}
-            {showOriginal && imageRef.current && (
-              <img
-                src={resolveImageUrl(imageUrl)}
-                alt="原图"
-                className="absolute inset-0 block rounded-lg shadow-2xl pointer-events-none"
-                style={{
-                  width: `${imageRef.current.naturalWidth * displayScale}px`,
-                  height: `${imageRef.current.naturalHeight * displayScale}px`,
-                }}
-              />
-            )}
-            {/* Empty state hint */}
-            {imageLoaded && pickedColors.length === 0 && !showOriginal && (
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 rounded-lg bg-black/70 px-4 py-2 backdrop-blur-sm">
-                <p className="text-sm text-white/90 flex items-center gap-2">
-                  <Pipette className="h-4 w-4" />
-                  点击图片上的背景区域拾取颜色
-                </p>
-              </div>
-            )}
-            {/* Loading overlay */}
-            {isLoading && (
-              <div className="flex flex-col items-center gap-3 absolute inset-0 justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <span className="text-sm text-muted-foreground">加载图片中...</span>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Footer: actions */}
-      <div className="flex items-center justify-between border-t border-border px-4 py-3 bg-card">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>提示: 可多次点击拾取不同背景色</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleDownload}
-            disabled={pickedColors.length === 0}
-            className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Download className="h-4 w-4" />
-            下载图片
-          </button>
-          {onSave && (
-            <button
-              onClick={handleSave}
-              disabled={pickedColors.length === 0 || isSaving}
-              className="flex items-center gap-2 rounded-lg border border-primary/50 bg-primary/10 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          {/* Actions */}
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              onClick={handleRemoveBg}
+              disabled={loading}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white"
             >
-              {isSaving ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  保存中...
-                </>
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : resultUrl ? (
+                <RefreshCw className="h-4 w-4 mr-2" />
               ) : (
-                <>
-                  <Save className="h-4 w-4" />
-                  保存到生成结果
-                </>
+                <Wand2 className="h-4 w-4 mr-2" />
               )}
-            </button>
-          )}
-          <button
-            onClick={handleConfirm}
-            disabled={pickedColors.length === 0 || isProcessing}
-            className="flex items-center gap-2 rounded-lg bg-primary px-5 py-2 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isProcessing ? (
+              {resultUrl ? '重新处理' : '开始去除背景'}
+            </Button>
+
+            {resultUrl && !loading && (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                处理中...
-              </>
-            ) : (
-              <>
-                <Check className="h-4 w-4" />
-                确认并继续编辑
+                <Button variant="outline" onClick={handleDownload} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">
+                  <Download className="h-4 w-4 mr-2" />
+                  下载
+                </Button>
+                {onSave && (
+                  <Button
+                    variant="outline"
+                    onClick={handleSave}
+                    disabled={saved}
+                    className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                  >
+                    {saved ? (
+                      <Check className="h-4 w-4 mr-2 text-green-500" />
+                    ) : null}
+                    {saved ? '已保存' : '保存到生成结果'}
+                  </Button>
+                )}
+                <Button variant="outline" onClick={handleApplyAndContinue} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">
+                  确认并继续编辑
+                </Button>
               </>
             )}
-          </button>
+          </div>
         </div>
       </div>
     </div>

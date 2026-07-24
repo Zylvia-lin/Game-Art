@@ -421,6 +421,17 @@ export default function ImageEditPage() {
           <Paintbrush className="h-3.5 w-3.5" />
           局部重绘
         </button>
+        <button
+          onClick={() => setActiveTab('remove-bg')}
+          className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-all ${
+            activeTab === 'remove-bg'
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Eraser className="h-3.5 w-3.5" />
+          去除背景
+        </button>
       </div>
 
       {/* Image source */}
@@ -497,7 +508,7 @@ export default function ImageEditPage() {
         <>
           <div className="rounded-lg border border-border bg-muted/30 p-3">
             <p className="text-xs text-muted-foreground leading-relaxed">
-              点击"去除背景"后，在弹出的面板中点击图片上的背景区域拾取颜色，可多次拾取不同颜色。拖动容差滑块控制匹配范围，实时预览透明效果。
+              选择背景类型后点击"去除背景"按钮，AI 将自动识别并移除背景，生成透明 PNG。支持通用场景、人像、商品三种模式。
             </p>
           </div>
           <button
