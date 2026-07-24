@@ -126,6 +126,9 @@ async def update_asset(asset_id: str, data: AssetUpdate):
 
 @router.delete("/{asset_id}")
 async def delete_asset(asset_id: str):
+    # Reject generated-image fake IDs (format: gen-{task_uuid}-{index})
+    if asset_id.startswith("gen-"):
+        raise HTTPException(status_code=400, detail="Generated image cannot be deleted via assets API. Use DELETE /api/generate/task/{task_id}/output/{index} instead.")
     result = await execute("DELETE FROM assets WHERE id = $1", asset_id)
     if "DELETE 0" in result:
         raise HTTPException(status_code=404, detail="Asset not found")

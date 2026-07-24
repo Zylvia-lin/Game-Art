@@ -98,12 +98,26 @@ export default function AssetsPage() {
     fetchAssets();
   }, [projectId, filter]);
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (asset: Asset) => {
     if (!confirm('确定要删除此资产吗？')) return;
     try {
-      await assetsApi.delete(id);
-      setAssets(assets.filter((a) => a.id !== id));
-      setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+      if (asset.id.startsWith('gen-')) {
+        // Generated image: extract task_id and index from fake ID "gen-{task_id}-{index}"
+        // task_id is UUID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+        // ID format: gen-<uuid>-<index>
+        const match = asset.id.match(/^gen-(.+)-(\d+)$/);
+        if (match) {
+          const [, taskId, indexStr] = match;
+          await generateApi.deleteOutput(taskId, parseInt(indexStr, 10));
+        } else {
+          throw new Error('无法解析生成结果的ID');
+        }
+      } else {
+        // Archived asset: use assets API
+        await assetsApi.delete(asset.id);
+      }
+      setAssets(assets.filter((a) => a.id !== asset.id));
+      setSelectedIds(prev => { const next = new Set(prev); next.delete(asset.id); return next; });
       toast.success('资产已删除');
     } catch (err) {
       console.error('Failed to delete asset:', err);
@@ -112,6 +126,10 @@ export default function AssetsPage() {
   };
 
   const handleToggleFinalize = async (asset: Asset) => {
+    if (asset.id.startsWith('gen-')) {
+      toast.info('生成结果需要先添加到资产库才能定稿');
+      return;
+    }
     try {
       await assetsApi.update(String(asset.id), { finalized: !asset.finalized });
       setAssets(assets.map(a => a.id === asset.id ? { ...a, finalized: !a.finalized } : a));
@@ -154,9 +172,20 @@ export default function AssetsPage() {
     if (!confirm(`确定要删除选中的 ${selectedIds.size} 个资产吗？`)) return;
     let successCount = 0;
     let failCount = 0;
-    for (const id of selectedIds) {
+    const selectedAssets = assets.filter(a => selectedIds.has(a.id));
+    for (const asset of selectedAssets) {
       try {
-        await assetsApi.delete(id);
+        if (asset.id.startsWith('gen-')) {
+          const match = asset.id.match(/^gen-(.+)-(\d+)$/);
+          if (match) {
+            const [, taskId, indexStr] = match;
+            await generateApi.deleteOutput(taskId, parseInt(indexStr, 10));
+          } else {
+            throw new Error('无法解析生成结果的ID');
+          }
+        } else {
+          await assetsApi.delete(asset.id);
+        }
         successCount++;
       } catch (err) {
         console.error('Failed to delete:', err);
@@ -405,7 +434,7 @@ export default function AssetsPage() {
                       <Download className="h-3 w-3" />
                     </button>
                     <button
-                      onClick={(e) => { e.stopPropagation(); handleDelete(asset.id); }}
+                      onClick={(e) => { e.stopPropagation(); handleDelete(asset); }}
                       className="rounded-md bg-card/80 p-1.5 text-destructive backdrop-blur-sm hover:bg-card transition-colors"
                     >
                       <Trash2 className="h-3 w-3" />
