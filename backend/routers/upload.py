@@ -1,14 +1,15 @@
 """
-File upload endpoint.
+File upload and image proxy endpoint.
 """
 import os
 import time
 import random
 import string
 from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi.responses import FileResponse
 from config import settings
 
-router = APIRouter(prefix="/api/upload", tags=["upload"])
+router = APIRouter(prefix="/api", tags=["upload"])
 
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
@@ -44,3 +45,28 @@ async def upload_file(file: UploadFile = File(...)):
         f.write(contents)
 
     return {"url": f"/uploads/{filename}", "filename": filename}
+
+
+@router.get("/proxy-image")
+async def proxy_image(url: str):
+    """Proxy an image file to avoid CORS canvas taint.
+    Reads files from the uploads directory and serves them with proper headers.
+    """
+    if not url:
+        raise HTTPException(status_code=400, detail="Missing url parameter")
+
+    # Only allow proxying files from the uploads directory
+    if url.startswith("/uploads/"):
+        filename = os.path.basename(url)
+        filepath = os.path.join(UPLOAD_DIR, filename)
+    elif url.startswith("http://") or url.startswith("https://"):
+        # For external URLs, redirect (proxy would require httpx)
+        raise HTTPException(status_code=400, detail="External URLs not supported")
+    else:
+        filename = os.path.basename(url)
+        filepath = os.path.join(UPLOAD_DIR, filename)
+
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    return FileResponse(filepath)

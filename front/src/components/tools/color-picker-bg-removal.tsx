@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { X, Download, Pipette, Undo2, Check, Loader2, Eraser, Save } from "lucide-react";
-import { resolveImageUrl } from "@/lib/api";
+import { resolveImageUrl, API_BASE } from "@/lib/api";
 
 interface ColorPickerBgRemovalProps {
   imageUrl: string;
@@ -65,12 +65,13 @@ export function ColorPickerBgRemoval({ imageUrl, onClose, onComplete, onSave }: 
       img.src = src;
     };
 
-    // Fetch image as blob to avoid CORS canvas taint.
-    // The backend serves images via StaticFiles which may not send
-    // proper CORS headers, so we fetch() (covered by CORSMiddleware)
-    // and create a same-origin blob URL instead.
+    // Fetch image via backend proxy to avoid CORS canvas taint.
+    // StaticFiles mount bypasses CORSMiddleware, so we use the
+    // /api/proxy-image endpoint which is a normal route with CORS.
     const resolved = resolveImageUrl(imageUrl);
-    fetch(resolved)
+    // Convert /uploads/xxx to /api/proxy-image?url=/uploads/xxx
+    const proxyUrl = `${API_BASE}/api/proxy-image?url=${encodeURIComponent(resolved.startsWith(API_BASE) ? resolved.slice(API_BASE.length) : resolved)}`;
+    fetch(proxyUrl)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.blob();
@@ -81,8 +82,20 @@ export function ColorPickerBgRemoval({ imageUrl, onClose, onComplete, onSave }: 
         loadImg(objectUrl);
       })
       .catch(() => {
-        // Fallback: try loading directly (may taint canvas but at least shows image)
-        if (!cancelled) loadImg(resolved);
+        // Last resort: try direct fetch of the original URL
+        fetch(resolved)
+          .then((res) => res.blob())
+          .then((blob) => {
+            if (cancelled) return;
+            objectUrl = URL.createObjectURL(blob);
+            loadImg(objectUrl);
+          })
+          .catch(() => {
+            if (!cancelled) {
+              setIsLoading(false);
+              setImageLoaded(false);
+            }
+          });
       });
 
     return () => {
