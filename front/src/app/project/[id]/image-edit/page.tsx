@@ -38,6 +38,7 @@ export default function ImageEditPage() {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [hasMask, setHasMask] = useState(false);
   const [modalReady, setModalReady] = useState(false);
+  const [savedMaskUrl, setSavedMaskUrl] = useState('');
 
   // Result modal state (for remove-bg)
   const [showResultModal, setShowResultModal] = useState(false);
@@ -89,6 +90,7 @@ export default function ImageEditPage() {
       setHistory([]);
       setHistoryIndex(-1);
       setHasMask(false);
+      setSavedMaskUrl('');
       setModalReady(true);
     };
 
@@ -183,6 +185,25 @@ export default function ImageEditPage() {
   };
 
   const confirmMask = () => {
+    // Save mask data URL while canvas is still mounted (modal closes after this)
+    const maskCanvas = modalMaskCanvasRef.current;
+    if (maskCanvas) {
+      const nat = imageNaturalSize.current;
+      if (nat && (nat.w !== maskCanvas.width || nat.h !== maskCanvas.height)) {
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = nat.w;
+        tempCanvas.height = nat.h;
+        const tempCtx = tempCanvas.getContext('2d');
+        if (tempCtx) {
+          tempCtx.drawImage(maskCanvas, 0, 0, maskCanvas.width, maskCanvas.height, 0, 0, nat.w, nat.h);
+          setSavedMaskUrl(tempCanvas.toDataURL('image/png'));
+        } else {
+          setSavedMaskUrl(maskCanvas.toDataURL('image/png'));
+        }
+      } else {
+        setSavedMaskUrl(maskCanvas.toDataURL('image/png'));
+      }
+    }
     setHasMask(true);
     setShowMaskModal(false);
     toast.success('遮罩已保存');
@@ -193,6 +214,7 @@ export default function ImageEditPage() {
     setHistory([]);
     setHistoryIndex(-1);
     setHasMask(false);
+    setSavedMaskUrl('');
     setModalReady(false);
   };
 
@@ -274,6 +296,7 @@ export default function ImageEditPage() {
     const ctx = maskCanvas.getContext('2d');
     ctx?.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
     setHasMask(false);
+    setSavedMaskUrl('');
     setHistory([]);
     setHistoryIndex(-1);
     // Save the cleared state as first history entry
@@ -304,19 +327,16 @@ export default function ImageEditPage() {
   // --- Submit handlers ---
   const handleInpaint = async () => {
     if (!imageUrl || !prompt.trim()) return;
-    if (!hasMask) {
+    if (!hasMask || !savedMaskUrl) {
       toast.error('请先涂抹要修改的区域');
       return;
     }
     genTrigger();
     try {
-      const maskUrl = await getMaskUrl();
-      // Use originalDimensions state (always set when image is selected) instead of imageNaturalSize ref
-      // which is only populated after opening the mask modal
       const nat = originalDimensions || imageNaturalSize.current;
       await submitTask('inpaint', {
         image_url: imageUrl,
-        mask_url: maskUrl,
+        mask_url: savedMaskUrl,
         prompt,
         original_width: nat?.w,
         original_height: nat?.h,
@@ -335,7 +355,7 @@ export default function ImageEditPage() {
     setResultUrl('');
     setResultDimensions(null);
     try {
-      const maskUrl = hasMask ? await getMaskUrl() : '';
+      const maskUrl = hasMask ? savedMaskUrl : '';
       const res = await toolsApi.removeBgMask({
         image_url: imageUrl,
         mask_url: maskUrl,
@@ -356,6 +376,7 @@ export default function ImageEditPage() {
   const handleTabChange = (tab: TabKey) => {
     setActiveTab(tab);
     setHasMask(false);
+    setSavedMaskUrl('');
     setResultUrl('');
     setResultDimensions(null);
     setShowResultModal(false);
@@ -418,6 +439,7 @@ export default function ImageEditPage() {
         onImageChange={(url) => {
           setImageUrl(url || '');
           setHasMask(false);
+          setSavedMaskUrl('');
         }}
         label="原始图片"
       />
@@ -630,6 +652,7 @@ export default function ImageEditPage() {
                   setShowResultModal(false);
                   setImageUrl(resultUrl);
                   setHasMask(false);
+                  setSavedMaskUrl('');
                 }}
                 className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all"
               >
