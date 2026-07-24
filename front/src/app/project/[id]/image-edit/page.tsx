@@ -4,7 +4,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { Eraser, Paintbrush, Sparkles, Loader2, Undo2, Redo2, Download, X, Check, Wand2, ZoomIn, ZoomOut, Maximize, Brush } from 'lucide-react';
 import { useTaskQueue } from '@/hooks/use-task-queue';
-import { resolveImageUrl, toolsApi } from '@/lib/api';
+import { resolveImageUrl, toolsApi, generateApi } from '@/lib/api';
 import { clampDimensions, estimateCostFromPixels, formatCostDisplay } from '@/lib/types';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { PromptInput } from '@/components/tools/prompt-input';
@@ -17,7 +17,7 @@ type TabKey = 'inpaint' | 'remove-bg';
 export default function ImageEditPage() {
   const params = useParams();
   const projectId = String(params.id || '');
-  const { submitting, submitTask, completedTasks } = useTaskQueue({ projectId });
+  const { submitting, submitTask, completedTasks, refreshTasks } = useTaskQueue({ projectId });
 
   // --- State ---
   const [activeTab, setActiveTab] = useState<TabKey>('inpaint');
@@ -58,6 +58,11 @@ export default function ImageEditPage() {
         return urls.map((url, i) => ({ url, taskId: t.id, taskIndex: i, name: names[i] || '' }));
       });
   }, [completedTasks]);
+
+  const handleDeleteResult = async (taskId: string, taskIndex: number) => {
+    await generateApi.deleteOutput(taskId, taskIndex);
+    refreshTasks();
+  };
 
   // --- Image loading into modal canvas ---
   const loadModalImage = useCallback(async () => {
@@ -303,10 +308,13 @@ export default function ImageEditPage() {
     }
     try {
       const maskUrl = await getMaskUrl();
+      const nat = imageNaturalSize.current;
       await submitTask('inpaint', {
         image_url: imageUrl,
         mask_url: maskUrl,
         prompt,
+        original_width: nat?.w,
+        original_height: nat?.h,
       });
       toast.success('局部重绘任务已提交');
     } catch (err) {
@@ -538,6 +546,7 @@ export default function ImageEditPage() {
                 name={r.name}
                 taskId={r.taskId}
                 taskIndex={r.taskIndex}
+                onDelete={handleDeleteResult}
               />
             ))}
           </div>

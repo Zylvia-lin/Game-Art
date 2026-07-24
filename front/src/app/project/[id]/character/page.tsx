@@ -10,7 +10,7 @@ import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/t
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { PromptInput } from '@/components/tools/prompt-input';
 import { ResultImageCard } from '@/components/tools/result-image-card';
-import { projectsApi } from '@/lib/api';
+import { projectsApi, generateApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { estimateCostFromResolution, formatCostDisplay } from '@/lib/types';
 
@@ -70,7 +70,7 @@ export default function CharacterPage() {
   const [resolution, setResolution] = useState('1024x1024');
   const [sourceImage, setSourceImage] = useState<string | null>(null);
 
-  const { submitting, submitTask, completedTasks } = useTaskQueue({
+  const { submitting, submitTask, completedTasks, refreshTasks } = useTaskQueue({
     projectId,
     onTaskComplete: () => {},
   });
@@ -96,6 +96,11 @@ export default function CharacterPage() {
         }));
       });
   }, [completedTasks]);
+
+  const handleDeleteResult = async (taskId: string, taskIndex: number) => {
+    await generateApi.deleteOutput(taskId, taskIndex);
+    refreshTasks();
+  };
 
   const handleGenerate = async () => {
     if (subTool === 'tpose' && !prompt.trim()) return;
@@ -255,6 +260,7 @@ export default function CharacterPage() {
                 name={r.name}
                 taskId={r.taskId}
                 taskIndex={r.taskIndex}
+                onDelete={() => handleDeleteResult(r.taskId, r.taskIndex)}
               />
             ))}
           </div>

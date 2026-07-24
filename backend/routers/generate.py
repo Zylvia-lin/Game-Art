@@ -204,3 +204,47 @@ async def rename_output(task_id: str, req: RenameOutputRequest):
         task_id,
     )
     return {"success": True, "name": names[req.index]}
+
+
+@router.delete("/task/{task_id}/output/{index}")
+async def delete_output(task_id: str, index: int):
+    """Delete a single output image from a task by index."""
+    row = await fetch_one(
+        "SELECT output_urls, output_names FROM tasks WHERE id = $1",
+        task_id,
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    raw_urls = row.get("output_urls")
+    if isinstance(raw_urls, str):
+        try:
+            urls = json.loads(raw_urls)
+        except (json.JSONDecodeError, TypeError):
+            urls = []
+    else:
+        urls = raw_urls or []
+
+    raw_names = row.get("output_names")
+    if isinstance(raw_names, str):
+        try:
+            names = json.loads(raw_names)
+        except (json.JSONDecodeError, TypeError):
+            names = []
+    else:
+        names = raw_names or []
+
+    if index < 0 or index >= len(urls):
+        raise HTTPException(status_code=400, detail="Index out of range")
+
+    urls.pop(index)
+    if index < len(names):
+        names.pop(index)
+
+    await execute(
+        "UPDATE tasks SET output_urls = $1::jsonb, output_names = $2::jsonb WHERE id = $3",
+        urls,
+        names,
+        task_id,
+    )
+    return {"success": True, "remaining": len(urls)}

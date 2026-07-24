@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { Download, FolderPlus, Check, Pencil, X, ZoomIn, User, Package, Layout, Image as ImageIcon, Film } from "lucide-react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { Download, FolderPlus, Check, Pencil, X, ZoomIn, ZoomOut, User, Package, Layout, Image as ImageIcon, Film, Trash2 } from "lucide-react";
 import { resolveImageUrl, assetsApi, downloadImage, generateApi } from "@/lib/api";
 
 const ASSET_TYPES = [
@@ -12,6 +12,14 @@ const ASSET_TYPES = [
   { value: "animation_frame", label: "动画帧", icon: Film, color: "text-rose-400" },
 ] as const;
 
+const ASSET_LABEL: Record<string, string> = {
+  character: "角色",
+  prop: "道具",
+  ui: "UI",
+  scene: "场景",
+  animation_frame: "动画帧",
+};
+
 interface ResultImageCardProps {
   url: string;
   projectId: string;
@@ -20,6 +28,7 @@ interface ResultImageCardProps {
   taskId?: string;
   taskIndex?: number;
   onNameChange?: (newName: string) => void;
+  onDelete?: () => void;
 }
 
 export function ResultImageCard({
@@ -30,6 +39,7 @@ export function ResultImageCard({
   taskId,
   taskIndex,
   onNameChange,
+  onDelete,
 }: ResultImageCardProps) {
   const [dimensions, setDimensions] = useState<{ w: number; h: number } | null>(null);
   const [displayName, setDisplayName] = useState(name || `生成图片 ${index + 1}`);
@@ -37,15 +47,26 @@ export function ResultImageCard({
   const [editName, setEditName] = useState("");
   const [renaming, setRenaming] = useState(false);
   const [addingToLibrary, setAddingToLibrary] = useState(false);
-  const [added, setAdded] = useState(false);
-  const [addedType, setAddedType] = useState<string | null>(null);
   const [showAssetTypeDialog, setShowAssetTypeDialog] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [previewZoom, setPreviewZoom] = useState(1);
+  const [deleting, setDeleting] = useState(false);
+
+  // Persist "added to library" state in localStorage
+  const storageKey = `asset_added:${projectId}:${url}`;
+  const [addedType, setAddedType] = useState<string | null>(null);
 
   useEffect(() => {
     if (name) setDisplayName(name);
   }, [name]);
+
+  // Load persisted "added" state from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (stored) setAddedType(stored);
+    } catch { /* ignore */ }
+  }, [storageKey]);
 
   useEffect(() => {
     const img = new Image();
@@ -99,8 +120,8 @@ export function ResultImageCard({
         type: assetType,
         url,
       });
-      setAdded(true);
       setAddedType(assetType);
+      try { localStorage.setItem(storageKey, assetType); } catch { /* ignore */ }
     } catch (err) {
       console.error("Failed to add to library:", err);
     } finally {
@@ -109,15 +130,23 @@ export function ResultImageCard({
   };
 
   const handleOpenAssetDialog = () => {
-    if (added) return;
+    if (addedType) return;
     setShowAssetTypeDialog(true);
   };
 
-  const handleImageClick = () => {
-    handleOpenPreview();
+  const handleDelete = async () => {
+    if (!onDelete) return;
+    setDeleting(true);
+    try {
+      await onDelete();
+    } catch (err) {
+      console.error("Delete failed:", err);
+    } finally {
+      setDeleting(false);
+    }
   };
 
-  const handleOpenPreview = () => {
+  const handleImageClick = () => {
     setPreviewZoom(1);
     setShowPreview(true);
   };
@@ -132,6 +161,50 @@ export function ResultImageCard({
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
     setPreviewZoom((prev) => Math.max(0.2, Math.min(5, Math.round((prev + delta) * 100) / 100)));
   };
+
+  // Render action buttons (shared between card and preview)
+  const renderActions = (isPreview = false) => (
+    <div className={`flex items-center justify-center gap-2 ${isPreview ? "" : "px-2 py-2"}`}>
+      <button
+        onClick={handleDownload}
+        className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-all ${
+          isPreview ? "bg-background/80 text-foreground hover:bg-background" : "bg-background/90 text-foreground hover:bg-background"
+        }`}
+        title="下载"
+      >
+        <Download className="h-3.5 w-3.5" />
+        下载
+      </button>
+      <button
+        onClick={handleOpenAssetDialog}
+        disabled={addingToLibrary}
+        className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-all ${
+          addedType
+            ? "bg-emerald-500/20 text-emerald-400"
+            : isPreview
+              ? "bg-background/80 text-foreground hover:bg-background"
+              : "bg-background/90 text-foreground hover:bg-background"
+        }`}
+        title="添加到资产库"
+      >
+        {addedType ? <Check className="h-3.5 w-3.5" /> : <FolderPlus className="h-3.5 w-3.5" />}
+        {addedType ? `已添加到${ASSET_LABEL[addedType] || "资产库"}` : "添加到资产库"}
+      </button>
+      {onDelete && (
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-all ${
+            isPreview ? "bg-background/80 text-red-400 hover:bg-background" : "bg-background/90 text-red-400 hover:bg-background"
+          }`}
+          title="删除"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          删除
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <>
@@ -199,28 +272,8 @@ export function ResultImageCard({
         )}
 
         {/* Action buttons - bottom overlay, hover only */}
-        <div className="absolute inset-x-0 bottom-0 z-20 flex items-center justify-center gap-2 bg-gradient-to-t from-black/70 to-transparent px-2 py-2 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-          <button
-            onClick={handleDownload}
-            className="flex items-center gap-1.5 rounded-md bg-background/90 px-3 py-1.5 text-xs text-foreground hover:bg-background"
-            title="下载"
-          >
-            <Download className="h-3.5 w-3.5" />
-            下载
-          </button>
-          <button
-            onClick={handleOpenAssetDialog}
-            disabled={addingToLibrary}
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-all ${
-              added
-                ? "bg-emerald-500/20 text-emerald-400"
-                : "bg-background/90 text-foreground hover:bg-background"
-            }`}
-            title="添加到资产库"
-          >
-            {added ? <Check className="h-3.5 w-3.5" /> : <FolderPlus className="h-3.5 w-3.5" />}
-            {added ? `已添加到${ASSET_TYPES.find(t => t.value === addedType)?.label || "资产库"}` : "添加到资产库"}
-          </button>
+        <div className="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/70 to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+          {renderActions(false)}
         </div>
       </div>
 
@@ -273,20 +326,18 @@ export function ResultImageCard({
           className="fixed inset-0 z-50 flex flex-col bg-black/90 backdrop-blur-sm"
           onClick={handleClosePreview}
         >
-          {/* Top bar: zoom indicator + close */}
-          <div className="flex items-center justify-between px-4 py-3">
+          {/* Top bar: zoom indicator + close - fixed, shrink-0 */}
+          <div className="flex shrink-0 items-center justify-between px-4 py-3">
             <div className="flex items-center gap-2 rounded-lg bg-background/80 px-3 py-1.5 text-xs text-muted-foreground">
               <span>滚轮缩放</span>
               <span className="text-foreground font-medium">{Math.round(previewZoom * 100)}%</span>
-              {previewZoom !== 1 && (
-                <button
-                  onClick={() => setPreviewZoom(1)}
-                  className="text-primary hover:text-primary/80"
-                  title="重置"
-                >
-                  重置
-                </button>
-              )}
+              <button
+                onClick={() => setPreviewZoom(1)}
+                className="text-primary hover:text-primary/80"
+                title="重置"
+              >
+                重置
+              </button>
             </div>
             <button
               onClick={handleClosePreview}
@@ -297,9 +348,10 @@ export function ResultImageCard({
             </button>
           </div>
 
-          {/* Image area - scrollable, no scrollbar */}
+          {/* Image area - flex-1, scrollable but scrollbar hidden */}
           <div
-            className="flex flex-1 items-center justify-center overflow-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+            className="flex flex-1 items-center justify-center overflow-auto p-4"
+            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             onClick={(e) => e.stopPropagation()}
             onWheel={handlePreviewWheel}
           >
@@ -311,43 +363,25 @@ export function ResultImageCard({
               style={{
                 transform: `scale(${previewZoom})`,
                 transformOrigin: "center center",
-                maxHeight: previewZoom > 1 ? "none" : "70vh",
-                maxWidth: "90vw",
+                maxHeight: previewZoom > 1 ? "none" : "100%",
+                maxWidth: "100%",
               }}
               draggable={false}
             />
           </div>
 
-          {/* Fixed bottom bar: name + dimensions + actions */}
+          {/* Fixed bottom bar: name + dimensions + actions - shrink-0 */}
           <div
-            className="flex items-center justify-center gap-4 px-4 py-4"
+            className="flex shrink-0 flex-col items-center gap-2 px-4 py-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <span className="text-sm text-white/80">{displayName}</span>
-            {dimensions && (
-              <span className="text-xs text-white/50">{dimensions.w} × {dimensions.h}px</span>
-            )}
-            <button
-              onClick={handleDownload}
-              className="flex items-center gap-1.5 rounded-md bg-background/80 px-3 py-1.5 text-xs text-foreground hover:bg-background"
-              title="下载"
-            >
-              <Download className="h-3.5 w-3.5" />
-              下载
-            </button>
-            <button
-              onClick={handleOpenAssetDialog}
-              disabled={addingToLibrary}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-all ${
-                added
-                  ? "bg-emerald-500/20 text-emerald-400"
-                  : "bg-background/80 text-foreground hover:bg-background"
-              }`}
-              title="添加到资产库"
-            >
-              {added ? <Check className="h-3.5 w-3.5" /> : <FolderPlus className="h-3.5 w-3.5" />}
-              {added ? `已添加到${ASSET_TYPES.find(t => t.value === addedType)?.label || "资产库"}` : "添加到资产库"}
-            </button>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-white/80">{displayName}</span>
+              {dimensions && (
+                <span className="text-xs text-white/50">{dimensions.w} × {dimensions.h}px</span>
+              )}
+            </div>
+            {renderActions(true)}
           </div>
         </div>
       )}

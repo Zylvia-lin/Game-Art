@@ -9,7 +9,7 @@ import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/t
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { PromptInput } from '@/components/tools/prompt-input';
 import { ResultImageCard } from '@/components/tools/result-image-card';
-import { projectsApi } from '@/lib/api';
+import { projectsApi, generateApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import type { Project } from '@/lib/types';
 import { estimateCostFromResolution, formatCostDisplay } from '@/lib/types';
@@ -31,7 +31,7 @@ export default function PropPage() {
     variant: 'prop_variant',
   };
 
-  const { submitting, submitTask, completedTasks } = useTaskQueue({
+  const { submitting, submitTask, completedTasks, refreshTasks } = useTaskQueue({
     projectId,
     onTaskComplete: () => {},
   });
@@ -57,6 +57,11 @@ export default function PropPage() {
         }));
       });
   }, [completedTasks]);
+
+  const handleDeleteResult = async (taskId: string, taskIndex: number) => {
+    await generateApi.deleteOutput(taskId, taskIndex);
+    refreshTasks();
+  };
 
   useEffect(() => {
     if (!projectId) return;
@@ -189,6 +194,7 @@ export default function PropPage() {
                 name={r.name}
                 taskId={r.taskId}
                 taskIndex={r.taskIndex}
+                onDelete={handleDeleteResult}
               />
             ))}
           </div>

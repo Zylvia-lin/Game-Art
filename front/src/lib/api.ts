@@ -315,6 +315,11 @@ export const generateApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ index, name }),
     }),
+
+  deleteOutput: (taskId: string, index: number) =>
+    request<{ success: boolean; remaining: number }>(`/api/generate/task/${taskId}/output/${index}`, {
+      method: 'DELETE',
+    }),
 };
 
 // ============================================

@@ -289,7 +289,15 @@ async def generate_image(
         body["size"] = size
     elif has_ref_image and has_mask:
         # inpaint: 输出尺寸必须与原图一致
-        orig_dims = _get_image_dimensions(image_url)
+        # 优先使用前端传入的 original_width/original_height
+        orig_dims = None
+        ow = input_params.get("original_width")
+        oh = input_params.get("original_height")
+        if ow and oh:
+            orig_dims = (int(ow), int(oh))
+            print(f"[Image API] inpaint size from frontend: {ow}x{oh}")
+        if not orig_dims:
+            orig_dims = _get_image_dimensions(image_url)
         if not orig_dims and mask_url:
             # 兜底：从 mask（base64 data URI）读取尺寸
             orig_dims = _get_image_dimensions(mask_url)

@@ -25,7 +25,7 @@ export default function InpaintPage() {
   const [isDrawing, setIsDrawing] = useState(false);
   const [history, setHistory] = useState<ImageData[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
-  const { submitting, submitTask, completedTasks } = useTaskQueue({ projectId });
+  const { submitting, submitTask, completedTasks, refreshTasks } = useTaskQueue({ projectId });
 
   // 从已完成的任务中派生结果图片
   const completedResults = useMemo(() => {
@@ -47,6 +47,11 @@ export default function InpaintPage() {
         }));
       });
   }, [completedTasks]);
+
+  const handleDeleteResult = async (taskId: string, taskIndex: number) => {
+    await generateApi.deleteOutput(taskId, taskIndex);
+    refreshTasks();
+  };
 
   // Check for pre-selected image from sessionStorage (navigated from another tool)
   useEffect(() => {
@@ -293,6 +298,7 @@ export default function InpaintPage() {
                 name={r.name}
                 taskId={r.taskId}
                 taskIndex={r.taskIndex}
+                onDelete={handleDeleteResult}
               />
             ))}
           </div>

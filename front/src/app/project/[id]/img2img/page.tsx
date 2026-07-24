@@ -9,7 +9,7 @@ import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { PromptInput } from '@/components/tools/prompt-input';
 import { ResultImageCard } from '@/components/tools/result-image-card';
 import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
-import { projectsApi } from '@/lib/api';
+import { projectsApi, generateApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { computeSize, estimateCost, formatCostDisplay } from '@/lib/types';
 
@@ -32,7 +32,7 @@ export default function ImageToImagePage() {
     // 结果从 completedTasks 派生，无需手动管理
   }, []);
 
-  const { submitting, submitTask, completedTasks } = useTaskQueue({
+  const { submitting, submitTask, completedTasks, refreshTasks } = useTaskQueue({
     projectId,
     onTaskComplete: handleTaskComplete,
   });
@@ -57,6 +57,11 @@ export default function ImageToImagePage() {
         }));
       });
   }, [completedTasks]);
+
+  const handleDeleteResult = async (taskId: string, taskIndex: number) => {
+    await generateApi.deleteOutput(taskId, taskIndex);
+    refreshTasks();
+  };
 
   const handleGenerate = async () => {
     if (!imageUrl || !prompt.trim()) return;
@@ -145,6 +150,7 @@ export default function ImageToImagePage() {
                 name={r.name}
                 taskId={r.taskId}
                 taskIndex={r.taskIndex}
+                onDelete={() => handleDeleteResult(r.taskId, r.taskIndex)}
               />
             ))}
           </div>

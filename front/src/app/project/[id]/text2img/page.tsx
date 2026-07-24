@@ -9,7 +9,7 @@ import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/t
 import { PromptInput } from '@/components/tools/prompt-input';
 import { ResultImageCard } from '@/components/tools/result-image-card';
 import { useTaskQueue } from '@/hooks/use-task-queue';
-import { projectsApi } from '@/lib/api';
+import { projectsApi, generateApi } from '@/lib/api';
 import { computeSize, estimateCost, formatCostDisplay } from '@/lib/types';
 
 export default function TextToImagePage() {
@@ -21,7 +21,7 @@ export default function TextToImagePage() {
   const [resolution, setResolution] = useState('2K');
   const [error, setError] = useState<string | null>(null);
 
-  const { submitting, submitTask, completedTasks } = useTaskQueue({
+  const { submitting, submitTask, completedTasks, refreshTasks } = useTaskQueue({
     projectId,
     onTaskComplete: () => {},
   });
@@ -54,6 +54,11 @@ export default function TextToImagePage() {
         }));
       });
   }, [completedTasks]);
+
+  const handleDeleteResult = async (taskId: string, taskIndex: number) => {
+    await generateApi.deleteOutput(taskId, taskIndex);
+    refreshTasks();
+  };
 
   if (!params.id) {
     return (
@@ -155,6 +160,7 @@ export default function TextToImagePage() {
                     name={r.name}
                     taskId={r.taskId}
                     taskIndex={r.taskIndex}
+                    onDelete={() => handleDeleteResult(r.taskId, r.taskIndex)}
                   />
                 ))}
               </div>
