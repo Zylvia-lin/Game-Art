@@ -162,6 +162,20 @@ export function ResultImageCard({
     setPreviewZoom((prev) => Math.max(0.2, Math.min(5, Math.round((prev + delta) * 100) / 100)));
   };
 
+  // ESC key to close preview
+  useEffect(() => {
+    if (!showPreview) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        handleClosePreview();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [showPreview]);
+
   // Render action buttons (shared between card and preview)
   const renderActions = (isPreview = false) => (
     <div className={`flex items-center justify-center gap-2 ${isPreview ? "" : "px-2 py-2"}`}>
@@ -352,7 +366,7 @@ export function ResultImageCard({
           <div
             className="flex flex-1 items-center justify-center overflow-auto p-4"
             style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-            onClick={(e) => e.stopPropagation()}
+            onClick={handleClosePreview}
             onWheel={handlePreviewWheel}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -367,6 +381,7 @@ export function ResultImageCard({
                 maxWidth: "100%",
               }}
               draggable={false}
+              onClick={(e) => e.stopPropagation()}
             />
           </div>
 
