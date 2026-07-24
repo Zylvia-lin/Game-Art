@@ -67,23 +67,40 @@ def resolve_image_input(image_url: str) -> str:
     - http/https URL → 原样返回（公网可访问）
     - data: URI → 原样返回（已是 base64）
     - 本地路径（/uploads/xxx）→ 读取文件转为 base64 data URI
+    - localhost URL（http://localhost:8000/uploads/xxx）→ 提取本地路径转 base64
     """
     if not image_url:
         return image_url
 
-    # 公网 URL 或 base64 data URI，直接使用
-    if image_url.startswith(("http://", "https://", "data:")):
+    # base64 data URI，直接使用
+    if image_url.startswith("data:"):
         return image_url
 
-    # 本地文件路径 → 转 base64
+    # localhost URL → 提取路径部分，转本地文件
+    if image_url.startswith("http://localhost") or image_url.startswith("http://127.0.0.1"):
+        from urllib.parse import urlparse
+        parsed = urlparse(image_url)
+        local_path = _resolve_local_path(parsed.path)
+        if local_path and os.path.isfile(local_path):
+            print(f"[Image API] Converting localhost URL to base64: {image_url} -> {local_path}")
+            return _to_base64_uri(local_path)
+        raise FileNotFoundError(f"图片文件不存在: {image_url} (resolved: {local_path})")
+
+    # 公网 URL（非 localhost），直接使用
+    if image_url.startswith(("http://", "https://")):
+        return image_url
+
+    # 本地文件路径（/uploads/xxx 或相对路径）→ 转 base64
     local_path = _resolve_local_path(image_url)
     if local_path and os.path.isfile(local_path):
         print(f"[Image API] Converting local file to base64: {image_url} -> {local_path}")
         return _to_base64_uri(local_path)
 
-    # 兜底：无法解析的 URL 原样返回（让 API 报错）
-    print(f"[Image API] Warning: unable to resolve image URL: {image_url}")
-    return image_url
+    # 文件不存在 → 抛出异常，避免把无效 URL 传给 API
+    raise FileNotFoundError(
+        f"图片文件不存在: {image_url} (resolved: {local_path}), "
+        f"upload_dir={_UPLOAD_DIR}, exists={os.path.isdir(_UPLOAD_DIR)}"
+    )
 
 
 def _compute_size(ratio: str, tier: str) -> str:
@@ -237,8 +254,15 @@ async def generate_image(
         "Content-Type": "application/json",
     }
 
+    # 日志：记录图片输入类型（base64 / url / 无）
+    img_type = "none"
+    if body.get("image"):
+        img_type = "base64" if body["image"].startswith("data:") else "url"
+    mask_type = "none"
+    if body.get("mask"):
+        mask_type = "base64" if body["mask"].startswith("data:") else "url"
     print(f"[Image API] Request: model={model['model_name']}, size={body.get('size', 'auto')}, "
-          f"has_image={bool(image_url)}, has_mask={bool(mask_url)}")
+          f"image_type={img_type}, mask_type={mask_type}")
 
     async with httpx.AsyncClient(timeout=120.0) as client:
         response = await client.post(url, json=body, headers=headers)
