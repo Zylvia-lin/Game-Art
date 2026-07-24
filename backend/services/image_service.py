@@ -288,11 +288,17 @@ async def generate_image(
         size = resolve_size(input_params, model.get("model_name", ""))
         body["size"] = size
     elif has_ref_image and has_mask:
+        # inpaint: 输出尺寸必须与原图一致
         orig_dims = _get_image_dimensions(image_url)
+        if not orig_dims and mask_url:
+            # 兜底：从 mask（base64 data URI）读取尺寸
+            orig_dims = _get_image_dimensions(mask_url)
         if orig_dims:
             cw, ch = _clamp_dimensions(orig_dims[0], orig_dims[1], model.get("model_name", ""))
             body["size"] = f"{cw}x{ch}"
-        # 读取失败时不传 size，让 API 用默认值
+            print(f"[Image API] inpaint size from original: {cw}x{ch}")
+        else:
+            print(f"[Image API] WARNING: inpaint failed to read original dimensions, image_url={image_url[:100]}")
     else:
         size = resolve_size(input_params, model.get("model_name", ""))
         body["size"] = size

@@ -270,36 +270,36 @@ export function ResultImageCard({
       {/* Full-screen preview modal */}
       {showPreview && (
         <div
-          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex flex-col bg-black/90 backdrop-blur-sm"
           onClick={handleClosePreview}
         >
-          {/* Close button */}
-          <button
-            onClick={handleClosePreview}
-            className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-background/80 text-foreground hover:bg-background"
-            title="关闭"
-          >
-            <X className="h-5 w-5" />
-          </button>
-
-          {/* Zoom indicator */}
-          <div className="absolute left-4 top-4 z-10 flex items-center gap-2 rounded-lg bg-background/80 px-3 py-1.5 text-xs text-muted-foreground">
-            <span>滚轮缩放</span>
-            <span className="text-foreground font-medium">{Math.round(previewZoom * 100)}%</span>
-            {previewZoom !== 1 && (
-              <button
-                onClick={() => setPreviewZoom(1)}
-                className="text-primary hover:text-primary/80"
-                title="重置"
-              >
-                重置
-              </button>
-            )}
+          {/* Top bar: zoom indicator + close */}
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-2 rounded-lg bg-background/80 px-3 py-1.5 text-xs text-muted-foreground">
+              <span>滚轮缩放</span>
+              <span className="text-foreground font-medium">{Math.round(previewZoom * 100)}%</span>
+              {previewZoom !== 1 && (
+                <button
+                  onClick={() => setPreviewZoom(1)}
+                  className="text-primary hover:text-primary/80"
+                  title="重置"
+                >
+                  重置
+                </button>
+              )}
+            </div>
+            <button
+              onClick={handleClosePreview}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-background/80 text-foreground hover:bg-background"
+              title="关闭"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
 
-          {/* Image */}
+          {/* Image area - scrollable, no scrollbar */}
           <div
-            className="flex max-h-[85vh] max-w-[90vw] flex-col items-center overflow-auto"
+            className="flex flex-1 items-center justify-center overflow-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
             onClick={(e) => e.stopPropagation()}
             onWheel={handlePreviewWheel}
           >
@@ -310,39 +310,44 @@ export function ResultImageCard({
               className="rounded-lg object-contain transition-transform duration-100"
               style={{
                 transform: `scale(${previewZoom})`,
-                transformOrigin: "center",
-                maxHeight: previewZoom > 1 ? "none" : "78vh",
+                transformOrigin: "center center",
+                maxHeight: previewZoom > 1 ? "none" : "70vh",
+                maxWidth: "90vw",
               }}
               draggable={false}
             />
-            {/* Info bar */}
-            <div className="mt-3 flex items-center gap-4">
-              <span className="text-sm text-white/80">{displayName}</span>
-              {dimensions && (
-                <span className="text-xs text-white/50">{dimensions.w} × {dimensions.h}px</span>
-              )}
-              <button
-                onClick={handleDownload}
-                className="flex items-center gap-1.5 rounded-md bg-background/80 px-3 py-1.5 text-xs text-foreground hover:bg-background"
-                title="下载"
-              >
-                <Download className="h-3.5 w-3.5" />
-                下载
-              </button>
-              <button
-                onClick={handleOpenAssetDialog}
-                disabled={addingToLibrary}
-                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-all ${
-                  added
-                    ? "bg-emerald-500/20 text-emerald-400"
-                    : "bg-background/80 text-foreground hover:bg-background"
-                }`}
-                title="添加到资产库"
-              >
-                {added ? <Check className="h-3.5 w-3.5" /> : <FolderPlus className="h-3.5 w-3.5" />}
-                {added ? `已添加到${ASSET_TYPES.find(t => t.value === addedType)?.label || "资产库"}` : "添加到资产库"}
-              </button>
-            </div>
+          </div>
+
+          {/* Fixed bottom bar: name + dimensions + actions */}
+          <div
+            className="flex items-center justify-center gap-4 px-4 py-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className="text-sm text-white/80">{displayName}</span>
+            {dimensions && (
+              <span className="text-xs text-white/50">{dimensions.w} × {dimensions.h}px</span>
+            )}
+            <button
+              onClick={handleDownload}
+              className="flex items-center gap-1.5 rounded-md bg-background/80 px-3 py-1.5 text-xs text-foreground hover:bg-background"
+              title="下载"
+            >
+              <Download className="h-3.5 w-3.5" />
+              下载
+            </button>
+            <button
+              onClick={handleOpenAssetDialog}
+              disabled={addingToLibrary}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-all ${
+                added
+                  ? "bg-emerald-500/20 text-emerald-400"
+                  : "bg-background/80 text-foreground hover:bg-background"
+              }`}
+              title="添加到资产库"
+            >
+              {added ? <Check className="h-3.5 w-3.5" /> : <FolderPlus className="h-3.5 w-3.5" />}
+              {added ? `已添加到${ASSET_TYPES.find(t => t.value === addedType)?.label || "资产库"}` : "添加到资产库"}
+            </button>
           </div>
         </div>
       )}
