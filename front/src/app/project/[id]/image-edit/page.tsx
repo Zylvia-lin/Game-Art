@@ -66,59 +66,98 @@ export default function ImageEditPage() {
     return url.startsWith('http') ? url : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${url}`;
   };
 
-  // Load image via fetch + blob to avoid CORS canvas tainting
+  // Draw image onto canvases (shared by all load strategies)
+  const drawImageToCanvas = useCallback((img: HTMLImageElement) => {
+    const canvas = canvasRef.current;
+    const maskCanvas = maskCanvasRef.current;
+    if (!canvas || !maskCanvas) return;
+
+    imageNaturalSize.current = { w: img.naturalWidth, h: img.naturalHeight };
+
+    const maxW = 900;
+    const maxH = 650;
+    const scale = Math.min(1, maxW / img.naturalWidth, maxH / img.naturalHeight);
+    const displayW = Math.round(img.naturalWidth * scale);
+    const displayH = Math.round(img.naturalHeight * scale);
+
+    canvas.width = maskCanvas.width = displayW;
+    canvas.height = maskCanvas.height = displayH;
+    canvas.style.width = `${displayW}px`;
+    canvas.style.height = `${displayH}px`;
+    maskCanvas.style.width = `${displayW}px`;
+    maskCanvas.style.height = `${displayH}px`;
+
+    const ctx = canvas.getContext('2d');
+    ctx?.drawImage(img, 0, 0, displayW, displayH);
+    const maskCtx = maskCanvas.getContext('2d');
+    maskCtx?.clearRect(0, 0, displayW, displayH);
+    setHistory([]);
+    setHistoryIndex(-1);
+    setZoom(1);
+  }, []);
+
+  // Load image with multi-strategy fallback:
+  // 1. fetch+blob (avoids canvas tainting, best for same-origin/CORS-enabled)
+  // 2. direct img.src with crossOrigin (works if server sends CORS headers)
+  // 3. direct img.src without crossOrigin (last resort, canvas may be tainted)
   const loadImage = useCallback(async (url: string) => {
     if (!url) return;
+
+    // data: and blob: URIs can be loaded directly without fetch
+    if (url.startsWith('data:') || url.startsWith('blob:')) {
+      const img = new window.Image();
+      img.onload = () => drawImageToCanvas(img);
+      img.onerror = () => toast.error('图片加载失败');
+      img.src = url;
+      return;
+    }
+
     const fullUrl = getFullUrl(url);
+
+    // Strategy 1: fetch + blob (best, avoids canvas tainting)
     try {
       const response = await fetch(fullUrl);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const blob = await response.blob();
       const objectUrl = URL.createObjectURL(blob);
-
       const img = new window.Image();
       img.onload = () => {
         URL.revokeObjectURL(objectUrl);
-        const canvas = canvasRef.current;
-        const maskCanvas = maskCanvasRef.current;
-        if (!canvas || !maskCanvas) return;
-
-        // Store natural size for mask export
-        imageNaturalSize.current = { w: img.naturalWidth, h: img.naturalHeight };
-
-        // Scale to fit container (up to 900px wide)
-        const maxW = 900;
-        const maxH = 650;
-        const scale = Math.min(1, maxW / img.naturalWidth, maxH / img.naturalHeight);
-        const displayW = Math.round(img.naturalWidth * scale);
-        const displayH = Math.round(img.naturalHeight * scale);
-
-        canvas.width = maskCanvas.width = displayW;
-        canvas.height = maskCanvas.height = displayH;
-        canvas.style.width = `${displayW}px`;
-        canvas.style.height = `${displayH}px`;
-        maskCanvas.style.width = `${displayW}px`;
-        maskCanvas.style.height = `${displayH}px`;
-
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, displayW, displayH);
-        const maskCtx = maskCanvas.getContext('2d');
-        maskCtx?.clearRect(0, 0, displayW, displayH);
-        setHistory([]);
-        setHistoryIndex(-1);
-        setZoom(1);
+        drawImageToCanvas(img);
       };
       img.onerror = () => {
         URL.revokeObjectURL(objectUrl);
-        console.error('Image load failed');
-        toast.error('图片加载失败');
+        // Strategy 3 fallback: direct load without crossOrigin
+        fallbackDirectLoad(fullUrl);
       };
       img.src = objectUrl;
-    } catch (err) {
-      console.error('Failed to load image:', err);
-      toast.error('图片加载失败，请重试');
+      return;
+    } catch {
+      // fetch failed (CORS or network), try fallback strategies
     }
-  }, []);
+
+    // Strategy 2: try with crossOrigin (canvas stays clean if server allows)
+    const img2 = new window.Image();
+    img2.crossOrigin = 'anonymous';
+    img2.onload = () => drawImageToCanvas(img2);
+    img2.onerror = () => {
+      // Strategy 3: direct load without crossOrigin (last resort)
+      fallbackDirectLoad(fullUrl);
+    };
+    img2.src = fullUrl;
+  }, [drawImageToCanvas]);
+
+  // Last resort: load without crossOrigin (canvas may be tainted,
+  // mask export will still work since it only reads the mask canvas)
+  const fallbackDirectLoad = useCallback((url: string) => {
+    const img = new window.Image();
+    img.onload = () => drawImageToCanvas(img);
+    img.onerror = () => {
+      console.error('All image load strategies failed for:', url);
+      toast.error('图片加载失败，请重试');
+    };
+    img.src = url;
+  }, [drawImageToCanvas]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
