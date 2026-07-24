@@ -34,27 +34,58 @@ export function ColorPickerBgRemoval({ imageUrl, onClose, onComplete }: ColorPic
   // Load image and draw to canvas
   useEffect(() => {
     if (!imageUrl) return;
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      imageRef.current = img;
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.drawImage(img, 0, 0);
-      }
-      setIsLoading(false);
-      setImageLoaded(true);
-      // Calculate display scale
-      updateDisplayScale();
+    let cancelled = false;
+    let objectUrl: string | null = null;
+
+    const loadImg = (src: string) => {
+      const img = new Image();
+      img.onload = () => {
+        if (cancelled) return;
+        imageRef.current = img;
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0);
+        }
+        setIsLoading(false);
+        setImageLoaded(true);
+        // Calculate display scale after canvas is ready
+        requestAnimationFrame(() => updateDisplayScale());
+      };
+      img.onerror = () => {
+        if (cancelled) return;
+        setIsLoading(false);
+      };
+      img.src = src;
     };
-    img.onerror = () => {
-      setIsLoading(false);
+
+    // Fetch image as blob to avoid CORS canvas taint.
+    // The backend serves images via StaticFiles which may not send
+    // proper CORS headers, so we fetch() (covered by CORSMiddleware)
+    // and create a same-origin blob URL instead.
+    const resolved = resolveImageUrl(imageUrl);
+    fetch(resolved)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.blob();
+      })
+      .then((blob) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        loadImg(objectUrl);
+      })
+      .catch(() => {
+        // Fallback: try loading directly (may taint canvas but at least shows image)
+        if (!cancelled) loadImg(resolved);
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-    img.src = resolveImageUrl(imageUrl);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imageUrl]);
 
