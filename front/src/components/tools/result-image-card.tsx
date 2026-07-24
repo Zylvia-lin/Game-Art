@@ -136,11 +136,14 @@ export function ResultImageCard({
     setShowAssetTypeDialog(true);
   };
 
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
   const handleDelete = async () => {
     if (!onDelete) return;
     setDeleting(true);
     try {
       await onDelete();
+      setShowDeleteConfirm(false);
     } catch (err) {
       console.error("Delete failed:", err);
     } finally {
@@ -208,7 +211,7 @@ export function ResultImageCard({
       </button>
       {onDelete && (
         <button
-          onClick={handleDelete}
+          onClick={() => setShowDeleteConfirm(true)}
           disabled={deleting}
           className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-all ${
             isPreview ? "bg-background/80 text-red-400 hover:bg-background" : "bg-background/90 text-red-400 hover:bg-background"
@@ -399,6 +402,53 @@ export function ResultImageCard({
               )}
             </div>
             {renderActions(true)}
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation dialog */}
+      {showDeleteConfirm && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          onClick={() => !deleting && setShowDeleteConfirm(false)}
+        >
+          <div
+            className="mx-4 w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-2 flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-red-400" />
+              <h3 className="text-base font-semibold text-foreground">确认删除</h3>
+            </div>
+            <p className="mb-5 text-sm text-muted-foreground">
+              确定要删除这张图片吗？此操作不可撤销。
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+                className="rounded-lg px-4 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex items-center gap-1.5 rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:opacity-50"
+              >
+                {deleting ? (
+                  <>
+                    <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    删除中...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-3.5 w-3.5" />
+                    确认删除
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -194,7 +194,7 @@ export default function PropPage() {
                 name={r.name}
                 taskId={r.taskId}
                 taskIndex={r.taskIndex}
-                onDelete={handleDeleteResult}
+                onDelete={() => handleDeleteResult(r.taskId, r.taskIndex)}
               />
             ))}
           </div>
