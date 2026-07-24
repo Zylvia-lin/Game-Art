@@ -14,7 +14,7 @@ async def billing_summary():
 
 @router.get("/stats")
 async def billing_stats(
-    period: str = Query("daily", regex="^(daily|monthly)$"),
+    period: str = Query("daily", pattern="^(daily|monthly)$"),
     days: int = Query(30, ge=1, le=365),
 ):
     """Get billing statistics grouped by date."""

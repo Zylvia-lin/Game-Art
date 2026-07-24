@@ -188,18 +188,30 @@ async def init_db():
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.execute(SCHEMA_SQL)
-    # Migration: add output_names column to existing generations table
-    await conn.execute("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_name = 'generations' AND column_name = 'output_names'
-            ) THEN
-                ALTER TABLE generations ADD COLUMN output_names JSONB DEFAULT '[]';
-            END IF;
-        END $$;
-    """)
+        # Migration: add output_names column to existing generations table
+        await conn.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'generations' AND column_name = 'output_names'
+                ) THEN
+                    ALTER TABLE generations ADD COLUMN output_names JSONB DEFAULT '[]';
+                END IF;
+            END $$;
+        """)
+        # Migration: add output_names column to existing tasks table
+        await conn.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'tasks' AND column_name = 'output_names'
+                ) THEN
+                    ALTER TABLE tasks ADD COLUMN output_names JSONB DEFAULT '[]';
+                END IF;
+            END $$;
+        """)
     print("[DB] Tables initialized")
 
 
