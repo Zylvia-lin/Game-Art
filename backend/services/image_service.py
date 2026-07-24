@@ -279,10 +279,15 @@ async def generate_image(
         "watermark": False,
     }
 
-    # 有参考图时：读取原图尺寸作为输出 size（clamp 到 API 允许范围），
-    # 使生成图片分辨率与原图一致；无参考图时用前端传入的 ratio/resolution 计算
+    # 有参考图时：
+    # - img2img（无 mask）：用前端传入的 ratio/resolution 计算输出尺寸
+    # - inpaint（有 mask）：读取原图尺寸作为输出 size，使生成图片分辨率与原图一致
     has_ref_image = bool(image_url)
-    if has_ref_image:
+    has_mask = bool(mask_url)
+    if has_ref_image and not has_mask:
+        size = resolve_size(input_params, model.get("model_name", ""))
+        body["size"] = size
+    elif has_ref_image and has_mask:
         orig_dims = _get_image_dimensions(image_url)
         if orig_dims:
             cw, ch = _clamp_dimensions(orig_dims[0], orig_dims[1], model.get("model_name", ""))
