@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
@@ -11,7 +11,6 @@ import { ResultImageCard } from '@/components/tools/result-image-card';
 import { resolveImageUrl, projectsApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { formatCostDisplay, estimateCostFromPixels, clampDimensions } from '@/lib/types';
-import type { Task } from '@/lib/types';
 
 export default function ImageToImagePage() {
   const params = useParams();
@@ -19,7 +18,6 @@ export default function ImageToImagePage() {
   const [imageUrl, setImageUrl] = useState('');
   const [prompt, setPrompt] = useState('');
   const [strength, setStrength] = useState(0.7);
-  const [results, setResults] = useState<string[]>([]);
   const [originalDimensions, setOriginalDimensions] = useState<{ w: number; h: number } | null>(null);
 
   // 当图片变化时读取实际分辨率
@@ -37,25 +35,26 @@ export default function ImageToImagePage() {
     projectsApi.get(projectId).catch(() => {});
   }, [projectId]);
 
-  // Wait for params to load
-  if (!params.id) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  const handleTaskComplete = useCallback((task: Task) => {
-    if (task.output_urls && task.output_urls.length > 0) {
-      setResults(prev => [...task.output_urls, ...prev]);
-    }
+  const handleTaskComplete = useCallback(() => {
+    // 结果从 completedTasks 派生，无需手动管理
   }, []);
 
-  const { submitting, submitTask } = useTaskQueue({
+  const { submitting, submitTask, completedTasks } = useTaskQueue({
     projectId,
     onTaskComplete: handleTaskComplete,
   });
+
+  // 从已完成的任务中派生结果图片（刷新页面后也能恢复）
+  const results = useMemo(() => {
+    return completedTasks
+      .filter(t => t.tool_key === 'image_to_image')
+      .sort((a, b) => {
+        const ta = a.completed_at ? new Date(a.completed_at).getTime() : 0;
+        const tb = b.completed_at ? new Date(b.completed_at).getTime() : 0;
+        return tb - ta;
+      })
+      .flatMap(t => t.output_urls || []);
+  }, [completedTasks]);
 
   const handleGenerate = async () => {
     if (!imageUrl || !prompt.trim()) return;
