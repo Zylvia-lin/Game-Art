@@ -145,7 +145,7 @@ export default function TextToImagePage() {
             </div>
           ) : (
             <div className="flex-1 overflow-y-auto rounded-xl border border-border bg-muted/30 p-4">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {results.map((r, i) => (
                   <ResultImageCard
                     key={`${r.taskId}-${r.taskIndex}`}

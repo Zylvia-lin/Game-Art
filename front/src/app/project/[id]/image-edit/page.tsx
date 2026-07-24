@@ -64,20 +64,7 @@ export default function ImageEditPage() {
     if (!imageUrl) return;
     const fullUrl = resolveImageUrl(imageUrl);
 
-    // Read natural dimensions first
-    const probeImg = new window.Image();
-    probeImg.crossOrigin = 'anonymous';
-    await new Promise<void>((resolve) => {
-      probeImg.onload = () => resolve();
-      probeImg.onerror = () => resolve();
-      probeImg.src = fullUrl;
-    });
-
-    const nat = { w: probeImg.naturalWidth || 512, h: probeImg.naturalHeight || 512 };
-    imageNaturalSize.current = nat;
-
-    // Now load into canvas (try fetch+blob first to avoid CORS taint)
-    const drawToCanvas = (img: HTMLImageElement) => {
+    const drawToCanvas = (img: HTMLImageElement, nat: { w: number; h: number }) => {
       const canvas = modalCanvasRef.current;
       const maskCanvas = modalMaskCanvasRef.current;
       if (!canvas || !maskCanvas) return;
@@ -98,13 +85,23 @@ export default function ImageEditPage() {
       setModalReady(true);
     };
 
+    // For data:/blob: URIs, load directly (no fetch needed)
     if (fullUrl.startsWith('data:') || fullUrl.startsWith('blob:')) {
       const img = new window.Image();
-      img.onload = () => drawToCanvas(img);
+      img.onload = () => {
+        const nat = { w: img.naturalWidth || 512, h: img.naturalHeight || 512 };
+        imageNaturalSize.current = nat;
+        drawToCanvas(img, nat);
+      };
+      img.onerror = () => {
+        toast.error('图片加载失败');
+        setModalReady(false);
+      };
       img.src = fullUrl;
       return;
     }
 
+    // For HTTP URLs: try fetch+blob first (avoids CORS taint on canvas)
     try {
       const resp = await fetch(fullUrl);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -112,23 +109,52 @@ export default function ImageEditPage() {
       const blobUrl = URL.createObjectURL(blob);
       const img = new window.Image();
       img.onload = () => {
-        drawToCanvas(img);
+        const nat = { w: img.naturalWidth || 512, h: img.naturalHeight || 512 };
+        imageNaturalSize.current = nat;
+        drawToCanvas(img, nat);
         URL.revokeObjectURL(blobUrl);
       };
       img.onerror = () => {
         URL.revokeObjectURL(blobUrl);
-        // fallback: direct load
+        // Fallback: direct load without crossOrigin
         const img2 = new window.Image();
-        img2.onload = () => drawToCanvas(img2);
+        img2.onload = () => {
+          const nat = { w: img2.naturalWidth || 512, h: img2.naturalHeight || 512 };
+          imageNaturalSize.current = nat;
+          drawToCanvas(img2, nat);
+        };
+        img2.onerror = () => {
+          toast.error('图片加载失败');
+          setModalReady(false);
+        };
         img2.src = fullUrl;
       };
       img.src = blobUrl;
     } catch {
+      // Fallback: direct load without fetch
       const img = new window.Image();
-      img.onload = () => drawToCanvas(img);
+      img.onload = () => {
+        const nat = { w: img.naturalWidth || 512, h: img.naturalHeight || 512 };
+        imageNaturalSize.current = nat;
+        drawToCanvas(img, nat);
+      };
+      img.onerror = () => {
+        toast.error('图片加载失败');
+        setModalReady(false);
+      };
       img.src = fullUrl;
     }
   }, [imageUrl]);
+
+  // Load image when mask modal opens (waits for DOM to be ready)
+  useEffect(() => {
+    if (!showMaskModal || !imageUrl) return;
+    // Use requestAnimationFrame to ensure canvas refs are mounted
+    const raf = requestAnimationFrame(() => {
+      loadModalImage();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [showMaskModal, imageUrl, loadModalImage]);
 
   // Read original dimensions when image changes
   useEffect(() => {
@@ -147,7 +173,6 @@ export default function ImageEditPage() {
     }
     setModalReady(false);
     setShowMaskModal(true);
-    setTimeout(() => { loadModalImage(); }, 100);
   };
 
   const confirmMask = () => {
@@ -491,27 +516,27 @@ export default function ImageEditPage() {
     </>
   );
 
-  // --- Canvas area: preview + results ---
+  // --- Canvas area: results only (no original image preview) ---
   const canvas = (
     <div className="flex h-full flex-col">
-      {/* Preview area */}
-      <div className="flex flex-1 items-center justify-center overflow-hidden p-4">
-        {imageUrl ? (
-          <div className="relative inline-block shadow-xl rounded-lg border border-border overflow-hidden max-w-full max-h-full">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={resolveImageUrl(imageUrl)}
-              alt="原图"
-              className="max-w-full object-contain"
-              style={{ maxHeight: 'calc(100vh - 360px)' }}
-            />
-            {hasMask && (
-              <span className="absolute top-2 right-2 rounded-md bg-green-500/90 px-2 py-1 text-xs font-medium text-white backdrop-blur-sm">
-                遮罩已设置
-              </span>
-            )}
+      {results.length > 0 ? (
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {results.map((r, i) => (
+              <ResultImageCard
+                key={`${r.taskId}-${r.taskIndex}`}
+                url={r.url}
+                projectId={projectId}
+                index={i}
+                name={r.name}
+                taskId={r.taskId}
+                taskIndex={r.taskIndex}
+              />
+            ))}
           </div>
-        ) : (
+        </div>
+      ) : (
+        <div className="flex flex-1 items-center justify-center">
           <div className="text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-accent">
               {activeTab === 'inpaint' ? (
@@ -528,26 +553,6 @@ export default function ImageEditPage() {
                 ? '上传图片，点击"涂抹遮罩"选择要修改的区域'
                 : '上传图片，涂抹可指定保留区域'}
             </p>
-          </div>
-        )}
-      </div>
-
-      {/* Results history */}
-      {activeTab === 'inpaint' && results.length > 0 && (
-        <div className="border-t border-border p-4">
-          <h4 className="mb-3 text-sm font-medium text-foreground">生成结果</h4>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {results.map((r, i) => (
-              <ResultImageCard
-                key={`${r.taskId}-${r.taskIndex}`}
-                url={r.url}
-                projectId={projectId}
-                index={i}
-                name={r.name}
-                taskId={r.taskId}
-                taskIndex={r.taskIndex}
-              />
-            ))}
           </div>
         </div>
       )}

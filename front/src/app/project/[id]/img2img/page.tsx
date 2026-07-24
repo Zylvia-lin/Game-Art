@@ -130,7 +130,7 @@ export default function ImageToImagePage() {
   const canvas = (
     <div className="flex h-full flex-col">
       {results.length > 0 ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {results.map((r, i) => (
             <ResultImageCard key={`${r.taskId}-${r.taskIndex}`} url={r.url} projectId={String(projectId)} index={i} name={r.name} taskId={r.taskId} taskIndex={r.taskIndex} />
           ))}
