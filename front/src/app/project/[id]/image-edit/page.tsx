@@ -355,12 +355,16 @@ export default function ImageEditPage() {
     setResultUrl('');
     setResultDimensions(null);
     try {
-      const maskUrl = hasMask ? savedMaskUrl : '';
-      const res = await toolsApi.removeBgMask({
-        image_url: imageUrl,
-        mask_url: maskUrl,
-        bg_color: bgColor,
-      });
+      let res: { url: string };
+      if (hasMask && savedMaskUrl) {
+        res = await toolsApi.removeBgMask({
+          image_url: imageUrl,
+          mask_url: savedMaskUrl,
+          bg_color: bgColor,
+        });
+      } else {
+        res = await toolsApi.removeBackground({ image_url: imageUrl });
+      }
       setResultUrl(res.url);
       setShowResultModal(true);
       toast.success('背景去除完成');

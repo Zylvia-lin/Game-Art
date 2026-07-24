@@ -133,6 +133,8 @@ def apply_background_mask(
     height, width = orig_arr.shape[:2]
 
     # Decode mask from data URL
+    if not mask_data_url:
+        raise ValueError("mask_data_url is required for mask-based background removal")
     if mask_data_url.startswith("data:image/"):
         b64_data = mask_data_url.split(",", 1)[1]
         mask_bytes = base64.b64decode(b64_data)
