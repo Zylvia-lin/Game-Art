@@ -348,7 +348,14 @@ export default function ImageEditPage() {
   };
 
   const handleZoom = (delta: number) => {
-    setZoom((prev) => Math.max(0.2, Math.min(3, prev + delta)));
+    setZoom((prev) => Math.max(0.2, Math.min(5, prev + delta)));
+  };
+
+  const handleWheelZoom = (e: React.WheelEvent) => {
+    // Prevent browser zoom (Ctrl+wheel changes page zoom)
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    setZoom((prev) => Math.max(0.2, Math.min(5, Math.round((prev + delta) * 100) / 100)));
   };
 
   const brushCursor = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='${brushSize * 2}' height='${brushSize * 2}'%3E%3Ccircle cx='${brushSize}' cy='${brushSize}' r='${brushSize - 1}' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E") ${brushSize} ${brushSize}, crosshair`;
@@ -711,7 +718,10 @@ export default function ImageEditPage() {
           </div>
 
           {/* Canvas area */}
-          <div className="relative flex flex-1 items-center justify-center overflow-auto p-4">
+          <div
+            className="relative flex flex-1 items-center justify-center overflow-auto p-4"
+            onWheel={handleWheelZoom}
+          >
             {/* Canvas container: always rendered so refs are available */}
             <div
               className="relative inline-block shadow-2xl"

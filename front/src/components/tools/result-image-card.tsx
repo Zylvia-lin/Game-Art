@@ -41,6 +41,7 @@ export function ResultImageCard({
   const [addedType, setAddedType] = useState<string | null>(null);
   const [showAssetTypeDialog, setShowAssetTypeDialog] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [previewZoom, setPreviewZoom] = useState(1);
 
   useEffect(() => {
     if (name) setDisplayName(name);
@@ -113,11 +114,23 @@ export function ResultImageCard({
   };
 
   const handleImageClick = () => {
+    handleOpenPreview();
+  };
+
+  const handleOpenPreview = () => {
+    setPreviewZoom(1);
     setShowPreview(true);
   };
 
   const handleClosePreview = () => {
     setShowPreview(false);
+    setPreviewZoom(1);
+  };
+
+  const handlePreviewWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    setPreviewZoom((prev) => Math.max(0.2, Math.min(5, Math.round((prev + delta) * 100) / 100)));
   };
 
   return (
@@ -269,13 +282,38 @@ export function ResultImageCard({
             <X className="h-5 w-5" />
           </button>
 
+          {/* Zoom indicator */}
+          <div className="absolute left-4 top-4 z-10 flex items-center gap-2 rounded-lg bg-background/80 px-3 py-1.5 text-xs text-muted-foreground">
+            <span>滚轮缩放</span>
+            <span className="text-foreground font-medium">{Math.round(previewZoom * 100)}%</span>
+            {previewZoom !== 1 && (
+              <button
+                onClick={() => setPreviewZoom(1)}
+                className="text-primary hover:text-primary/80"
+                title="重置"
+              >
+                重置
+              </button>
+            )}
+          </div>
+
           {/* Image */}
-          <div className="flex max-h-[85vh] max-w-[90vw] flex-col items-center" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="flex max-h-[85vh] max-w-[90vw] flex-col items-center overflow-auto"
+            onClick={(e) => e.stopPropagation()}
+            onWheel={handlePreviewWheel}
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={resolveImageUrl(url)}
               alt={displayName}
-              className="max-h-[78vh] max-w-full rounded-lg object-contain"
+              className="rounded-lg object-contain transition-transform duration-100"
+              style={{
+                transform: `scale(${previewZoom})`,
+                transformOrigin: "center",
+                maxHeight: previewZoom > 1 ? "none" : "78vh",
+              }}
+              draggable={false}
             />
             {/* Info bar */}
             <div className="mt-3 flex items-center gap-4">
