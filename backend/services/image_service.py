@@ -3,9 +3,12 @@ Image generation service.
 Calls image generation APIs (Seedream, DALL-E, etc.) to generate images.
 """
 import os
+import io
 import math
 import httpx
 import base64
+from PIL import Image
+from urllib.parse import urlparse
 
 
 # 分辨率档位 → 目标总像素
@@ -78,7 +81,6 @@ def resolve_image_input(image_url: str) -> str:
 
     # localhost URL → 提取路径部分，转本地文件
     if image_url.startswith("http://localhost") or image_url.startswith("http://127.0.0.1"):
-        from urllib.parse import urlparse
         parsed = urlparse(image_url)
         local_path = _resolve_local_path(parsed.path)
         if local_path and os.path.isfile(local_path):
@@ -101,6 +103,46 @@ def resolve_image_input(image_url: str) -> str:
         f"图片文件不存在: {image_url} (resolved: {local_path}), "
         f"upload_dir={_UPLOAD_DIR}, exists={os.path.isdir(_UPLOAD_DIR)}"
     )
+
+
+def _get_image_dimensions(image_url: str) -> tuple[int, int] | None:
+    """读取图片的实际宽高，用于图生图时保持输出分辨率与原图一致。
+    支持 data: URI、本地路径、localhost URL。
+    公网 URL 无法读取时返回 None。
+    """
+    if not image_url:
+        return None
+
+    try:
+        # data: URI → 解码后用 PIL 读取
+        if image_url.startswith("data:"):
+            _, b64data = image_url.split(",", 1)
+            raw = base64.b64decode(b64data)
+            img = Image.open(io.BytesIO(raw))
+            return img.size  # (width, height)
+
+        # localhost URL → 提取本地路径
+        if image_url.startswith("http://localhost") or image_url.startswith("http://127.0.0.1"):
+            parsed = urlparse(image_url)
+            local_path = _resolve_local_path(parsed.path)
+            if local_path and os.path.isfile(local_path):
+                img = Image.open(local_path)
+                return img.size
+            return None
+
+        # 公网 URL → 无法本地读取
+        if image_url.startswith(("http://", "https://")):
+            return None
+
+        # 本地文件路径
+        local_path = _resolve_local_path(image_url)
+        if local_path and os.path.isfile(local_path):
+            img = Image.open(local_path)
+            return img.size
+    except Exception as e:
+        print(f"[Image API] Failed to read image dimensions: {e}")
+
+    return None
 
 
 def _compute_size(ratio: str, tier: str) -> str:
@@ -237,9 +279,16 @@ async def generate_image(
         "watermark": False,
     }
 
-    # 图生图 / 局部重绘：有参考图时不传 size，让 API 根据参考图自动决定输出尺寸
+    # 有参考图时：读取原图尺寸作为输出 size（clamp 到 API 允许范围），
+    # 使生成图片分辨率与原图一致；无参考图时用前端传入的 ratio/resolution 计算
     has_ref_image = bool(image_url)
-    if not has_ref_image:
+    if has_ref_image:
+        orig_dims = _get_image_dimensions(image_url)
+        if orig_dims:
+            cw, ch = _clamp_dimensions(orig_dims[0], orig_dims[1], model.get("model_name", ""))
+            body["size"] = f"{cw}x{ch}"
+        # 读取失败时不传 size，让 API 用默认值
+    else:
         size = resolve_size(input_params, model.get("model_name", ""))
         body["size"] = size
 
