@@ -37,6 +37,8 @@ class GenerateRequest(BaseModel):
     tile_size: Optional[int] = None
     components: Optional[list] = None
     sub_tool: Optional[str] = None
+    original_width: Optional[int] = None
+    original_height: Optional[int] = None
 
 
 # Tools that don't need AI models (local processing only)

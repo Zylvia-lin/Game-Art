@@ -5,13 +5,11 @@ import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, Undo2, Redo2, Eraser, Paintbrush } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
-import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { PromptInput } from '@/components/tools/prompt-input';
 import { ResultImageCard } from '@/components/tools/result-image-card';
 import { generateApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { useButtonCooldown } from '@/hooks/use-button-cooldown';
-import { computeSize } from '@/lib/types';
 
 export default function InpaintPage() {
   const params = useParams();
@@ -21,8 +19,7 @@ export default function InpaintPage() {
   const [imageUrl, setImageUrl] = useState('');
   const [prompt, setPrompt] = useState('');
   const [brushSize, setBrushSize] = useState(20);
-  const [ratio, setRatio] = useState('1:1');
-  const [resolution, setResolution] = useState('2K');
+  const [originalDimensions, setOriginalDimensions] = useState<{ w: number; h: number } | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [history, setHistory] = useState<ImageData[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -70,6 +67,10 @@ export default function InpaintPage() {
     img.onload = () => {
       const canvas = canvasRef.current;
       const maskCanvas = maskCanvasRef.current;
+
+      // Store original dimensions for inpaint size
+      setOriginalDimensions({ w: img.width, h: img.height });
+
       if (!canvas || !maskCanvas) return;
 
       const maxW = 600;
@@ -193,8 +194,8 @@ export default function InpaintPage() {
         image_url: imageUrl,
         mask_url: maskUrl,
         prompt,
-        ratio,
-        resolution: computeSize(ratio, resolution),
+        original_width: originalDimensions?.w,
+        original_height: originalDimensions?.h,
       });
     } catch (err) {
       console.error('Inpaint failed:', err);
@@ -262,8 +263,11 @@ export default function InpaintPage() {
         </button>
       </div>
       <PromptInput value={prompt} onChange={setPrompt} toolKey="inpaint" label="替换描述" placeholder="描述遮罩区域要替换成什么，如：替换为金色皇冠..." rows={3} />
-      <RatioSelector value={ratio} onChange={setRatio} />
-      <ResolutionSelector ratio={ratio} value={resolution} onChange={setResolution} />
+      {originalDimensions && (
+        <div className="text-xs text-muted-foreground">
+          原图分辨率：{originalDimensions.w} × {originalDimensions.h}px
+        </div>
+      )}
       <button
         onClick={handleGenerate}
         disabled={submitting || genCooldown || !imageUrl || !prompt.trim()}
