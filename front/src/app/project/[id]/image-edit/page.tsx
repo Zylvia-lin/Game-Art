@@ -711,28 +711,30 @@ export default function ImageEditPage() {
           </div>
 
           {/* Canvas area */}
-          <div className="flex flex-1 items-center justify-center overflow-auto p-4">
-            {modalReady && imageNaturalSize.current && (
-              <div
-                className="relative inline-block shadow-2xl"
-                style={{ transform: `scale(${zoom})`, transformOrigin: 'center' }}
-              >
-                <canvas ref={modalCanvasRef} className="block" />
-                <canvas
-                  ref={modalMaskCanvasRef}
-                  className="absolute left-0 top-0"
-                  style={{ cursor: brushCursor }}
-                  onMouseDown={handleMouseDown}
-                  onMouseMove={draw}
-                  onMouseUp={handleMouseUp}
-                  onMouseLeave={handleMouseUp}
-                />
-              </div>
-            )}
+          <div className="relative flex flex-1 items-center justify-center overflow-auto p-4">
+            {/* Canvas container: always rendered so refs are available */}
+            <div
+              className="relative inline-block shadow-2xl"
+              style={{ transform: `scale(${zoom})`, transformOrigin: 'center' }}
+            >
+              <canvas ref={modalCanvasRef} className="block" />
+              <canvas
+                ref={modalMaskCanvasRef}
+                className="absolute left-0 top-0"
+                style={{ cursor: brushCursor }}
+                onMouseDown={handleMouseDown}
+                onMouseMove={draw}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+              />
+            </div>
+            {/* Loading overlay: shown on top of canvas while loading */}
             {!modalReady && (
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Loader2 className="h-5 w-5 animate-spin" />
-                <span className="text-sm">加载图片中...</span>
+              <div className="absolute inset-0 flex items-center justify-center bg-background/80">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span className="text-sm">加载图片中...</span>
+                </div>
               </div>
             )}
           </div>
