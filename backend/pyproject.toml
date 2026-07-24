@@ -18,5 +18,5 @@ dependencies = [
     "langchain>=0.3.0",
     "langchain-openai>=0.2.0",
     "langchain-community>=0.3.0",
-    "boto3>=1.35.0",
+    "tos>=2.6.0",
 ]

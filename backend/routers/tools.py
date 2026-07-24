@@ -5,8 +5,6 @@ Frame extraction, background removal (local + AI), and mask-based background fil
 import os
 import uuid
 import httpx
-import boto3
-from io import BytesIO
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from config import settings
@@ -84,30 +82,24 @@ class AIRemoveBgRequest(BaseModel):
 
 def _upload_to_tos(local_path: str, storage_cfg: dict) -> str:
     """
-    Upload a local file to TOS via native HTTP API (SigV4).
-    Avoids boto3 endpoint/host mismatch issues by using raw HTTP requests.
+    Upload a local file to TOS using the official TOS Python SDK.
+    Returns a tos:// URL for MediaKit consumption.
     """
-    import hashlib
-    import hmac
-    import time
-    from urllib.parse import quote
+    import tos
 
-    # Use S3-compatible endpoint as-is (tos-s3-cn-guangzhou.volces.com)
-    # For TOS native endpoint (tos-cn-xxx), convert to S3-compatible
+    # Normalize endpoint: TOS SDK expects native endpoint (tos-cn-xxx),
+    # not the S3-compatible one (tos-s3-cn-xxx)
     raw_endpoint = storage_cfg["endpoint"]
-    if raw_endpoint.startswith("tos-") and not raw_endpoint.startswith("tos-s3-"):
-        endpoint = "tos-s3-" + raw_endpoint[len("tos-"):]
+    if raw_endpoint.startswith("tos-s3-"):
+        endpoint = "tos-" + raw_endpoint[len("tos-s3-"):]
     else:
         endpoint = raw_endpoint
+
     bucket = storage_cfg["bucket"]
     region = storage_cfg["region"]
     ak = storage_cfg["access_key"]
     sk = storage_cfg["secret_key"]
     key = f"gameart/{uuid.uuid4().hex[:12]}_{os.path.basename(local_path)}"
-
-    # Read file content
-    with open(local_path, "rb") as f:
-        body = f.read()
 
     # Determine content type
     ext = os.path.splitext(local_path)[1].lower()
@@ -119,89 +111,23 @@ def _upload_to_tos(local_path: str, storage_cfg: dict) -> str:
         ".gif": "image/gif",
     }.get(ext, "application/octet-stream")
 
-    # Path-style URL: https://{endpoint}/{bucket}/{key}
-    host = endpoint
-    object_path = f"/{bucket}/{key}"
-    url = f"https://{host}{object_path}"
-
-    # AWS SigV4 signing
-    amz_date = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
-    date_stamp = time.strftime("%Y%m%d", time.gmtime())
-
-    # Step 1: Create canonical request
-    payload_hash = hashlib.sha256(body).hexdigest()
-
-    # Headers to sign (must be lowercase, sorted)
-    headers_to_sign = {
-        "host": host,
-        "x-tos-content-sha256": payload_hash,
-        "x-tos-date": amz_date,
-    }
-
-    canonical_headers = "".join(
-        f"{k}:{v}\n" for k, v in sorted(headers_to_sign.items())
-    )
-    signed_headers = ";".join(k for k in sorted(headers_to_sign.keys()))
-
-    canonical_request = (
-        f"PUT\n"
-        f"/{key}\n"  # resource path (without bucket)
-        f"\n"  # canonical query string (empty)
-        f"{canonical_headers}\n"
-        f"{signed_headers}\n"
-        f"{payload_hash}"
-    )
-
-    # Step 2: Create string to sign
-    credential_scope = f"{date_stamp}/{region}/tos/request"
-    string_to_sign = (
-        f"TOS4-HMAC-SHA256\n"
-        f"{amz_date}\n"
-        f"{credential_scope}\n"
-        f"{hashlib.sha256(canonical_request.encode()).hexdigest()}"
-    )
-
-    # Step 3: Calculate signature
-    def _hmac(key, msg):
-        return hmac.new(key, msg.encode(), hashlib.sha256).digest()
-
-    k_date = _hmac(("TOS4" + sk).encode(), date_stamp)
-    k_region = _hmac(k_date, region)
-    k_service = _hmac(k_region, "tos")
-    k_signing = _hmac(k_service, "request")
-    signature = hmac.new(k_signing, string_to_sign.encode(), hashlib.sha256).hexdigest()
-
-    # Step 4: Build Authorization header
-    authorization = (
-        f"TOS4-HMAC-SHA256 "
-        f"Credential={ak}/{credential_scope}, "
-        f"SignedHeaders={signed_headers}, "
-        f"Signature={signature}"
-    )
-
-    # Step 5: Send request (path-style: bucket in URL path)
-    import httpx
-
-    headers = {
-        "Host": host,
-        "x-tos-date": amz_date,
-        "x-tos-content-sha256": payload_hash,
-        "Authorization": authorization,
-        "Content-Type": content_type,
-        "Content-Length": str(len(body)),
-    }
-
-    full_url = url  # already https://{bucket}.{endpoint}/{key}
-    resp = httpx.put(full_url, content=body, headers=headers, timeout=30.0)
-
-    if resp.status_code != 200:
-        raise RuntimeError(
-            f"上传图片到对象存储失败: HTTP {resp.status_code}\n"
-            f"URL: {full_url}\n"
-            f"Response: {resp.text}\n"
-            f"endpoint={host}, bucket={bucket}, region={region}"
+    try:
+        client = tos.TosClientV2(ak, sk, endpoint, region)
+        client.put_object_from_file(
+            bucket, key, local_path,
+            content_type=content_type,
         )
+    except tos.exceptions.TosClientError as e:
+        raise RuntimeError(f"TOS 客户端错误: {e.message}, cause: {e.cause}")
+    except tos.exceptions.TosServerError as e:
+        raise RuntimeError(
+            f"TOS 服务端错误: code={e.code}, message={e.message}, "
+            f"http_code={e.status_code}, ec={e.ec}"
+        )
+    except Exception as e:
+        raise RuntimeError(f"TOS 上传失败: {str(e)}")
 
+    # Return tos:// URL for MediaKit
     return f"tos://{bucket}/{key}"
 
 
