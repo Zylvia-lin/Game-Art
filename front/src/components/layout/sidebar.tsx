@@ -19,8 +19,6 @@ import {
   ChevronRight,
   Gamepad2,
   BarChart3,
-  Sparkles,
-  ZoomIn,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TOOLBOX_ITEMS, CREATION_ITEMS } from '@/lib/types';
@@ -37,8 +35,6 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   Layout,
   Map,
   FolderOpen,
-  Sparkles,
-  ZoomIn,
 };
 
 interface SidebarProps {
@@ -113,19 +109,6 @@ export function Sidebar({ projectId }: SidebarProps) {
             {TOOLBOX_ITEMS.map((item) => {
               const Icon = iconMap[item.icon];
               const isActive = pathname.includes(item.href);
-              if ('available' in item && !item.available) {
-                return (
-                  <div
-                    key={item.key}
-                    className="mb-0.5 flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground/40"
-                    title="敬请期待"
-                  >
-                    {Icon && <Icon className="h-4 w-4 shrink-0" />}
-                    {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
-                    {!collapsed && <span className="ml-auto text-xs text-muted-foreground/30">即将推出</span>}
-                  </div>
-                );
-              }
               return (
                 <Link
                   key={item.key}

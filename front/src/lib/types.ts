@@ -198,9 +198,7 @@ export const BASIC_TOOLS_ITEMS = [
 
 // 侧边栏 - 工具箱
 export const TOOLBOX_ITEMS = [
-  { key: 'remove-bg', label: '去除背景', href: '/remove-bg', icon: 'Eraser', available: true },
-  { key: 'image-enhance', label: '图像增强', href: '/image-enhance', icon: 'Sparkles', available: false },
-  { key: 'image-upscale', label: '高清放大', href: '/image-upscale', icon: 'ZoomIn', available: false },
+  { key: 'remove-bg', label: '去除背景', href: '/remove-bg', icon: 'Eraser' },
 ] as const;
 
 // 工具页面 key 映射
