@@ -82,10 +82,12 @@ class AIRemoveBgRequest(BaseModel):
 
 def _upload_to_tos(local_path: str, storage_cfg: dict) -> str:
     """
-    Upload a local file to TOS using the official TOS Python SDK.
-    Returns a tos:// URL for MediaKit consumption.
+    Upload a local file to TOS using the official TOS Python SDK,
+    then return a presigned HTTPS URL for MediaKit to fetch directly.
+    Using presigned URL avoids the need for MediaKit IAM service-linked role.
     """
     import tos
+    from tos.enum import HttpMethodType
 
     # Normalize endpoint: TOS SDK expects native endpoint (tos-cn-xxx),
     # not the S3-compatible one (tos-s3-cn-xxx)
@@ -113,10 +115,23 @@ def _upload_to_tos(local_path: str, storage_cfg: dict) -> str:
 
     try:
         client = tos.TosClientV2(ak, sk, endpoint, region)
+
+        # Step 1: Upload the file to TOS
         client.put_object_from_file(
             bucket, key, local_path,
             content_type=content_type,
         )
+
+        # Step 2: Generate a presigned GET URL (valid for 1 hour)
+        # MediaKit can directly fetch via this HTTPS URL without IAM role
+        out = client.pre_signed_url(
+            HttpMethodType.Http_Method_Get,
+            bucket,
+            key,
+            expires=3600,
+        )
+        presigned_url = out.signed_url
+
     except tos.exceptions.TosClientError as e:
         raise RuntimeError(f"TOS 客户端错误: {e.message}, cause: {e.cause}")
     except tos.exceptions.TosServerError as e:
@@ -127,15 +142,14 @@ def _upload_to_tos(local_path: str, storage_cfg: dict) -> str:
     except Exception as e:
         raise RuntimeError(f"TOS 上传失败: {str(e)}")
 
-    # Return tos:// URL for MediaKit
-    return f"tos://{bucket}/{key}"
+    return presigned_url
 
 
 @router.post("/ai-remove-bg")
 async def ai_remove_bg_endpoint(data: AIRemoveBgRequest):
     """
     AI-powered background removal using Volcengine MediaKit.
-    Uploads image to TOS first, then passes tos:// URL to MediaKit.
+    Uploads image to TOS, generates presigned URL, passes to MediaKit.
     Returns transparent PNG URL.
     """
     # Load API key from model_configs (type = 'tool')
