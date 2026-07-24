@@ -204,6 +204,7 @@ export default function ImageEditPage() {
     setProcessing(true);
     setResultUrl('');
     setResultDimensions(null);
+    try {
       const maskUrl = await getMaskUrl();
       const res = await toolsApi.removeBgMask({
         image_url: imageUrl,
