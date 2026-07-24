@@ -295,6 +295,47 @@ function round(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+// ── 图生图"使用原图"相关辅助 ────────────────────
+
+/**
+ * 从图片宽高推导最简比例字符串（如 "16:9"）
+ */
+export function deriveRatio(w: number, h: number): string {
+  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
+  const g = gcd(w, h);
+  return `${w / g}:${h / g}`;
+}
+
+/**
+ * 将宽高 clamp 到 API 允许范围 [921600, 16777216] 像素，并四舍五入到 8 的倍数
+ */
+export function clampDimensions(w: number, h: number): { w: number; h: number } {
+  let rw = Math.round(w / 8) * 8;
+  let rh = Math.round(h / 8) * 8;
+  if (rw <= 0) rw = 8;
+  if (rh <= 0) rh = 8;
+
+  const total = rw * rh;
+  if (total < MIN_PIXELS) {
+    const scale = Math.sqrt(MIN_PIXELS / total);
+    rh = Math.round((rh * scale) / 8) * 8;
+    rw = Math.round((rh * (w / h)) / 8) * 8;
+  } else if (total > MAX_PIXELS) {
+    const scale = Math.sqrt(MAX_PIXELS / total);
+    rh = Math.round((rh * scale) / 8) * 8;
+    rw = Math.round((rh * (w / h)) / 8) * 8;
+  }
+  return { w: rw, h: rh };
+}
+
+/**
+ * 根据总像素数计算预估费用
+ */
+export function estimateCostFromPixels(totalPixels: number, outputCount = 1, inputCount = 0): number {
+  const outputPrice = totalPixels <= PIXEL_THRESHOLD ? OUTPUT_PRICE_LOW : OUTPUT_PRICE_HIGH;
+  return round(inputCount * INPUT_PRICE + outputCount * outputPrice);
+}
+
 // 工具名称映射
 export const TOOL_NAME_MAP: Record<string, string> = {
   text2img: '文生图',

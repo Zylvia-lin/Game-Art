@@ -29,14 +29,19 @@ export function StyleSelector({ value, onChange }: StyleSelectorProps) {
 interface RatioSelectorProps {
   value: string;
   onChange: (value: string) => void;
+  showOriginal?: boolean;
 }
 
-export function RatioSelector({ value, onChange }: RatioSelectorProps) {
+export function RatioSelector({ value, onChange, showOriginal = false }: RatioSelectorProps) {
+  const options = showOriginal
+    ? [{ value: 'original', label: '默认' }, ...IMAGE_RATIOS]
+    : IMAGE_RATIOS;
+
   return (
     <div>
       <label className="mb-1.5 block text-sm font-medium text-foreground">比例</label>
-      <div className="grid grid-cols-4 gap-1.5">
-        {IMAGE_RATIOS.map((r) => (
+      <div className="grid grid-cols-3 gap-1.5">
+        {options.map((r) => (
           <button
             key={r.value}
             onClick={() => onChange(r.value)}
@@ -50,6 +55,9 @@ export function RatioSelector({ value, onChange }: RatioSelectorProps) {
           </button>
         ))}
       </div>
+      {showOriginal && value === 'original' && (
+        <p className="mt-1 text-xs text-muted-foreground/70">使用原图比例</p>
+      )}
     </div>
   );
 }
@@ -58,15 +66,19 @@ interface ResolutionSelectorProps {
   ratio: string;
   value: string;
   onChange: (value: string) => void;
+  showOriginal?: boolean;
 }
 
-export function ResolutionSelector({ ratio, value, onChange }: ResolutionSelectorProps) {
+export function ResolutionSelector({ ratio, value, onChange, showOriginal = false }: ResolutionSelectorProps) {
+  const options = showOriginal
+    ? [{ value: 'original', label: '默认' }]
+    : [];
+
   return (
     <div>
       <label className="mb-1.5 block text-sm font-medium text-foreground">分辨率</label>
       <div className="grid grid-cols-2 gap-1.5">
-        {RESOLUTION_TIERS.map((t) => {
-          const computed = computeSize(ratio, t.value);
+        {options.map((t) => {
           const selected = value === t.value;
           return (
             <button
@@ -80,7 +92,27 @@ export function ResolutionSelector({ ratio, value, onChange }: ResolutionSelecto
             >
               <div className="text-sm font-medium">{t.label}</div>
               <div className={`text-xs ${selected ? 'text-primary/70' : 'text-muted-foreground/60'}`}>
-                {computed}
+                使用原图分辨率
+              </div>
+            </button>
+          );
+        })}
+        {RESOLUTION_TIERS.map((t) => {
+          const computed = computeSize(ratio === 'original' ? '1:1' : ratio, t.value);
+          const selected = value === t.value;
+          return (
+            <button
+              key={t.value}
+              onClick={() => onChange(t.value)}
+              className={`rounded-lg border px-3 py-2 text-center transition-all ${
+                selected
+                  ? 'border-primary bg-primary/10 text-foreground'
+                  : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground'
+              }`}
+            >
+              <div className="text-sm font-medium">{t.label}</div>
+              <div className={`text-xs ${selected ? 'text-primary/70' : 'text-muted-foreground/60'}`}>
+                {ratio === 'original' ? `${t.label} 档` : computed}
               </div>
             </button>
           );
