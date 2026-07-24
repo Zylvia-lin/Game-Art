@@ -60,6 +60,7 @@ export function ColorPickerBgRemoval({ imageUrl, onClose, onComplete, onSave }: 
       img.onerror = () => {
         if (cancelled) return;
         setIsLoading(false);
+        setImageLoaded(false);
       };
       img.src = src;
     };
@@ -417,16 +418,11 @@ export function ColorPickerBgRemoval({ imageUrl, onClose, onComplete, onSave }: 
             backgroundPosition: "0 0, 0 10px, 10px -10px, 10px 0px",
           }}
         >
-          {isLoading ? (
-            <div className="flex flex-col items-center gap-3">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <span className="text-sm text-muted-foreground">加载图片中...</span>
-            </div>
-          ) : (
-            <div className="relative" style={{ width: "fit-content" }}>
-              {/* Hidden source canvas */}
-              <canvas ref={canvasRef} className="hidden" />
-              {/* Preview canvas (clickable) */}
+          <div className="relative" style={{ width: "fit-content" }}>
+            {/* Hidden source canvas - always rendered to avoid ref null deadlock */}
+            <canvas ref={canvasRef} className="hidden" />
+            {/* Preview canvas (clickable) */}
+            {imageLoaded && (
               <canvas
                 ref={previewCanvasRef}
                 onClick={handleCanvasClick}
@@ -442,29 +438,36 @@ export function ColorPickerBgRemoval({ imageUrl, onClose, onComplete, onSave }: 
                     : "auto",
                 }}
               />
-              {/* Show original image overlay when toggled */}
-              {showOriginal && imageRef.current && (
-                <img
-                  src={resolveImageUrl(imageUrl)}
-                  alt="原图"
-                  className="absolute inset-0 block rounded-lg shadow-2xl pointer-events-none"
-                  style={{
-                    width: `${imageRef.current.naturalWidth * displayScale}px`,
-                    height: `${imageRef.current.naturalHeight * displayScale}px`,
-                  }}
-                />
-              )}
-              {/* Empty state hint */}
-              {pickedColors.length === 0 && !showOriginal && (
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 rounded-lg bg-black/70 px-4 py-2 backdrop-blur-sm">
-                  <p className="text-sm text-white/90 flex items-center gap-2">
-                    <Pipette className="h-4 w-4" />
-                    点击图片上的背景区域拾取颜色
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
+            )}
+            {/* Show original image overlay when toggled */}
+            {showOriginal && imageRef.current && (
+              <img
+                src={resolveImageUrl(imageUrl)}
+                alt="原图"
+                className="absolute inset-0 block rounded-lg shadow-2xl pointer-events-none"
+                style={{
+                  width: `${imageRef.current.naturalWidth * displayScale}px`,
+                  height: `${imageRef.current.naturalHeight * displayScale}px`,
+                }}
+              />
+            )}
+            {/* Empty state hint */}
+            {imageLoaded && pickedColors.length === 0 && !showOriginal && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 rounded-lg bg-black/70 px-4 py-2 backdrop-blur-sm">
+                <p className="text-sm text-white/90 flex items-center gap-2">
+                  <Pipette className="h-4 w-4" />
+                  点击图片上的背景区域拾取颜色
+                </p>
+              </div>
+            )}
+            {/* Loading overlay */}
+            {isLoading && (
+              <div className="flex flex-col items-center gap-3 absolute inset-0 justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <span className="text-sm text-muted-foreground">加载图片中...</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
