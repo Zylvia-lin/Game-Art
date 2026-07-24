@@ -159,6 +159,31 @@ export const projectsApi = {
 };
 
 // ============================================
+// Storage API
+// ============================================
+
+export interface StorageConfig {
+  provider: string;
+  access_key: string;
+  secret_key: string;
+  bucket: string;
+  endpoint: string;
+  region: string;
+  is_active: boolean;
+  configured: boolean;
+}
+
+export const storageApi = {
+  getConfig: () => request<StorageConfig>(`/api/storage/config`),
+
+  updateConfig: (data: Omit<StorageConfig, 'is_active' | 'configured'>) =>
+    request(`/api/storage/config`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+};
+
+// ============================================
 // Models API
 // ============================================
 

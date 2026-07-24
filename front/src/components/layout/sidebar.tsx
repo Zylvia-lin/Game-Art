@@ -46,7 +46,7 @@ export function Sidebar({ projectId }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
 
   const settingsItems = [
-    { key: 'models', label: '模型配置', href: '/settings/models', icon: Settings },
+    { key: 'models', label: '系统配置', href: '/settings/models', icon: Settings },
     { key: 'prompts', label: '提示词管理', href: '/settings/prompts', icon: Type },
     { key: 'billing', label: '账单统计', href: '/settings/billing', icon: BarChart3 },
   ];

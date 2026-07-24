@@ -116,6 +116,20 @@ CREATE TABLE IF NOT EXISTS billing_records (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 对象存储配置
+CREATE TABLE IF NOT EXISTS storage_configs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    provider VARCHAR(100) NOT NULL DEFAULT 'volcengine',
+    access_key TEXT NOT NULL,
+    secret_key TEXT NOT NULL,
+    bucket TEXT NOT NULL,
+    endpoint TEXT NOT NULL,
+    region TEXT NOT NULL DEFAULT 'cn-beijing',
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- 索引
 CREATE INDEX IF NOT EXISTS idx_assets_project_id ON assets(project_id);
 CREATE INDEX IF NOT EXISTS idx_generations_project_id ON generations(project_id);

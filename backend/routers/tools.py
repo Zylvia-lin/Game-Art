@@ -5,11 +5,14 @@ Frame extraction, background removal (local + AI), and mask-based background fil
 import os
 import uuid
 import httpx
+import boto3
+from io import BytesIO
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from config import settings
 from services.image_processor import extract_frames, remove_background, apply_background_mask
 from database import fetch_one
+from routers.storage import get_storage_config_raw
 
 router = APIRouter(prefix="/api/tools", tags=["tools"])
 
@@ -79,45 +82,85 @@ class AIRemoveBgRequest(BaseModel):
     scene: str = "general"  # general / human / product
 
 
+def _upload_to_tos(local_path: str, storage_cfg: dict) -> str:
+    """
+    Upload a local file to TOS (S3-compatible) and return tos:// URL.
+    """
+    s3_client = boto3.client(
+        "s3",
+        endpoint_url=f"https://{storage_cfg['endpoint']}",
+        aws_access_key_id=storage_cfg["access_key"],
+        aws_secret_access_key=storage_cfg["secret_key"],
+        region_name=storage_cfg["region"],
+    )
+    key = f"gameart/{uuid.uuid4().hex[:12]}_{os.path.basename(local_path)}"
+    with open(local_path, "rb") as f:
+        s3_client.upload_fileobj(f, storage_cfg["bucket"], key)
+    return f"tos://{storage_cfg['bucket']}/{key}"
+
+
 @router.post("/ai-remove-bg")
 async def ai_remove_bg_endpoint(data: AIRemoveBgRequest):
     """
     AI-powered background removal using Volcengine MediaKit.
+    Uploads image to TOS first, then passes tos:// URL to MediaKit.
     Returns transparent PNG URL.
     """
-    # Load API key from model_configs (type = 'tool' - 火山工具模型)
+    # Load API key from model_configs (type = 'tool')
     config = await fetch_one(
         "SELECT * FROM model_configs WHERE type = 'tool' AND is_default = true LIMIT 1"
     )
     if not config:
-        # Fallback: any tool config
         config = await fetch_one(
             "SELECT * FROM model_configs WHERE type = 'tool' LIMIT 1"
         )
     if not config:
         raise HTTPException(
             status_code=400,
-            detail="未找到工具模型配置。请在模型设置中添加一个 type=tool 的配置，填入火山引擎 API Key。"
+            detail="未找到工具模型配置。请在系统设置中添加一个 type=tool 的配置，填入火山引擎 API Key。"
         )
 
     api_key = config.get("api_key", "")
     api_base = config.get("api_base_url", "") or "https://mediakit.cn-beijing.volces.com"
-    # MediaKit API base is different from general volcengine API base
-    # If user configured visual.volcengineapi.com, use MediaKit endpoint instead
     if "visual.volcengineapi.com" in api_base:
         api_base = "https://mediakit.cn-beijing.volces.com"
     if not api_key:
         raise HTTPException(
             status_code=400,
-            detail="工具模型配置缺少 api_key。请在模型设置中配置火山引擎 API Key。"
+            detail="工具模型配置缺少 api_key。请在系统设置中配置火山引擎 API Key。"
         )
 
-    # Resolve image URL to absolute if relative
+    # Load storage config
+    storage_cfg = await get_storage_config_raw()
+    if not storage_cfg or not storage_cfg.get("access_key"):
+        raise HTTPException(
+            status_code=400,
+            detail="未配置对象存储。请在系统设置中配置火山引擎 TOS 对象存储。"
+        )
+
+    # Resolve local file path
     image_url = data.image_url
     if image_url.startswith("/uploads/"):
-        # Need a publicly accessible URL for Volcengine to fetch
-        backend_base = f"http://127.0.0.1:{settings.backend_port}"
-        image_url = f"{backend_base}{image_url}"
+        local_path = os.path.join(settings.upload_dir, image_url.replace("/uploads/", ""))
+    elif image_url.startswith("http"):
+        raise HTTPException(
+            status_code=400,
+            detail="暂不支持远程图片 URL，请先上传图片。"
+        )
+    else:
+        local_path = image_url
+
+    if not os.path.exists(local_path):
+        raise HTTPException(status_code=404, detail=f"图片文件不存在: {local_path}")
+
+    # Upload to TOS
+    try:
+        tos_url = _upload_to_tos(local_path, storage_cfg)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"上传图片到对象存储失败: {str(e)}"
+        )
 
     scene = data.scene if data.scene in ("general", "human", "product") else "general"
 
@@ -130,7 +173,7 @@ async def ai_remove_bg_endpoint(data: AIRemoveBgRequest):
                     "Content-Type": "application/json",
                 },
                 json={
-                    "image_url": image_url,
+                    "image_url": tos_url,
                     "scene": scene,
                     "output_format": "png",
                 },
@@ -156,9 +199,6 @@ async def ai_remove_bg_endpoint(data: AIRemoveBgRequest):
             img_bytes = img_resp.content
 
         # Save locally
-        import os
-        import uuid
-        from config import settings
         upload_dir = settings.upload_dir
         os.makedirs(upload_dir, exist_ok=True)
         filename = f"bg_removed_{uuid.uuid4().hex[:12]}.png"

@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, Trash2, Star, Loader2, Settings, Key, Server, ArrowLeft, Eraser } from 'lucide-react';
+import { Plus, Trash2, Star, Loader2, Settings, Key, Server, ArrowLeft, Eraser, Cloud, Save } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { modelsApi } from '@/lib/api';
+import { modelsApi, storageApi } from '@/lib/api';
 import type { ModelConfig, ModelConfigCreate } from '@/lib/types';
+import type { StorageConfig } from '@/lib/api';
 
 // 提供商配置：根据模型类型提供不同的提供商和默认API地址
 const PROVIDER_CONFIG = {
@@ -16,13 +17,6 @@ const PROVIDER_CONFIG = {
   image: {
     volcengine: { name: '火山引擎', apiUrl: 'https://ark.cn-beijing.volces.com/api/v3/images/generations', defaultModel: 'seeddream-5.0-pro' },
     fal: { name: 'fal.ai', apiUrl: 'https://fal.run', defaultModel: 'fal-ai/flux-pro' },
-    custom: { name: '自定义', apiUrl: '', defaultModel: '' },
-  },
-  video: {
-    runway: { name: 'Runway', apiUrl: 'https://api.runwayml.com/v1', defaultModel: 'gen-3-alpha' },
-    pika: { name: 'Pika', apiUrl: 'https://api.pika.art/v1', defaultModel: 'pika-1.0' },
-    kling: { name: '可灵(Kling)', apiUrl: 'https://api.klingai.com/v1', defaultModel: 'kling-v1' },
-    luma: { name: 'Luma AI', apiUrl: 'https://api.lumalabs.ai/v1', defaultModel: 'dream-machine' },
     custom: { name: '自定义', apiUrl: '', defaultModel: '' },
   },
   tool: {
@@ -58,6 +52,17 @@ export default function ModelsSettingsPage() {
   });
   const [saving, setSaving] = useState(false);
 
+  // Storage config state
+  const [storageCfg, setStorageCfg] = useState<StorageConfig | null>(null);
+  const [storageForm, setStorageForm] = useState({
+    access_key: '',
+    secret_key: '',
+    bucket: '',
+    endpoint: '',
+    region: 'cn-beijing',
+  });
+  const [storageSaving, setStorageSaving] = useState(false);
+
   const fetchConfigs = async () => {
     try {
       const data = await modelsApi.list();
@@ -69,7 +74,26 @@ export default function ModelsSettingsPage() {
     }
   };
 
-  useEffect(() => { fetchConfigs(); }, []);
+  const fetchStorageConfig = async () => {
+    try {
+      const data = await storageApi.getConfig();
+      setStorageCfg(data);
+      setStorageForm({
+        access_key: '',
+        secret_key: '',
+        bucket: data.bucket || '',
+        endpoint: data.endpoint || '',
+        region: data.region || 'cn-beijing',
+      });
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    fetchConfigs();
+    fetchStorageConfig();
+  }, []);
 
   const resetForm = () => {
     setForm({ type: 'text', name: '', provider: 'deepseek', api_base_url: 'https://api.deepseek.com/v1', api_key: '', model_name: 'deepseek-chat', is_default: false });
@@ -120,7 +144,6 @@ export default function ModelsSettingsPage() {
         is_default: form.is_default,
       };
       if (editingId) {
-        // 编辑时：如果 api_key 为空则不发送，避免覆盖已有密钥
         const updateData: Record<string, unknown> = { ...data };
         if (!form.api_key) {
           delete updateData.api_key;
@@ -171,6 +194,21 @@ export default function ModelsSettingsPage() {
     setShowForm(true);
   };
 
+  const handleStorageSave = async () => {
+    setStorageSaving(true);
+    try {
+      await storageApi.updateConfig({
+        provider: 'volcengine',
+        ...storageForm,
+      });
+      fetchStorageConfig();
+    } catch (err) {
+      console.error('Storage config save failed:', err);
+    } finally {
+      setStorageSaving(false);
+    }
+  };
+
   const textConfigs = configs.filter((c) => c.type === 'text');
   const imageConfigs = configs.filter((c) => c.type === 'image');
   const toolConfigs = configs.filter((c) => c.type === 'tool');
@@ -187,8 +225,8 @@ export default function ModelsSettingsPage() {
             返回
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">模型配置</h1>
-            <p className="mt-1 text-sm text-muted-foreground">配置 AI 文本模型和图片模型的 API 信息</p>
+            <h1 className="text-2xl font-bold text-foreground">系统配置</h1>
+            <p className="mt-1 text-sm text-muted-foreground">配置 AI 模型、工具模型和对象存储</p>
           </div>
         </div>
         <button
@@ -311,7 +349,11 @@ export default function ModelsSettingsPage() {
           <Key className="h-5 w-5 text-primary" />
           文本模型
         </h2>
-        {textConfigs.length === 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : textConfigs.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
             暂未配置文本模型，点击上方「添加模型」开始配置
           </div>
@@ -351,12 +393,16 @@ export default function ModelsSettingsPage() {
       </div>
 
       {/* Image models */}
-      <div>
+      <div className="mb-8">
         <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-foreground">
           <Settings className="h-5 w-5 text-primary" />
           图片模型
         </h2>
-        {imageConfigs.length === 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : imageConfigs.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
             暂未配置图片模型，点击上方「添加模型」开始配置
           </div>
@@ -395,8 +441,9 @@ export default function ModelsSettingsPage() {
         )}
       </div>
 
+      {/* Tool models */}
       {toolConfigs.length > 0 && (
-        <div>
+        <div className="mb-8">
           <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-foreground">
             <Eraser className="h-5 w-5 text-primary" />
             工具模型
@@ -413,7 +460,7 @@ export default function ModelsSettingsPage() {
                       <span className="font-medium text-foreground">{config.name}</span>
                       {config.is_default && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">默认</span>}
                     </div>
-                    <p className="text-xs text-muted-foreground">{config.provider} / {config.model_name}</p>
+                    <p className="text-xs text-muted-foreground">{config.provider} / {config.model_name || '无模型名'}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -434,6 +481,84 @@ export default function ModelsSettingsPage() {
           </div>
         </div>
       )}
+
+      {/* Storage config */}
+      <div>
+        <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-foreground">
+          <Cloud className="h-5 w-5 text-primary" />
+          对象存储配置
+        </h2>
+        <div className="rounded-xl border border-border bg-card p-6">
+          <div className="mb-4 flex items-center gap-2">
+            <span className="rounded-lg bg-primary/10 px-3 py-1 text-sm font-medium text-primary">火山引擎 TOS</span>
+            {storageCfg?.configured && (
+              <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-xs text-green-500">已配置</span>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-foreground">Access Key</label>
+              <input
+                type="password"
+                value={storageForm.access_key}
+                onChange={(e) => setStorageForm({ ...storageForm, access_key: e.target.value })}
+                placeholder={storageCfg?.access_key ? storageCfg.access_key : 'AKLT****'}
+                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-foreground">Secret Key</label>
+              <input
+                type="password"
+                value={storageForm.secret_key}
+                onChange={(e) => setStorageForm({ ...storageForm, secret_key: e.target.value })}
+                placeholder={storageCfg?.secret_key ? storageCfg.secret_key : '****'}
+                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-foreground">Bucket 名称</label>
+              <input
+                value={storageForm.bucket}
+                onChange={(e) => setStorageForm({ ...storageForm, bucket: e.target.value })}
+                placeholder="gameart-images"
+                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-foreground">Endpoint</label>
+              <input
+                value={storageForm.endpoint}
+                onChange={(e) => setStorageForm({ ...storageForm, endpoint: e.target.value })}
+                placeholder="tos-cn-beijing.volces.com"
+                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-foreground">Region</label>
+              <input
+                value={storageForm.region}
+                onChange={(e) => setStorageForm({ ...storageForm, region: e.target.value })}
+                placeholder="cn-beijing"
+                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+              />
+            </div>
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            用于去除背景等功能将图片上传到 TOS，火山引擎 MediaKit 通过 tos:// 协议读取。Access Key 和 Secret Key 留空则保持原配置不变。
+          </p>
+          <div className="mt-4">
+            <button
+              onClick={handleStorageSave}
+              disabled={storageSaving || (!storageForm.access_key && !storageCfg?.configured) || !storageForm.bucket || !storageForm.endpoint}
+              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 transition-all"
+            >
+              {storageSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              保存存储配置
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
