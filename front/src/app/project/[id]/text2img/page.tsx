@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { Sparkles, Loader2, Download, Eye } from 'lucide-react';
+import { Sparkles, Loader2, Download, Eye, Trash2, AlertTriangle } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { PromptInput } from '@/components/tools/prompt-input';
@@ -30,6 +30,8 @@ export default function TextToImagePage() {
   const [previewIdx, setPreviewIdx] = useState<number | null>(null);
   const [loadingImages, setLoadingImages] = useState(false);
   const [justCompleted, setJustCompleted] = useState(false);
+  const [deleteIdx, setDeleteIdx] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const { submitting, submitTask } = useTaskQueue({
     projectId,
@@ -115,6 +117,22 @@ export default function TextToImagePage() {
 
   const handleDownload = (url: string, filename: string) => {
     downloadImage(url, filename);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (deleteIdx === null) return;
+    const img = images[deleteIdx];
+    setDeleting(true);
+    try {
+      await generateApi.deleteTask(img.taskId);
+      setImages((prev) => prev.filter((_, i) => i !== deleteIdx));
+      setPreviewIdx(null);
+      setDeleteIdx(null);
+    } catch {
+      setError('删除失败，请重试');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const paramsPanel = (
@@ -216,6 +234,13 @@ export default function TextToImagePage() {
                       >
                         <Download className="h-4 w-4" />
                       </button>
+                      <button
+                        onClick={() => setDeleteIdx(idx)}
+                        className="flex h-9 w-9 items-center justify-center rounded-lg bg-destructive/90 text-white hover:bg-destructive"
+                        title="删除"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -254,6 +279,63 @@ export default function TextToImagePage() {
                   >
                     <Download className="h-4 w-4" />
                     下载图片
+                  </button>
+                  <button
+                    onClick={() => setDeleteIdx(previewIdx)}
+                    className="flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-2 text-sm text-destructive hover:bg-destructive/20"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    删除
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Delete confirmation dialog */}
+          {deleteIdx !== null && images[deleteIdx] && (
+            <div
+              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+              onClick={() => !deleting && setDeleteIdx(null)}
+            >
+              <div
+                className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/15">
+                    <AlertTriangle className="h-5 w-5 text-destructive" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold text-foreground">确认删除</h3>
+                    <p className="text-xs text-muted-foreground">此操作不可撤销</p>
+                  </div>
+                </div>
+                <p className="mb-5 text-sm text-muted-foreground">
+                  删除后图片将永久消失，<span className="font-medium text-foreground">无法恢复</span>。
+                  请确认您已下载到本地。
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setDeleteIdx(null)}
+                    disabled={deleting}
+                    className="flex-1 rounded-lg border border-border bg-muted/50 px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={handleConfirmDelete}
+                    disabled={deleting}
+                    className="flex-1 rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-white hover:bg-destructive/90 transition-colors disabled:opacity-50"
+                  >
+                    {deleting ? (
+                      <span className="flex items-center justify-center gap-1.5">
+                        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        删除中...
+                      </span>
+                    ) : (
+                      '确认删除'
+                    )}
                   </button>
                 </div>
               </div>

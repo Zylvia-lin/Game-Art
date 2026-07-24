@@ -9,7 +9,7 @@ from typing import Optional
 from database import fetch_one
 from services.task_queue import (
     create_task, get_task, get_project_tasks, get_queue_stats, cancel_task,
-    delete_project_tasks,
+    delete_project_tasks, delete_single_task,
 )
 from services.llm_service import optimize_prompt
 
@@ -157,3 +157,12 @@ async def delete_tasks(
     If no status, delete all completed and failed tasks."""
     deleted = await delete_project_tasks(project_id, status)
     return {"deleted": deleted}
+
+
+@router.delete("/task/{task_id}")
+async def delete_single(task_id: str):
+    """Delete a single task and its generations history."""
+    ok = await delete_single_task(task_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return {"success": True}

@@ -295,6 +295,8 @@ export const generateApi = {
     request<Task>(`/api/generate/task/${taskId}/cancel`, { method: 'POST' }),
   deleteTasks: (projectId: string, status?: string) =>
     request<{ deleted: number }>(`/api/generate/task?project_id=${projectId}${status ? `&status=${status}` : ''}`, { method: 'DELETE' }),
+  deleteTask: (taskId: string) =>
+    request<{ success: boolean }>(`/api/generate/task/${taskId}`, { method: 'DELETE' }),
 
   // On-demand prompt optimization (LLM)
   optimizePrompt: (prompt: string, toolKey?: string) =>

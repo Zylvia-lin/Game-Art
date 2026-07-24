@@ -172,6 +172,15 @@ async def delete_project_tasks(project_id: str, status: str | None = None) -> in
     return int(parts[1]) if len(parts) > 1 else 0
 
 
+async def delete_single_task(task_id: str) -> bool:
+    """Delete a single task by ID, including its generations history."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("DELETE FROM generations WHERE task_id = $1", task_id)
+        result = await conn.execute("DELETE FROM tasks WHERE id = $1", task_id)
+    return "DELETE 0" not in result
+
+
 async def _get_next_pending_task() -> dict | None:
     pool = await get_pool()
     async with pool.acquire() as conn:
