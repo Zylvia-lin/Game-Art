@@ -410,7 +410,7 @@ async def get_billing_stats(period: str = "daily", days: int = 30) -> list:
                     SUM(output_cost) as total_output_cost,
                     SUM(total_cost) as total_cost
                    FROM billing_records
-                   WHERE created_at >= NOW() - ($1 || ' days')::interval
+                   WHERE created_at >= NOW() - make_interval(days => $1)
                    GROUP BY TO_CHAR(created_at, 'YYYY-MM')
                    ORDER BY period DESC""",
                 days,
@@ -425,7 +425,7 @@ async def get_billing_stats(period: str = "daily", days: int = 30) -> list:
                     SUM(output_cost) as total_output_cost,
                     SUM(total_cost) as total_cost
                    FROM billing_records
-                   WHERE created_at >= NOW() - ($1 || ' days')::interval
+                   WHERE created_at >= NOW() - make_interval(days => $1)
                    GROUP BY TO_CHAR(created_at, 'YYYY-MM-DD')
                    ORDER BY period DESC""",
                 days,
