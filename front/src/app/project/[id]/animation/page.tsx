@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { toast } from 'sonner';
 import { useParams } from 'next/navigation';
 import { Play, Loader2, Scissors, Grid3X3 } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
@@ -89,8 +90,11 @@ export default function AnimationPage() {
         ratio,
         resolution,
       });
+      toast.success('任务已提交，请在任务队列中查看进度');
     } catch (err) {
-      setError(err instanceof Error ? err.message : '生成失败');
+      const msg = err instanceof Error ? err.message : '生成失败';
+      setError(msg);
+      toast.error(msg);
     }
   };
 

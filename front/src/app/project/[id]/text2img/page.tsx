@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, Download, Eye, Trash2, AlertTriangle, Pencil, Check, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { PromptInput } from '@/components/tools/prompt-input';
@@ -119,8 +120,10 @@ export default function TextToImagePage() {
         ratio,
         resolution: computeSize(ratio, resolution),
       });
+      toast.success('任务提交成功');
     } catch (err) {
       setError(err instanceof Error ? err.message : '生成失败，请重试');
+      toast.error(err instanceof Error ? err.message : '生成失败，请重试');
     }
   };
 

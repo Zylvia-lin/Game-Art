@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { toast } from 'sonner';
 import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, Sword } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
@@ -74,14 +75,19 @@ export default function PropPage() {
   const handleGenerate = async () => {
     if (subTool === 'generate' && !prompt.trim()) return;
     if (subTool === 'variant' && !sourceImage) return;
-    submitTask(toolKeyMap[subTool], {
-      prompt: prompt || '基于参考图生成变体',
-      image_url: sourceImage || undefined,
-      variant_count: variantCount,
-      style,
-      ratio,
-      resolution,
-    });
+    try {
+      await submitTask(toolKeyMap[subTool], {
+        prompt: prompt || '基于参考图生成变体',
+        image_url: sourceImage || undefined,
+        variant_count: variantCount,
+        style,
+        ratio,
+        resolution,
+      });
+      toast.success('任务已提交，请在任务队列中查看进度');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '提交失败');
+    }
   };
 
   const paramsPanel = (

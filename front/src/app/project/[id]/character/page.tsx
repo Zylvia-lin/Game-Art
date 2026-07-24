@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, User } from 'lucide-react';
+import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
@@ -111,8 +112,10 @@ export default function CharacterPage() {
         ratio,
         resolution,
       });
+      toast.success('任务提交成功');
     } catch (err) {
       console.error('Generation failed:', err);
+      toast.error('任务提交失败', { description: err instanceof Error ? err.message : '未知错误' });
     }
   };
 

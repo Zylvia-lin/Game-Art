@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, ImageIcon } from 'lucide-react';
+import { toast } from 'sonner';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
@@ -59,8 +60,10 @@ export default function ImageToImagePage() {
         resolution: computeSize(ratio, resolution),
         strength,
       });
+      toast.success('任务提交成功');
     } catch (err) {
       console.error('Generation failed:', err);
+      toast.error('任务提交失败');
     }
   };
 

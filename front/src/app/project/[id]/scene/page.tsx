@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { toast } from 'sonner';
 import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, Map } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
@@ -64,15 +65,20 @@ export default function ScenePage() {
   const handleGenerate = async () => {
     if (subTool === 'map_generate' && !prompt.trim()) return;
     if (subTool === 'map_split' && !sourceImage) return;
-    await submitTask(toolKeyMap[subTool], {
-      prompt: prompt || '基于参考图拆分',
-      sub_tool: subTool,
-      image_url: sourceImage || undefined,
-      map_type: mapType,
-      tile_size: tileSize,
-      ratio,
-      resolution,
-    });
+    try {
+      await submitTask(toolKeyMap[subTool], {
+        prompt: prompt || '基于参考图拆分',
+        sub_tool: subTool,
+        image_url: sourceImage || undefined,
+        map_type: mapType,
+        tile_size: tileSize,
+        ratio,
+        resolution,
+      });
+      toast.success('任务提交成功');
+    } catch (err) {
+      toast.error('任务提交失败', { description: err instanceof Error ? err.message : '未知错误' });
+    }
   };
 
   const paramsPanel = (

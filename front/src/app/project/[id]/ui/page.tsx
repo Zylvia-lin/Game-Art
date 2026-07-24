@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { toast } from 'sonner';
 import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, Layout, Plus, Trash2, GripHorizontal } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
@@ -74,14 +75,19 @@ export default function UIPage() {
     if (subTool === 'layout_generate' && !prompt.trim()) return;
     if (subTool === 'component_split' && !sourceImage) return;
     if (subTool === 'component_place' && !sourceImage) return;
-    await submitTask(toolKeyMap[subTool], {
-      prompt: prompt || '基于参考图生成',
-      sub_tool: subTool,
-      image_url: sourceImage || undefined,
-      ratio,
-      resolution,
-      components: components.length > 0 ? components : undefined,
-    });
+    try {
+      await submitTask(toolKeyMap[subTool], {
+        prompt: prompt || '基于参考图生成',
+        sub_tool: subTool,
+        image_url: sourceImage || undefined,
+        ratio,
+        resolution,
+        components: components.length > 0 ? components : undefined,
+      });
+      toast.success('任务提交成功');
+    } catch (err) {
+      toast.error('任务提交失败');
+    }
   };
 
   const addComponent = () => {
