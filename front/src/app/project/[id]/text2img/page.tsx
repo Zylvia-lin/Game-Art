@@ -9,6 +9,7 @@ import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/t
 import { PromptInput } from '@/components/tools/prompt-input';
 import { ResultImageCard } from '@/components/tools/result-image-card';
 import { useTaskQueue } from '@/hooks/use-task-queue';
+import { useButtonCooldown } from '@/hooks/use-button-cooldown';
 import { projectsApi, generateApi } from '@/lib/api';
 import { computeSize, estimateCost, formatCostDisplay } from '@/lib/types';
 
@@ -25,6 +26,7 @@ export default function TextToImagePage() {
     projectId,
     onTaskComplete: () => {},
   });
+  const { isCoolingDown: genCooldown, triggerCooldown: genTrigger } = useButtonCooldown(2000);
 
   // Load project style as default
   useEffect(() => {
@@ -70,6 +72,7 @@ export default function TextToImagePage() {
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
+    genTrigger();
     setError(null);
     try {
       await submitTask('text_to_image', {
@@ -98,7 +101,7 @@ export default function TextToImagePage() {
       )}
       <button
         onClick={handleGenerate}
-        disabled={submitting || !prompt.trim()}
+        disabled={submitting || genCooldown || !prompt.trim()}
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-0.5"
       >
         {submitting ? (

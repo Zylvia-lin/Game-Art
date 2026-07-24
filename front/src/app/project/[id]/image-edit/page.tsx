@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { Eraser, Paintbrush, Sparkles, Loader2, Undo2, Redo2, Download, X, Check, Wand2, ZoomIn, ZoomOut, Maximize, Brush } from 'lucide-react';
 import { useTaskQueue } from '@/hooks/use-task-queue';
+import { useButtonCooldown } from '@/hooks/use-button-cooldown';
 import { resolveImageUrl, toolsApi, generateApi } from '@/lib/api';
 import { clampDimensions, estimateCostFromPixels, formatCostDisplay } from '@/lib/types';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
@@ -18,6 +19,7 @@ export default function ImageEditPage() {
   const params = useParams();
   const projectId = String(params.id || '');
   const { submitting, submitTask, completedTasks, refreshTasks } = useTaskQueue({ projectId });
+  const { isCoolingDown: genCooldown, triggerCooldown: genTrigger } = useButtonCooldown();
 
   // --- State ---
   const [activeTab, setActiveTab] = useState<TabKey>('inpaint');
@@ -306,9 +308,12 @@ export default function ImageEditPage() {
       toast.error('请先涂抹要修改的区域');
       return;
     }
+    genTrigger();
     try {
       const maskUrl = await getMaskUrl();
-      const nat = imageNaturalSize.current;
+      // Use originalDimensions state (always set when image is selected) instead of imageNaturalSize ref
+      // which is only populated after opening the mask modal
+      const nat = originalDimensions || imageNaturalSize.current;
       await submitTask('inpaint', {
         image_url: imageUrl,
         mask_url: maskUrl,
@@ -325,6 +330,7 @@ export default function ImageEditPage() {
 
   const handleRemoveBg = async () => {
     if (!imageUrl) return;
+    genTrigger();
     setProcessing(true);
     setResultUrl('');
     setResultDimensions(null);
@@ -454,7 +460,7 @@ export default function ImageEditPage() {
           />
           <button
             onClick={handleInpaint}
-            disabled={submitting || !imageUrl || !prompt.trim() || !hasMask}
+            disabled={submitting || genCooldown || !imageUrl || !prompt.trim() || !hasMask}
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-0.5"
           >
             {submitting ? (
@@ -511,7 +517,7 @@ export default function ImageEditPage() {
           </div>
           <button
             onClick={handleRemoveBg}
-            disabled={processing || !imageUrl}
+            disabled={processing || genCooldown || !imageUrl}
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-0.5"
           >
             {processing ? (

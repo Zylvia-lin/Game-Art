@@ -9,6 +9,7 @@ import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors'
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { PromptInput } from '@/components/tools/prompt-input';
 import { useTaskQueue } from '@/hooks/use-task-queue';
+import { useButtonCooldown } from '@/hooks/use-button-cooldown';
 import { PromptEditor } from '@/components/tools/prompt-editor';
 import type { Task } from '@/lib/types';
 import { estimateCostFromResolution, formatCostDisplay } from '@/lib/types';
@@ -41,6 +42,7 @@ export default function ScenePage() {
 
   const handleTaskComplete = useCallback((_task: Task) => {}, []);
   const { submitting, submitTask } = useTaskQueue({ projectId, onTaskComplete: handleTaskComplete });
+  const { isCoolingDown: genCooldown, triggerCooldown: genTrigger } = useButtonCooldown(2000);
 
   // Wait for params to load
   if (!params.id) {
@@ -65,6 +67,7 @@ export default function ScenePage() {
   const handleGenerate = async () => {
     if (subTool === 'map_generate' && !prompt.trim()) return;
     if (subTool === 'map_split' && !sourceImage) return;
+    genTrigger();
     try {
       await submitTask(toolKeyMap[subTool], {
         prompt: prompt || '基于参考图拆分',
@@ -160,7 +163,7 @@ export default function ScenePage() {
       <ResolutionSelector ratio={ratio} value={resolution} onChange={setResolution} />
       <button
         onClick={handleGenerate}
-        disabled={submitting || (subTool === 'map_generate' ? !prompt.trim() : !sourceImage)}
+        disabled={submitting || genCooldown || (subTool === 'map_generate' ? !prompt.trim() : !sourceImage)}
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-primary to-accent px-4 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:opacity-90 disabled:opacity-50"
       >
         {submitting ? (

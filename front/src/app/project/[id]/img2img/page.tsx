@@ -11,6 +11,7 @@ import { ResultImageCard } from '@/components/tools/result-image-card';
 import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { projectsApi, generateApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
+import { useButtonCooldown } from '@/hooks/use-button-cooldown';
 import { computeSize, estimateCost, formatCostDisplay } from '@/lib/types';
 
 export default function ImageToImagePage() {
@@ -36,6 +37,7 @@ export default function ImageToImagePage() {
     projectId,
     onTaskComplete: handleTaskComplete,
   });
+  const { isCoolingDown: genCooldown, triggerCooldown: genTrigger } = useButtonCooldown(2000);
 
   // 从已完成的任务中派生结果图片（刷新页面后也能恢复）
   const results = useMemo(() => {
@@ -65,6 +67,7 @@ export default function ImageToImagePage() {
 
   const handleGenerate = async () => {
     if (!imageUrl || !prompt.trim()) return;
+    genTrigger();
     setError(null);
     try {
       await submitTask('image_to_image', {
@@ -98,7 +101,7 @@ export default function ImageToImagePage() {
       )}
       <button
         onClick={handleGenerate}
-        disabled={submitting || !imageUrl || !prompt.trim()}
+        disabled={submitting || genCooldown || !imageUrl || !prompt.trim()}
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-0.5"
       >
         {submitting ? (

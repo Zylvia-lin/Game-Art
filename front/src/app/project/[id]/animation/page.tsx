@@ -9,6 +9,7 @@ import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors'
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { PromptInput } from '@/components/tools/prompt-input';
 import { useTaskQueue } from '@/hooks/use-task-queue';
+import { useButtonCooldown } from '@/hooks/use-button-cooldown';
 import { resolveImageUrl, toolsApi } from '@/lib/api';
 import { PromptEditor } from '@/components/tools/prompt-editor';
 import type { Task } from '@/lib/types';
@@ -59,6 +60,7 @@ export default function AnimationPage() {
 
   const handleTaskComplete = useCallback((_task: Task) => {}, []);
   const { submitting, submitTask } = useTaskQueue({ projectId, onTaskComplete: handleTaskComplete });
+  const { isCoolingDown: genCooldown, triggerCooldown: genTrigger } = useButtonCooldown(2000);
 
   // Wait for params to load
   if (!id) {
@@ -79,6 +81,7 @@ export default function AnimationPage() {
 
   // AI 动作生成
   const handleGenerate = async () => {
+    genTrigger();
     setError(null);
     try {
       await submitTask(toolKeyMap.text, {
@@ -243,7 +246,7 @@ export default function AnimationPage() {
       {subTool === 'text' ? (
         <button
           onClick={handleGenerate}
-          disabled={submitting || !imageUrl}
+          disabled={submitting || genCooldown || !imageUrl}
           className="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-primary to-accent px-4 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:opacity-90 disabled:opacity-50"
         >
           {submitting ? (
