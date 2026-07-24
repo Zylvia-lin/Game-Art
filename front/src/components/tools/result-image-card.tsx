@@ -105,10 +105,10 @@ export function ResultImageCard({
 
   return (
     <>
-      <div className="group relative overflow-hidden rounded-xl border border-border bg-card">
+      <div className="group relative mb-3 break-inside-avoid overflow-hidden rounded-xl border border-border bg-card">
         <div className="relative cursor-pointer" onClick={handleImageClick}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={resolveImageUrl(url)} alt={displayName} className="w-full object-contain" loading="lazy" />
+          <img src={resolveImageUrl(url)} alt={displayName} className="block w-full" loading="lazy" />
 
           {/* Resolution badge - top right */}
           {dimensions && (
