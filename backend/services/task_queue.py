@@ -66,7 +66,7 @@ async def create_task(project_id: str, tool_key: str, input_params: dict) -> dic
             """INSERT INTO tasks (project_id, tool_key, input_params, status, progress)
                VALUES ($1, $2, $3::jsonb, 'pending', 0)
                RETURNING *""",
-            project_id, tool_key, json.dumps(input_params),
+            project_id, tool_key, input_params,
         )
         task = _to_task(dict(row))
 
@@ -145,8 +145,8 @@ async def update_task_status(
                WHERE id = $1
                RETURNING *""",
             task_id, status,
-            json.dumps(output_urls) if output_urls else None,
-            json.dumps(output_names) if output_names else None,
+            output_urls if output_urls else None,
+            output_names if output_names else None,
             error_message, progress,
             started_at, completed_at, now,
         )
@@ -194,6 +194,61 @@ async def delete_single_task(task_id: str) -> bool:
     return "DELETE 0" not in result
 
 
+async def delete_output_image(task_id: str, index: int) -> dict:
+    """Delete a single output image from a task's output_urls array.
+    Removes the image at the given index, updates both tasks and generations tables.
+    If this was the last image, deletes the entire task."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT output_urls, output_names FROM tasks WHERE id = $1",
+            task_id,
+        )
+        if not row:
+            return {"deleted": False, "reason": "task not found"}
+
+        output_urls = row["output_urls"] or []
+        output_names = row["output_names"] or []
+
+        if index < 0 or index >= len(output_urls):
+            return {"deleted": False, "reason": "index out of range"}
+
+        url_to_delete = output_urls[index]
+
+        new_urls = output_urls[:index] + output_urls[index + 1:]
+        new_names = output_names[:index] + output_names[index + 1:] if len(output_names) > index else output_names
+
+        if len(new_urls) == 0:
+            await conn.execute("DELETE FROM generations WHERE task_id = $1", task_id)
+            await conn.execute("DELETE FROM tasks WHERE id = $1", task_id)
+            return {"deleted": True, "url": url_to_delete, "task_removed": True}
+
+        await conn.execute(
+            "UPDATE tasks SET output_urls = $1::jsonb, output_names = $2::jsonb WHERE id = $3",
+            new_urls, new_names, task_id,
+        )
+
+        gen_row = await conn.fetchrow(
+            "SELECT id FROM generations WHERE task_id = $1",
+            task_id,
+        )
+        if gen_row:
+            await conn.execute(
+                "UPDATE generations SET output_urls = $1::jsonb, output_names = $2::jsonb WHERE task_id = $3",
+                new_urls, new_names, task_id,
+            )
+
+        try:
+            file_path = url_to_delete.lstrip("/")
+            import os
+            if os.path.exists(file_path):
+                os.remove(file_path)
+        except Exception:
+            pass
+
+        return {"deleted": True, "url": url_to_delete, "task_removed": False}
+
+
 async def _get_next_pending_task() -> dict | None:
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -236,9 +291,9 @@ async def _process_single_task(task: dict):
                 """INSERT INTO generations (project_id, task_id, tool_key, input_params, output_urls, output_names, status)
                    VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, 'completed')""",
                 task["project_id"], task["id"], task["tool_key"],
-                json.dumps(task["input_params"]),
-                json.dumps(result["output_urls"]),
-                json.dumps(default_names),
+                task["input_params"],
+                result["output_urls"],
+                default_names,
             )
 
         # Write billing record (independent of task/image lifecycle)

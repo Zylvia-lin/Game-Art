@@ -301,7 +301,7 @@ export default function AnimationPage() {
             <img
               src={resolveImageUrl(frame.url)}
               alt={`Frame ${i}`}
-              className="h-full w-full rounded-lg border border-border object-cover"
+              className="h-full w-full rounded-lg border border-border object-contain bg-black"
             />
             <div className="absolute bottom-1 right-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white">
               {i + 1}

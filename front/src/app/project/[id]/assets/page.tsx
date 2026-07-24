@@ -31,7 +31,7 @@ export default function AssetsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
 
   // Upload dialog state
@@ -73,7 +73,7 @@ export default function AssetsPage() {
     fetchAssets();
   }, [projectId, filter]);
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('确定要删除此资产吗？')) return;
     try {
       await assetsApi.delete(id);
@@ -86,20 +86,14 @@ export default function AssetsPage() {
 
   const handleToggleFinalize = async (asset: Asset) => {
     try {
-      const res = await fetch(`/api/assets/${asset.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ finalized: !asset.finalized }),
-      });
-      if (res.ok) {
-        setAssets(assets.map(a => a.id === asset.id ? { ...a, finalized: !a.finalized } : a));
-      }
+      await assetsApi.update(String(asset.id), { finalized: !asset.finalized });
+      setAssets(assets.map(a => a.id === asset.id ? { ...a, finalized: !a.finalized } : a));
     } catch (err) {
       console.error('Failed to toggle finalize:', err);
     }
   };
 
-  const handleToggleSelect = (id: number) => {
+  const handleToggleSelect = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -179,7 +173,7 @@ export default function AssetsPage() {
       // 1. Upload file to server
       const { url } = await generateApi.upload(uploadFile);
       // 2. Create asset record
-      const asset = await projectsApi.createAsset({
+      const asset = await assetsApi.create({
         project_id: projectId,
         name: uploadName.trim(),
         type: uploadCategory,
@@ -342,7 +336,7 @@ export default function AssetsPage() {
                   </div>
                 )}
 
-                <div className="aspect-square">
+                <div className="aspect-square bg-black">
                   <img src={resolveImageUrl(asset.url)} alt={asset.name} className="h-full w-full object-contain p-2" />
                 </div>
                 <div className="border-t border-border p-2">
@@ -368,15 +362,12 @@ export default function AssetsPage() {
                     >
                       <Check className="h-3 w-3" />
                     </button>
-                    <a
-                      href={asset.url}
-                      download
-                      target="_blank"
-                      onClick={(e) => e.stopPropagation()}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); downloadImage(asset.url, `${asset.name || `asset_${asset.id}`}.png`); }}
                       className="rounded-md bg-card/80 p-1.5 text-foreground backdrop-blur-sm hover:bg-card transition-colors"
                     >
                       <Download className="h-3 w-3" />
-                    </a>
+                    </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDelete(asset.id); }}
                       className="rounded-md bg-card/80 p-1.5 text-destructive backdrop-blur-sm hover:bg-card transition-colors"

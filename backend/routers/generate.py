@@ -200,7 +200,7 @@ async def rename_output(task_id: str, req: RenameOutputRequest):
 
     await execute(
         "UPDATE tasks SET output_names = $1::jsonb WHERE id = $2",
-        json.dumps(names),
+        names,
         task_id,
     )
     return {"success": True, "name": names[req.index]}

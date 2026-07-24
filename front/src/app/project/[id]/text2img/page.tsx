@@ -260,13 +260,13 @@ export default function TextToImagePage() {
                 {images.map((img, idx) => (
                   <div
                     key={img.id}
-                    className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-background"
+                    className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-black"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={img.url}
                       alt="生成结果"
-                      className="h-full w-full object-cover transition-all duration-300 group-hover:scale-105"
+                      className="h-full w-full object-contain transition-all duration-300"
                       loading="lazy"
                     />
                     {/* Hover overlay */}

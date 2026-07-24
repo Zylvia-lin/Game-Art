@@ -57,7 +57,7 @@ async def create_asset(data: AssetCreate):
             """INSERT INTO assets (project_id, name, type, url, metadata)
                VALUES ($1, $2, $3, $4, $5::jsonb)
                RETURNING *""",
-            data.project_id, data.name, data.type, data.url, json.dumps(metadata),
+            data.project_id, data.name, data.type, data.url, metadata,
         )
         return _to_asset(dict(row))
 
@@ -102,7 +102,7 @@ async def update_asset(asset_id: str, data: AssetUpdate):
                     update_data.get("name"),
                     update_data.get("type"),
                     update_data.get("finalized"),
-                    json.dumps(metadata),
+                    metadata,
                 )
             else:
                 raise HTTPException(status_code=404, detail="Asset not found")

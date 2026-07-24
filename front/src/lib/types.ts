@@ -58,7 +58,7 @@ export interface Asset {
   generation_id: string | null;
   name: string;
   description: string;
-  type: 'character' | 'prop' | 'ui' | 'scene' | 'animation_frame' | 'image';
+  type: 'character' | 'prop' | 'ui' | 'scene' | 'animation_frame' | 'image' | string;
   url: string;
   metadata_: Record<string, unknown> | null;
   finalized: boolean;

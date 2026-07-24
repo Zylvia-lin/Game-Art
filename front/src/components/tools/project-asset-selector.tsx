@@ -89,12 +89,12 @@ export function ProjectAssetSelector({ projectId, onSelect, onClose, filterType 
                 <button
                   key={asset.id}
                   onClick={() => onSelect(asset)}
-                  className="group relative aspect-square rounded-lg overflow-hidden border border-[#27272a] hover:border-indigo-500/50 transition-all"
+                  className="group relative aspect-square rounded-lg overflow-hidden border border-[#27272a] hover:border-indigo-500/50 transition-all bg-black"
                 >
                   <img
                     src={resolveImageUrl(asset.url)}
                     alt={asset.name}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain"
                   />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center">
                     <span className="text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity">

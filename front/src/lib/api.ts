@@ -140,9 +140,10 @@ export const projectsApi = {
     return request<void>(`/api/projects/${id}`, { method: 'DELETE' });
   },
 
-  assets: (projectId: string) => {
+  assets: (projectId: string, assetType?: string) => {
     if (!isValidId(projectId)) throw new Error('Invalid project ID');
-    return request<Asset[]>(`/api/projects/${projectId}/assets`);
+    const query = assetType ? `?asset_type=${encodeURIComponent(assetType)}` : '';
+    return request<Asset[]>(`/api/projects/${projectId}/assets${query}`);
   },
 
   generations: (projectId: string) => {

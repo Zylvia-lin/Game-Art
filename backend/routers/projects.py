@@ -57,12 +57,39 @@ def _to_asset(row: dict) -> dict:
 
 
 def _to_generation(row: dict) -> dict:
+    # Parse output_urls (may be string due to JSONB codec)
+    raw_urls = row.get("output_urls")
+    if isinstance(raw_urls, str):
+        try:
+            raw_urls = json.loads(raw_urls)
+        except (json.JSONDecodeError, TypeError):
+            raw_urls = []
+    if not isinstance(raw_urls, list):
+        raw_urls = []
+
+    raw_names = row.get("output_names")
+    if isinstance(raw_names, str):
+        try:
+            raw_names = json.loads(raw_names)
+        except (json.JSONDecodeError, TypeError):
+            raw_names = []
+    if not isinstance(raw_names, list):
+        raw_names = []
+
+    raw_params = row.get("input_params")
+    if isinstance(raw_params, str):
+        try:
+            raw_params = json.loads(raw_params)
+        except (json.JSONDecodeError, TypeError):
+            raw_params = {}
+
     return {
         "id": row["id"],
         "project_id": row["project_id"],
         "tool_key": row["tool_key"],
-        "input_params": row.get("input_params"),
-        "output_urls": row.get("output_urls"),
+        "input_params": raw_params,
+        "output_urls": raw_urls,
+        "output_names": raw_names,
         "status": row.get("status", "completed"),
         "error_message": row.get("error_message"),
         "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
@@ -145,7 +172,58 @@ async def list_project_assets(project_id: str, asset_type: Optional[str] = Query
         )
     result = [_to_asset(r) for r in rows]
 
-    # 2. Load generated images from generations table (completed tasks with output_urls)
+    # 2. Load generated images from tasks table (completed tasks with output_urls)
+    #    tasks table is the primary source of truth (same as text2img page uses)
+    task_rows = await fetch_all(
+        """SELECT * FROM tasks
+           WHERE project_id = $1 AND status = 'completed'
+           AND output_urls IS NOT NULL
+           ORDER BY created_at DESC""",
+        project_id,
+    )
+    seen_task_ids = set()
+    for t in task_rows:
+        # Parse output_urls (may be string due to JSONB codec double-encoding)
+        raw_urls = t.get("output_urls")
+        if isinstance(raw_urls, str):
+            try:
+                raw_urls = json.loads(raw_urls)
+            except (json.JSONDecodeError, TypeError):
+                raw_urls = []
+        if not isinstance(raw_urls, list):
+            raw_urls = []
+
+        raw_names = t.get("output_names")
+        if isinstance(raw_names, str):
+            try:
+                raw_names = json.loads(raw_names)
+            except (json.JSONDecodeError, TypeError):
+                raw_names = []
+        if not isinstance(raw_names, list):
+            raw_names = []
+
+        seen_task_ids.add(str(t["id"]))
+
+        for i, url in enumerate(raw_urls):
+            if not isinstance(url, str):
+                continue
+            if not url.startswith("/uploads/"):
+                continue
+            name = raw_names[i] if i < len(raw_names) and raw_names[i] else f"{t['tool_key']}_{i+1}"
+            result.append({
+                "id": f"gen-{t['id']}-{i}",
+                "project_id": t["project_id"],
+                "generation_id": t["id"],
+                "name": name,
+                "description": "",
+                "type": t["tool_key"],
+                "url": url,
+                "finalized": False,
+                "metadata_": None,
+                "created_at": t["created_at"].isoformat() if t.get("created_at") else None,
+            })
+
+    # 3. Also check generations table for any records not in tasks table
     gen_rows = await fetch_all(
         """SELECT * FROM generations
            WHERE project_id = $1 AND status = 'completed'
@@ -154,15 +232,34 @@ async def list_project_assets(project_id: str, asset_type: Optional[str] = Query
         project_id,
     )
     for g in gen_rows:
-        output_urls = g.get("output_urls") or []
-        output_names = g.get("output_names") or []
-        for i, url in enumerate(output_urls):
+        task_id_str = str(g.get("task_id")) if g.get("task_id") else None
+        if task_id_str and task_id_str in seen_task_ids:
+            continue  # Already covered by tasks table
+
+        raw_urls = g.get("output_urls")
+        if isinstance(raw_urls, str):
+            try:
+                raw_urls = json.loads(raw_urls)
+            except (json.JSONDecodeError, TypeError):
+                raw_urls = []
+        if not isinstance(raw_urls, list):
+            raw_urls = []
+
+        raw_names = g.get("output_names")
+        if isinstance(raw_names, str):
+            try:
+                raw_names = json.loads(raw_names)
+            except (json.JSONDecodeError, TypeError):
+                raw_names = []
+        if not isinstance(raw_names, list):
+            raw_names = []
+
+        for i, url in enumerate(raw_urls):
             if not isinstance(url, str):
                 continue
-            # Only include local file paths (uploaded images), skip external/base64 URLs
             if not url.startswith("/uploads/"):
                 continue
-            name = output_names[i] if i < len(output_names) and output_names[i] else f"{g['tool_key']}_{i+1}"
+            name = raw_names[i] if i < len(raw_names) and raw_names[i] else f"{g['tool_key']}_{i+1}"
             result.append({
                 "id": f"gen-{g['id']}-{i}",
                 "project_id": g["project_id"],
