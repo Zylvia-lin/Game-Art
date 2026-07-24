@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { Sparkles, Loader2, Download, Eye, Trash2, AlertTriangle } from 'lucide-react';
+import { Sparkles, Loader2, Download, Eye, Trash2, AlertTriangle, Pencil, Check, X } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { PromptInput } from '@/components/tools/prompt-input';
@@ -14,6 +14,8 @@ interface ImageItem {
   id: string;
   url: string;
   taskId: string;
+  taskIndex: number;
+  name: string;
   prompt: string;
   createdAt: string;
 }
@@ -32,6 +34,9 @@ export default function TextToImagePage() {
   const [justCompleted, setJustCompleted] = useState(false);
   const [deleteIdx, setDeleteIdx] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editingName, setEditingName] = useState('');
+  const [renaming, setRenaming] = useState(false);
 
   const { submitting, submitTask } = useTaskQueue({
     projectId,
@@ -51,11 +56,15 @@ export default function TextToImagePage() {
       );
       const items: ImageItem[] = [];
       for (const t of completed) {
-        for (const url of t.output_urls!) {
+        const names = t.output_names || [];
+        for (let i = 0; i < t.output_urls!.length; i++) {
+          const url = t.output_urls![i];
           items.push({
-            id: `${t.id}-${url}`,
+            id: `${t.id}-${i}`,
             url: resolveImageUrl(url),
             taskId: t.id,
+            taskIndex: i,
+            name: names[i] || `text2img_${t.created_at.slice(0, 10).replace(/-/g, '')}_${i + 1}`,
             prompt: '',
             createdAt: t.created_at,
           });
@@ -132,6 +141,40 @@ export default function TextToImagePage() {
       setError('删除失败，请重试');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleStartRename = (idx: number) => {
+    setEditingIdx(idx);
+    setEditingName(images[idx].name);
+  };
+
+  const handleCancelRename = () => {
+    setEditingIdx(null);
+    setEditingName('');
+  };
+
+  const handleConfirmRename = async () => {
+    if (editingIdx === null) return;
+    const img = images[editingIdx];
+    const newName = editingName.trim();
+    if (!newName || newName === img.name) {
+      setEditingIdx(null);
+      setEditingName('');
+      return;
+    }
+    setRenaming(true);
+    try {
+      await generateApi.renameOutput(img.taskId, img.taskIndex, newName);
+      setImages((prev) =>
+        prev.map((item, i) => (i === editingIdx ? { ...item, name: newName } : item))
+      );
+      setEditingIdx(null);
+      setEditingName('');
+    } catch {
+      setError('重命名失败，请重试');
+    } finally {
+      setRenaming(false);
     }
   };
 
@@ -221,6 +264,48 @@ export default function TextToImagePage() {
                       className="h-full w-full object-cover transition-all duration-300 group-hover:scale-105"
                       loading="lazy"
                     />
+                    {/* Name badge - top left */}
+                    {editingIdx === idx ? (
+                      <div className="absolute inset-x-0 top-0 flex items-center gap-1 bg-black/80 px-2 py-1.5 backdrop-blur-sm">
+                        <input
+                          autoFocus
+                          value={editingName}
+                          onChange={(e) => setEditingName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleConfirmRename();
+                            if (e.key === 'Escape') handleCancelRename();
+                          }}
+                          disabled={renaming}
+                          className="min-w-0 flex-1 bg-transparent text-xs text-white outline-none placeholder:text-white/40"
+                          placeholder="输入名称"
+                        />
+                        <button
+                          onClick={handleConfirmRename}
+                          disabled={renaming}
+                          className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-primary text-white hover:bg-primary/90"
+                        >
+                          <Check className="h-3 w-3" />
+                        </button>
+                        <button
+                          onClick={handleCancelRename}
+                          disabled={renaming}
+                          className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-muted text-white hover:bg-muted/80"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="absolute inset-x-0 top-0 flex items-center gap-1 bg-gradient-to-b from-black/70 to-transparent px-2 py-1.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                        <span className="flex-1 truncate text-xs text-white drop-shadow">{img.name}</span>
+                        <button
+                          onClick={() => handleStartRename(idx)}
+                          className="flex h-4 w-4 shrink-0 items-center justify-center text-white/70 hover:text-white"
+                          title="编辑名称"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                      </div>
+                    )}
                     {/* Hover overlay */}
                     <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/60 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
                       <button
@@ -231,7 +316,7 @@ export default function TextToImagePage() {
                         <Eye className="h-4 w-4" />
                       </button>
                       <button
-                        onClick={() => handleDownload(img.url, `text2img-${img.id}.png`)}
+                        onClick={() => handleDownload(img.url, `${img.name}.png`)}
                         className="flex h-9 w-9 items-center justify-center rounded-lg bg-background/90 text-foreground hover:bg-background"
                         title="下载"
                       >
@@ -275,7 +360,7 @@ export default function TextToImagePage() {
                     onClick={() =>
                       handleDownload(
                         images[previewIdx].url,
-                        `text2img-${images[previewIdx].id}.png`
+                        `${images[previewIdx].name}.png`
                       )
                     }
                     className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"

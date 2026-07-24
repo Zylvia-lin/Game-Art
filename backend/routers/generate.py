@@ -3,10 +3,11 @@ Generation endpoints.
 Task submission and management via async task queue.
 On-demand prompt optimization endpoint.
 """
+import json
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional
-from database import fetch_one
+from database import fetch_one, fetch_all, execute
 from services.task_queue import (
     create_task, get_task, get_project_tasks, get_queue_stats, cancel_task,
     delete_project_tasks, delete_single_task,
@@ -166,3 +167,42 @@ async def delete_single(task_id: str):
     if not ok:
         raise HTTPException(status_code=404, detail="Task not found")
     return {"success": True}
+
+
+class RenameOutputRequest(BaseModel):
+    index: int
+    name: str
+
+
+@router.patch("/task/{task_id}/rename")
+async def rename_output(task_id: str, req: RenameOutputRequest):
+    """Rename a specific output image in a task."""
+    row = await fetch_one(
+        "SELECT output_names FROM tasks WHERE id = $1",
+        task_id,
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    raw_names = row.get("output_names")
+    if isinstance(raw_names, str):
+        try:
+            names = json.loads(raw_names)
+        except (json.JSONDecodeError, TypeError):
+            names = []
+    else:
+        names = raw_names or []
+
+    # Ensure list is long enough
+    while len(names) <= req.index:
+        names.append(None)
+    names[req.index] = req.name.strip() or f"output_{req.index+1}"
+
+    await execute(
+        "UPDATE tasks SET output_names = $1::jsonb WHERE id = $2",
+        json.dumps(names),
+        task_id,
+    )
+    return {"success": True}
+    )
+    return {"success": True, "name": names[index]}

@@ -67,6 +67,7 @@ export interface Task {
   progress: number;
   result_url?: string;
   output_urls?: string[];
+  output_names?: string[];
   error?: string;
   created_at: string;
   updated_at: string;
@@ -304,6 +305,14 @@ export const generateApi = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt, tool_key: toolKey }),
+    }),
+
+  // Rename a generated image
+  renameOutput: (taskId: string, index: number, name: string) =>
+    request<{ success: boolean }>(`/api/generate/task/${taskId}/rename`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ index, name }),
     }),
 };
 

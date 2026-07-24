@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS generations (
     tool_key VARCHAR(100) NOT NULL,
     input_params JSONB DEFAULT '{}',
     output_urls JSONB DEFAULT '[]',
+    output_names JSONB DEFAULT '[]',
     status VARCHAR(50) DEFAULT 'pending',
     error_message TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -187,6 +188,18 @@ async def init_db():
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.execute(SCHEMA_SQL)
+    # Migration: add output_names column to existing generations table
+    await conn.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'generations' AND column_name = 'output_names'
+            ) THEN
+                ALTER TABLE generations ADD COLUMN output_names JSONB DEFAULT '[]';
+            END IF;
+        END $$;
+    """)
     print("[DB] Tables initialized")
 
 

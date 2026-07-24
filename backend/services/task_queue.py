@@ -32,6 +32,15 @@ def _to_task(row: dict) -> dict:
     if not isinstance(raw_urls, list):
         raw_urls = []
 
+    raw_names = row.get("output_names")
+    if isinstance(raw_names, str):
+        try:
+            raw_names = json.loads(raw_names)
+        except (json.JSONDecodeError, TypeError):
+            raw_names = []
+    if not isinstance(raw_names, list):
+        raw_names = []
+
     return {
         "id": row["id"],
         "project_id": row["project_id"],
@@ -39,6 +48,7 @@ def _to_task(row: dict) -> dict:
         "input_params": raw_params,
         "status": row["status"],
         "output_urls": raw_urls,
+        "output_names": raw_names,
         "error_message": row.get("error_message"),
         "progress": row.get("progress", 0),
         "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
@@ -112,6 +122,7 @@ async def update_task_status(
     task_id: str,
     status: str,
     output_urls: list | None = None,
+    output_names: list | None = None,
     error_message: str | None = None,
     progress: int | None = None,
 ) -> dict | None:
@@ -125,15 +136,17 @@ async def update_task_status(
             """UPDATE tasks SET
                  status = $2,
                  output_urls = COALESCE($3::jsonb, output_urls),
-                 error_message = COALESCE($4, error_message),
-                 progress = COALESCE($5, progress),
-                 started_at = COALESCE(started_at, $6),
-                 completed_at = COALESCE($7, completed_at),
-                 updated_at = $8
+                 output_names = COALESCE($4::jsonb, output_names),
+                 error_message = COALESCE($5, error_message),
+                 progress = COALESCE($6, progress),
+                 started_at = COALESCE(started_at, $7),
+                 completed_at = COALESCE($8, completed_at),
+                 updated_at = $9
                WHERE id = $1
                RETURNING *""",
             task_id, status,
             json.dumps(output_urls) if output_urls else None,
+            json.dumps(output_names) if output_names else None,
             error_message, progress,
             started_at, completed_at, now,
         )
@@ -206,9 +219,13 @@ async def _process_single_task(task: dict):
             on_progress,
         )
 
+        # Generate default output names
+        default_names = [f"output_{i+1}" for i in range(len(result["output_urls"]))]
+
         await update_task_status(
             task["id"], "completed",
             output_urls=result["output_urls"],
+            output_names=default_names,
             progress=100,
         )
 
@@ -216,11 +233,12 @@ async def _process_single_task(task: dict):
         pool = await get_pool()
         async with pool.acquire() as conn:
             await conn.execute(
-                """INSERT INTO generations (project_id, task_id, tool_key, input_params, output_urls, status)
-                   VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, 'completed')""",
+                """INSERT INTO generations (project_id, task_id, tool_key, input_params, output_urls, output_names, status)
+                   VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, 'completed')""",
                 task["project_id"], task["id"], task["tool_key"],
                 json.dumps(task["input_params"]),
                 json.dumps(result["output_urls"]),
+                json.dumps(default_names),
             )
 
         # Write billing record (independent of task/image lifecycle)

@@ -131,6 +131,8 @@ async def delete_project(project_id: str):
 
 @router.get("/{project_id}/assets")
 async def list_project_assets(project_id: str, asset_type: Optional[str] = Query(None)):
+    """Return both archived assets and generated images (from generations table)."""
+    # 1. Load archived assets
     if asset_type:
         rows = await fetch_all(
             "SELECT * FROM assets WHERE project_id = $1 AND type = $2 ORDER BY created_at DESC",
@@ -141,7 +143,36 @@ async def list_project_assets(project_id: str, asset_type: Optional[str] = Query
             "SELECT * FROM assets WHERE project_id = $1 ORDER BY created_at DESC",
             project_id,
         )
-    return [_to_asset(r) for r in rows]
+    result = [_to_asset(r) for r in rows]
+
+    # 2. Load generated images from generations table (completed tasks with output_urls)
+    gen_rows = await fetch_all(
+        """SELECT * FROM generations
+           WHERE project_id = $1 AND status = 'completed'
+           AND output_urls IS NOT NULL AND output_urls != '[]'::jsonb
+           ORDER BY created_at DESC""",
+        project_id,
+    )
+    for g in gen_rows:
+        output_urls = g.get("output_urls") or []
+        output_names = g.get("output_names") or []
+        for i, url in enumerate(output_urls):
+            if not isinstance(url, str):
+                continue
+            name = output_names[i] if i < len(output_names) and output_names[i] else f"{g['tool_key']}_{i+1}"
+            result.append({
+                "id": f"gen-{g['id']}-{i}",
+                "project_id": g["project_id"],
+                "generation_id": g["id"],
+                "name": name,
+                "description": "",
+                "type": g["tool_key"],
+                "url": url,
+                "finalized": False,
+                "metadata_": None,
+                "created_at": g["created_at"].isoformat() if g.get("created_at") else None,
+            })
+    return result
 
 
 @router.get("/{project_id}/generations")
