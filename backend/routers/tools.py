@@ -85,13 +85,19 @@ class AIRemoveBgRequest(BaseModel):
 def _upload_to_tos(local_path: str, storage_cfg: dict) -> str:
     """
     Upload a local file to TOS (S3-compatible) and return tos:// URL.
+    Uses path-style addressing and SigV4 signing required by Volcengine TOS.
     """
+    from botocore.config import Config as BotoConfig
     s3_client = boto3.client(
         "s3",
         endpoint_url=f"https://{storage_cfg['endpoint']}",
         aws_access_key_id=storage_cfg["access_key"],
         aws_secret_access_key=storage_cfg["secret_key"],
         region_name=storage_cfg["region"],
+        config=BotoConfig(
+            s3={"addressing_style": "path"},
+            signature_version="s3v4",
+        ),
     )
     key = f"gameart/{uuid.uuid4().hex[:12]}_{os.path.basename(local_path)}"
     with open(local_path, "rb") as f:
@@ -199,7 +205,7 @@ async def ai_remove_bg_endpoint(data: AIRemoveBgRequest):
             img_bytes = img_resp.content
 
         # Save locally
-        upload_dir = settings.upload_dir
+        upload_dir = settings.UPLOAD_DIR
         os.makedirs(upload_dir, exist_ok=True)
         filename = f"bg_removed_{uuid.uuid4().hex[:12]}.png"
         filepath = os.path.join(upload_dir, filename)
