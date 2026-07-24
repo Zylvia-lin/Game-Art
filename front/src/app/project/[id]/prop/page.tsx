@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, Sword } from 'lucide-react';
@@ -8,10 +8,10 @@ import { ToolLayout } from '@/components/tools/tool-layout';
 import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { PromptInput } from '@/components/tools/prompt-input';
-import { GenerationResultActions } from '@/components/tools/generation-result-actions';
-import { resolveImageUrl, projectsApi } from '@/lib/api';
+import { ResultImageCard } from '@/components/tools/result-image-card';
+import { projectsApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
-import type { Project, Task } from '@/lib/types';
+import type { Project } from '@/lib/types';
 import { estimateCostFromResolution, formatCostDisplay } from '@/lib/types';
 
 export default function PropPage() {
@@ -24,8 +24,39 @@ export default function PropPage() {
   const [resolution, setResolution] = useState('1024x1024');
   const [variantCount, setVariantCount] = useState(4);
   const [sourceImage, setSourceImage] = useState<string | null>(null);
-  const [results, setResults] = useState<string[]>([]);
   const [project, setProject] = useState<Project | null>(null);
+
+  const toolKeyMap: Record<string, string> = {
+    generate: 'prop_generate',
+    variant: 'prop_variant',
+  };
+
+  const { submitting, submitTask, completedTasks } = useTaskQueue({
+    projectId,
+    onTaskComplete: () => {},
+  });
+
+  // 从已完成的任务中派生结果图片
+  const results = useMemo(() => {
+    const toolKeys = Object.values(toolKeyMap);
+    return completedTasks
+      .filter(t => toolKeys.includes(t.tool_key))
+      .sort((a, b) => {
+        const ta = a.completed_at ? new Date(a.completed_at).getTime() : 0;
+        const tb = b.completed_at ? new Date(b.completed_at).getTime() : 0;
+        return tb - ta;
+      })
+      .flatMap(t => {
+        const urls = t.output_urls || [];
+        const names = t.output_names || [];
+        return urls.map((url, i) => ({
+          url,
+          taskId: t.id,
+          taskIndex: i,
+          name: names[i] || '',
+        }));
+      });
+  }, [completedTasks]);
 
   useEffect(() => {
     if (!projectId) return;
@@ -36,15 +67,6 @@ export default function PropPage() {
     if (project?.style) setStyle(project.style);
   }, [project]);
 
-  // Wait for params to load
-  if (!params.id) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
   // Check sessionStorage for pre-selected image
   useEffect(() => {
     const saved = sessionStorage.getItem('prop_source_image');
@@ -54,21 +76,14 @@ export default function PropPage() {
     }
   }, []);
 
-  const toolKeyMap: Record<string, string> = {
-    generate: 'prop_generate',
-    variant: 'prop_variant',
-  };
-
-  const handleTaskComplete = useCallback((task: Task) => {
-    if (task.output_urls && task.output_urls.length > 0) {
-      setResults(prev => [...task.output_urls, ...prev]);
-    }
-  }, []);
-
-  const { submitting, submitTask } = useTaskQueue({
-    projectId,
-    onTaskComplete: handleTaskComplete,
-  });
+  // Wait for params to load
+  if (!params.id) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   const needsImage = subTool === 'variant';
 
@@ -163,15 +178,20 @@ export default function PropPage() {
   const canvas = (
     <div className="flex h-full flex-col">
       {results.length > 0 ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {results.map((url, i) => (
-            <div key={i} className="overflow-hidden rounded-xl border border-border bg-card">
-              <img src={resolveImageUrl(url)} alt={`Prop ${i + 1}`} className="w-full object-contain" />
-              <div className="p-3 border-t border-border">
-                <GenerationResultActions imageUrl={url} projectId={String(projectId)} showAddToLibrary />
-              </div>
-            </div>
-          ))}
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {results.map((r, i) => (
+              <ResultImageCard
+                key={`${r.taskId}-${r.taskIndex}`}
+                url={r.url}
+                projectId={String(projectId)}
+                index={i}
+                name={r.name}
+                taskId={r.taskId}
+                taskIndex={r.taskIndex}
+              />
+            ))}
+          </div>
         </div>
       ) : (
         <div className="flex flex-1 items-center justify-center">

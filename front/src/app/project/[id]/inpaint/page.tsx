@@ -1,14 +1,14 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, Undo2, Redo2, Eraser, Paintbrush } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { PromptInput } from '@/components/tools/prompt-input';
-import { GenerationResultActions } from '@/components/tools/generation-result-actions';
-import { resolveImageUrl, generateApi } from '@/lib/api';
+import { ResultImageCard } from '@/components/tools/result-image-card';
+import { generateApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { computeSize } from '@/lib/types';
 
@@ -22,20 +22,31 @@ export default function InpaintPage() {
   const [brushSize, setBrushSize] = useState(20);
   const [ratio, setRatio] = useState('1:1');
   const [resolution, setResolution] = useState('2K');
-  const [results, setResults] = useState<string[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
   const [history, setHistory] = useState<ImageData[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
-  const { submitting, submitTask } = useTaskQueue({ projectId });
+  const { submitting, submitTask, completedTasks } = useTaskQueue({ projectId });
 
-  // Wait for params to load
-  if (!params.id) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  // 从已完成的任务中派生结果图片
+  const completedResults = useMemo(() => {
+    return completedTasks
+      .filter(t => t.tool_key === 'inpaint')
+      .sort((a, b) => {
+        const ta = a.completed_at ? new Date(a.completed_at).getTime() : 0;
+        const tb = b.completed_at ? new Date(b.completed_at).getTime() : 0;
+        return tb - ta;
+      })
+      .flatMap(t => {
+        const urls = t.output_urls || [];
+        const names = t.output_names || [];
+        return urls.map((url, i) => ({
+          url,
+          taskId: t.id,
+          taskIndex: i,
+          name: names[i] || '',
+        }));
+      });
+  }, [completedTasks]);
 
   // Check for pre-selected image from sessionStorage (navigated from another tool)
   useEffect(() => {
@@ -186,6 +197,15 @@ export default function InpaintPage() {
     if (imageUrl) loadImage(imageUrl);
   }, [imageUrl, loadImage]);
 
+  // Wait for params to load
+  if (!params.id) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   const paramsPanel = (
     <>
       <ImageSourceSelector
@@ -261,16 +281,21 @@ export default function InpaintPage() {
             onMouseLeave={handleMouseUp}
           />
         </div>
-      ) : results.length > 0 ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {results.map((url, i) => (
-            <div key={i} className="overflow-hidden rounded-xl border border-border bg-card">
-              <img src={resolveImageUrl(url)} alt={`Result ${i + 1}`} className="w-full object-contain" />
-              <div className="p-3 border-t border-border">
-                <GenerationResultActions projectId={String(projectId)} imageUrl={url} showAddToLibrary />
-              </div>
-            </div>
-          ))}
+      ) : completedResults.length > 0 ? (
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {completedResults.map((r, i) => (
+              <ResultImageCard
+                key={`${r.taskId}-${r.taskIndex}`}
+                url={r.url}
+                projectId={String(projectId)}
+                index={i}
+                name={r.name}
+                taskId={r.taskId}
+                taskIndex={r.taskIndex}
+              />
+            ))}
+          </div>
         </div>
       ) : (
         <div className="text-center">

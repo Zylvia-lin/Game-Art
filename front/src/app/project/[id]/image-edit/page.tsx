@@ -54,7 +54,8 @@ export default function ImageEditPage() {
       .sort((a, b) => new Date(b.completed_at || 0).getTime() - new Date(a.completed_at || 0).getTime())
       .flatMap((t) => {
         const urls = Array.isArray(t.output_urls) ? t.output_urls : [];
-        return urls.map((url) => ({ url, taskId: t.id }));
+        const names = t.output_names || [];
+        return urls.map((url, i) => ({ url, taskId: t.id, taskIndex: i, name: names[i] || '' }));
       });
   }, [completedTasks]);
 
@@ -535,11 +536,17 @@ export default function ImageEditPage() {
       {activeTab === 'inpaint' && results.length > 0 && (
         <div className="border-t border-border p-4">
           <h4 className="mb-3 text-sm font-medium text-foreground">生成结果</h4>
-          <div className="flex gap-3 overflow-x-auto pb-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {results.map((r, i) => (
-              <div key={`${r.taskId}-${i}`} className="shrink-0 w-[200px]">
-                <ResultImageCard url={r.url} projectId={projectId} index={i} />
-              </div>
+              <ResultImageCard
+                key={`${r.taskId}-${r.taskIndex}`}
+                url={r.url}
+                projectId={projectId}
+                index={i}
+                name={r.name}
+                taskId={r.taskId}
+                taskIndex={r.taskIndex}
+              />
             ))}
           </div>
         </div>

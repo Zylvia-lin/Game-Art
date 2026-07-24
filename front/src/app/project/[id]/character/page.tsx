@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, User } from 'lucide-react';
 import { toast } from 'sonner';
@@ -9,10 +9,9 @@ import { ToolLayout } from '@/components/tools/tool-layout';
 import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { PromptInput } from '@/components/tools/prompt-input';
-import { GenerationResultActions } from '@/components/tools/generation-result-actions';
-import { resolveImageUrl, projectsApi } from '@/lib/api';
+import { ResultImageCard } from '@/components/tools/result-image-card';
+import { projectsApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
-import type { Task } from '@/lib/types';
 import { estimateCostFromResolution, formatCostDisplay } from '@/lib/types';
 
 const SUB_TOOLS = [
@@ -52,15 +51,6 @@ export default function CharacterPage() {
     }).catch(() => {});
   }, [projectId]);
 
-  // Wait for params to load
-  if (!params.id) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
   // Check sessionStorage for pre-selected image
   useEffect(() => {
     const saved = sessionStorage.getItem('preselect_image');
@@ -79,18 +69,33 @@ export default function CharacterPage() {
   const [ratio, setRatio] = useState('1:1');
   const [resolution, setResolution] = useState('1024x1024');
   const [sourceImage, setSourceImage] = useState<string | null>(null);
-  const [results, setResults] = useState<string[]>([]);
 
-  const handleTaskComplete = useCallback((task: Task) => {
-    if (task.output_urls && task.output_urls.length > 0) {
-      setResults(prev => [...task.output_urls, ...prev]);
-    }
-  }, []);
-
-  const { submitting, submitTask } = useTaskQueue({
+  const { submitting, submitTask, completedTasks } = useTaskQueue({
     projectId,
-    onTaskComplete: handleTaskComplete,
+    onTaskComplete: () => {},
   });
+
+  // 从已完成的任务中派生结果图片（刷新页面后也能恢复）
+  const results = useMemo(() => {
+    const toolKeys = Object.values(TOOL_KEY_MAP);
+    return completedTasks
+      .filter(t => toolKeys.includes(t.tool_key))
+      .sort((a, b) => {
+        const ta = a.completed_at ? new Date(a.completed_at).getTime() : 0;
+        const tb = b.completed_at ? new Date(b.completed_at).getTime() : 0;
+        return tb - ta;
+      })
+      .flatMap(t => {
+        const urls = t.output_urls || [];
+        const names = t.output_names || [];
+        return urls.map((url, i) => ({
+          url,
+          taskId: t.id,
+          taskIndex: i,
+          name: names[i] || '',
+        }));
+      });
+  }, [completedTasks]);
 
   const handleGenerate = async () => {
     if (subTool === 'tpose' && !prompt.trim()) return;
@@ -121,6 +126,15 @@ export default function CharacterPage() {
 
   const needsImage = subTool === 'directions' || subTool === 'part_split';
   const optionalImage = subTool === 'three_view';
+
+  // Wait for params to load
+  if (!params.id) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   const paramsPanel = (
     <>
@@ -230,13 +244,20 @@ export default function CharacterPage() {
   const canvas = (
     <div className="flex h-full flex-col">
       {results.length > 0 ? (
-        <div className="space-y-4">
-          {results.map((url, i) => (
-            <div key={i} className="overflow-hidden rounded-xl border border-border bg-card">
-              <img src={resolveImageUrl(url)} alt={`Character ${i + 1}`} className="w-full object-contain" />
-              <GenerationResultActions imageUrl={url} projectId={String(projectId)} />
-            </div>
-          ))}
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {results.map((r, i) => (
+              <ResultImageCard
+                key={`${r.taskId}-${r.taskIndex}`}
+                url={r.url}
+                projectId={String(projectId)}
+                index={i}
+                name={r.name}
+                taskId={r.taskId}
+                taskIndex={r.taskIndex}
+              />
+            ))}
+          </div>
         </div>
       ) : (
         <div className="flex flex-1 items-center justify-center">

@@ -74,6 +74,7 @@ export interface Task {
   input_params: Record<string, unknown>;
   status: TaskStatus;
   output_urls: string[];
+  output_names?: string[];
   error_message: string | null;
   progress: number;
   created_at: string;

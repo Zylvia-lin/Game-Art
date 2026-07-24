@@ -53,7 +53,16 @@ export default function ImageToImagePage() {
         const tb = b.completed_at ? new Date(b.completed_at).getTime() : 0;
         return tb - ta;
       })
-      .flatMap(t => t.output_urls || []);
+      .flatMap(t => {
+        const urls = t.output_urls || [];
+        const names = t.output_names || [];
+        return urls.map((url, i) => ({
+          url,
+          taskId: t.id,
+          taskIndex: i,
+          name: names[i] || '',
+        }));
+      });
   }, [completedTasks]);
 
   const handleGenerate = async () => {
@@ -122,8 +131,8 @@ export default function ImageToImagePage() {
     <div className="flex h-full flex-col">
       {results.length > 0 ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {results.map((url, i) => (
-            <ResultImageCard key={i} url={url} projectId={String(projectId)} index={i} />
+          {results.map((r, i) => (
+            <ResultImageCard key={`${r.taskId}-${r.taskIndex}`} url={r.url} projectId={String(projectId)} index={i} name={r.name} taskId={r.taskId} taskIndex={r.taskIndex} />
           ))}
         </div>
       ) : (
