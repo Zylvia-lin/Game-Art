@@ -76,7 +76,7 @@ async def create_model(config: ModelConfigCreate):
 
 
 @router.get("/{model_id}")
-async def get_model(model_id: int):
+async def get_model(model_id: str):
     row = await fetch_one("SELECT * FROM model_configs WHERE id = $1", model_id)
     if not row:
         raise HTTPException(status_code=404, detail="Model not found")
@@ -84,7 +84,7 @@ async def get_model(model_id: int):
 
 
 @router.put("/{model_id}")
-async def update_model(model_id: int, config: ModelConfigUpdate):
+async def update_model(model_id: str, config: ModelConfigUpdate):
     pool = await get_pool()
     async with pool.acquire() as conn:
         existing = await conn.fetchrow("SELECT * FROM model_configs WHERE id = $1", model_id)
@@ -121,7 +121,7 @@ async def update_model(model_id: int, config: ModelConfigUpdate):
 
 
 @router.delete("/{model_id}")
-async def delete_model(model_id: int):
+async def delete_model(model_id: str):
     result = await execute("DELETE FROM model_configs WHERE id = $1", model_id)
     if "DELETE 0" in result:
         raise HTTPException(status_code=404, detail="Model not found")
@@ -129,7 +129,7 @@ async def delete_model(model_id: int):
 
 
 @router.put("/{model_id}/default")
-async def set_default_model(model_id: int):
+async def set_default_model(model_id: str):
     pool = await get_pool()
     async with pool.acquire() as conn:
         existing = await conn.fetchrow("SELECT * FROM model_configs WHERE id = $1", model_id)

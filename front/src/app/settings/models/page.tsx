@@ -34,7 +34,7 @@ export default function ModelsSettingsPage() {
   const [configs, setConfigs] = useState<ModelConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<{
     type: ModelType;
     name: string;
@@ -116,7 +116,12 @@ export default function ModelsSettingsPage() {
         is_default: form.is_default,
       };
       if (editingId) {
-        await modelsApi.update(editingId, data);
+        // 编辑时：如果 api_key 为空则不发送，避免覆盖已有密钥
+        const updateData: Record<string, unknown> = { ...data };
+        if (!form.api_key) {
+          delete updateData.api_key;
+        }
+        await modelsApi.update(editingId, updateData as Partial<ModelConfig>);
       } else {
         await modelsApi.create(data);
       }
@@ -129,7 +134,7 @@ export default function ModelsSettingsPage() {
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('确定删除此模型配置？')) return;
     try {
       await modelsApi.delete(id);
@@ -139,7 +144,7 @@ export default function ModelsSettingsPage() {
     }
   };
 
-  const handleSetDefault = async (id: number) => {
+  const handleSetDefault = async (id: string) => {
     try {
       await modelsApi.setDefault(id);
       fetchConfigs();
@@ -249,9 +254,12 @@ export default function ModelsSettingsPage() {
                   type="password"
                   value={form.api_key}
                   onChange={(e) => setForm({ ...form, api_key: e.target.value })}
-                  placeholder="sk-..."
+                  placeholder={editingId ? '留空则保持原密钥不变' : 'sk-...'}
                   className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
                 />
+                {editingId && (
+                  <p className="mt-1 text-xs text-muted-foreground">编辑模式下留空表示不修改已有密钥</p>
+                )}
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-foreground">模型名称</label>

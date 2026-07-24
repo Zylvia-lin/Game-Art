@@ -1,219 +1,173 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
-import {
-  Sparkles, Loader2, Undo2, Redo2, Eraser, Paintbrush,
-  Wand2, Download, Check, X, ZoomIn, ZoomOut, Maximize,
-} from 'lucide-react';
-import { ToolLayout } from '@/components/tools/tool-layout';
+import { Eraser, Paintbrush, Sparkles, Loader2, Undo2, Redo2, Download, X, Check, Wand2, ZoomIn, ZoomOut, Maximize, Brush } from 'lucide-react';
+import { useTaskQueue } from '@/hooks/use-task-queue';
+import { resolveImageUrl, toolsApi } from '@/lib/api';
+import { clampDimensions, estimateCostFromPixels, formatCostDisplay } from '@/lib/types';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { PromptInput } from '@/components/tools/prompt-input';
-import { resolveImageUrl, toolsApi, downloadImage } from '@/lib/api';
-import { useTaskQueue } from '@/hooks/use-task-queue';
-import { estimateCostFromPixels, clampDimensions, formatCostDisplay } from '@/lib/types';
+import { ResultImageCard } from '@/components/tools/result-image-card';
 import { toast } from 'sonner';
+import { ToolLayout } from '@/components/tools/tool-layout';
 
 type TabKey = 'inpaint' | 'remove-bg';
 
 export default function ImageEditPage() {
   const params = useParams();
-  const projectId = params.id as string;
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const maskCanvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const projectId = String(params.id || '');
+  const { submitting, submitTask, completedTasks } = useTaskQueue({ projectId });
+
+  // --- State ---
+  const [activeTab, setActiveTab] = useState<TabKey>('inpaint');
   const [imageUrl, setImageUrl] = useState('');
+  const [originalDimensions, setOriginalDimensions] = useState<{ w: number; h: number } | null>(null);
   const [prompt, setPrompt] = useState('');
+  const [bgColor, setBgColor] = useState('#FFFFFF');
+  const [processing, setProcessing] = useState(false);
+
+  // Mask modal state
+  const [showMaskModal, setShowMaskModal] = useState(false);
   const [brushSize, setBrushSize] = useState(20);
+  const [zoom, setZoom] = useState(1);
   const [isDrawing, setIsDrawing] = useState(false);
   const [history, setHistory] = useState<ImageData[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
-  const [activeTab, setActiveTab] = useState<TabKey>('inpaint');
-  const [originalDimensions, setOriginalDimensions] = useState<{ w: number; h: number } | null>(null);
-  const [zoom, setZoom] = useState(1);
+  const [hasMask, setHasMask] = useState(false);
+  const [modalReady, setModalReady] = useState(false);
 
-  // Remove-bg tab state
-  const [bgColor, setBgColor] = useState('#FFFFFF');
+  // Result modal state (for remove-bg)
+  const [showResultModal, setShowResultModal] = useState(false);
   const [resultUrl, setResultUrl] = useState('');
   const [resultDimensions, setResultDimensions] = useState<{ w: number; h: number } | null>(null);
-  const [processing, setProcessing] = useState(false);
-  const [showResultModal, setShowResultModal] = useState(false);
 
-  // Store the actual image dimensions for mask export at full resolution
+  // Refs
+  const modalCanvasRef = useRef<HTMLCanvasElement>(null);
+  const modalMaskCanvasRef = useRef<HTMLCanvasElement>(null);
   const imageNaturalSize = useRef<{ w: number; h: number } | null>(null);
 
-  const { submitting, submitTask } = useTaskQueue({ projectId });
+  // --- Derived state: inpaint results from completed tasks ---
+  const results = useMemo(() => {
+    return completedTasks
+      .filter((t) => t.tool_key === 'inpaint')
+      .sort((a, b) => new Date(b.completed_at || 0).getTime() - new Date(a.completed_at || 0).getTime())
+      .flatMap((t) => {
+        const urls = Array.isArray(t.output_urls) ? t.output_urls : [];
+        return urls.map((url) => ({ url, taskId: t.id }));
+      });
+  }, [completedTasks]);
 
-  if (!params.id) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  // --- Image loading into modal canvas ---
+  const loadModalImage = useCallback(async () => {
+    if (!imageUrl) return;
+    const fullUrl = resolveImageUrl(imageUrl);
 
-  // Check for pre-selected image from sessionStorage
-  useEffect(() => {
-    const sourceImage = sessionStorage.getItem('inpaint_source_image');
-    if (sourceImage) {
-      setImageUrl(sourceImage);
-      sessionStorage.removeItem('inpaint_source_image');
-    }
-  }, []);
+    // Read natural dimensions first
+    const probeImg = new window.Image();
+    probeImg.crossOrigin = 'anonymous';
+    await new Promise<void>((resolve) => {
+      probeImg.onload = () => resolve();
+      probeImg.onerror = () => resolve();
+      probeImg.src = fullUrl;
+    });
 
-  const getFullUrl = (url: string) => {
-    if (!url) return '';
-    return url.startsWith('http') ? url : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${url}`;
-  };
+    const nat = { w: probeImg.naturalWidth || 512, h: probeImg.naturalHeight || 512 };
+    imageNaturalSize.current = nat;
 
-  // Draw image onto canvases (shared by all load strategies)
-  const drawImageToCanvas = useCallback((img: HTMLImageElement) => {
-    const canvas = canvasRef.current;
-    const maskCanvas = maskCanvasRef.current;
-    if (!canvas || !maskCanvas) return;
+    // Now load into canvas (try fetch+blob first to avoid CORS taint)
+    const drawToCanvas = (img: HTMLImageElement) => {
+      const canvas = modalCanvasRef.current;
+      const maskCanvas = modalMaskCanvasRef.current;
+      if (!canvas || !maskCanvas) return;
+      canvas.width = nat.w;
+      canvas.height = nat.h;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+      }
+      maskCanvas.width = nat.w;
+      maskCanvas.height = nat.h;
+      const maskCtx = maskCanvas.getContext('2d');
+      if (maskCtx) maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+      setHistory([]);
+      setHistoryIndex(-1);
+      setHasMask(false);
+      setModalReady(true);
+    };
 
-    imageNaturalSize.current = { w: img.naturalWidth, h: img.naturalHeight };
-
-    const maxW = 900;
-    const maxH = 650;
-    const scale = Math.min(1, maxW / img.naturalWidth, maxH / img.naturalHeight);
-    const displayW = Math.round(img.naturalWidth * scale);
-    const displayH = Math.round(img.naturalHeight * scale);
-
-    canvas.width = maskCanvas.width = displayW;
-    canvas.height = maskCanvas.height = displayH;
-    canvas.style.width = `${displayW}px`;
-    canvas.style.height = `${displayH}px`;
-    maskCanvas.style.width = `${displayW}px`;
-    maskCanvas.style.height = `${displayH}px`;
-
-    const ctx = canvas.getContext('2d');
-    ctx?.drawImage(img, 0, 0, displayW, displayH);
-    const maskCtx = maskCanvas.getContext('2d');
-    maskCtx?.clearRect(0, 0, displayW, displayH);
-    setHistory([]);
-    setHistoryIndex(-1);
-    setZoom(1);
-  }, []);
-
-  // Load image with multi-strategy fallback:
-  // 1. fetch+blob (avoids canvas tainting, best for same-origin/CORS-enabled)
-  // 2. direct img.src with crossOrigin (works if server sends CORS headers)
-  // 3. direct img.src without crossOrigin (last resort, canvas may be tainted)
-  const loadImage = useCallback(async (url: string) => {
-    if (!url) return;
-
-    // data: and blob: URIs can be loaded directly without fetch
-    if (url.startsWith('data:') || url.startsWith('blob:')) {
+    if (fullUrl.startsWith('data:') || fullUrl.startsWith('blob:')) {
       const img = new window.Image();
-      img.onload = () => drawImageToCanvas(img);
-      img.onerror = () => toast.error('图片加载失败');
-      img.src = url;
+      img.onload = () => drawToCanvas(img);
+      img.src = fullUrl;
       return;
     }
 
-    const fullUrl = getFullUrl(url);
-
-    // Strategy 1: fetch + blob (best, avoids canvas tainting)
     try {
-      const response = await fetch(fullUrl);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
+      const resp = await fetch(fullUrl);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
       const img = new window.Image();
       img.onload = () => {
-        URL.revokeObjectURL(objectUrl);
-        drawImageToCanvas(img);
+        drawToCanvas(img);
+        URL.revokeObjectURL(blobUrl);
       };
       img.onerror = () => {
-        URL.revokeObjectURL(objectUrl);
-        // Strategy 3 fallback: direct load without crossOrigin
-        fallbackDirectLoad(fullUrl);
+        URL.revokeObjectURL(blobUrl);
+        // fallback: direct load
+        const img2 = new window.Image();
+        img2.onload = () => drawToCanvas(img2);
+        img2.src = fullUrl;
       };
-      img.src = objectUrl;
-      return;
+      img.src = blobUrl;
     } catch {
-      // fetch failed (CORS or network), try fallback strategies
+      const img = new window.Image();
+      img.onload = () => drawToCanvas(img);
+      img.src = fullUrl;
     }
+  }, [imageUrl]);
 
-    // Strategy 2: try with crossOrigin (canvas stays clean if server allows)
-    const img2 = new window.Image();
-    img2.crossOrigin = 'anonymous';
-    img2.onload = () => drawImageToCanvas(img2);
-    img2.onerror = () => {
-      // Strategy 3: direct load without crossOrigin (last resort)
-      fallbackDirectLoad(fullUrl);
-    };
-    img2.src = fullUrl;
-  }, [drawImageToCanvas]);
-
-  // Last resort: load without crossOrigin (canvas may be tainted,
-  // mask export will still work since it only reads the mask canvas)
-  const fallbackDirectLoad = useCallback((url: string) => {
+  // Read original dimensions when image changes
+  useEffect(() => {
+    if (!imageUrl) { setOriginalDimensions(null); return; }
     const img = new window.Image();
-    img.onload = () => drawImageToCanvas(img);
-    img.onerror = () => {
-      console.error('All image load strategies failed for:', url);
-      toast.error('图片加载失败，请重试');
-    };
-    img.src = url;
-  }, [drawImageToCanvas]);
+    img.onload = () => setOriginalDimensions({ w: img.naturalWidth, h: img.naturalHeight });
+    img.onerror = () => setOriginalDimensions(null);
+    img.src = resolveImageUrl(imageUrl);
+  }, [imageUrl]);
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/upload`, {
-        method: 'POST',
-        body: (() => { const fd = new FormData(); fd.append('file', file); return fd; })(),
-      });
-      const data = await res.json();
-      setImageUrl(data.url);
-    } catch (err) {
-      console.error('Upload failed:', err);
-      toast.error('上传失败');
+  // --- Mask modal operations ---
+  const openMaskModal = () => {
+    if (!imageUrl) {
+      toast.error('请先选择原始图片');
+      return;
     }
+    setModalReady(false);
+    setShowMaskModal(true);
+    setTimeout(() => { loadModalImage(); }, 100);
   };
 
-  const saveToHistory = () => {
-    const maskCanvas = maskCanvasRef.current;
-    if (!maskCanvas) return;
-    const ctx = maskCanvas.getContext('2d');
-    if (!ctx) return;
-    const data = ctx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
-    const newHistory = history.slice(0, historyIndex + 1);
-    newHistory.push(data);
-    setHistory(newHistory);
-    setHistoryIndex(newHistory.length - 1);
+  const confirmMask = () => {
+    setHasMask(true);
+    setShowMaskModal(false);
+    toast.success('遮罩已保存');
   };
 
-  const handleUndo = () => {
-    if (historyIndex <= 0) return;
-    const maskCanvas = maskCanvasRef.current;
-    if (!maskCanvas) return;
-    const ctx = maskCanvas.getContext('2d');
-    if (!ctx) return;
-    const newIndex = historyIndex - 1;
-    ctx.putImageData(history[newIndex], 0, 0);
-    setHistoryIndex(newIndex);
+  const cancelMask = () => {
+    setShowMaskModal(false);
+    setHistory([]);
+    setHistoryIndex(-1);
+    setHasMask(false);
+    setModalReady(false);
   };
 
-  const handleRedo = () => {
-    if (historyIndex >= history.length - 1) return;
-    const maskCanvas = maskCanvasRef.current;
-    if (!maskCanvas) return;
-    const ctx = maskCanvas.getContext('2d');
-    if (!ctx) return;
-    const newIndex = historyIndex + 1;
-    ctx.putImageData(history[newIndex], 0, 0);
-    setHistoryIndex(newIndex);
-  };
-
+  // --- Canvas drawing ---
   const getCanvasPos = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = maskCanvasRef.current;
+    const canvas = modalMaskCanvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
-    // Account for zoom: the rect reflects displayed size, canvas internal size may differ
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
     return {
@@ -224,7 +178,7 @@ export default function ImageEditPage() {
 
   const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isDrawing) return;
-    const maskCanvas = maskCanvasRef.current;
+    const maskCanvas = modalMaskCanvasRef.current;
     if (!maskCanvas) return;
     const ctx = maskCanvas.getContext('2d');
     if (!ctx) return;
@@ -247,39 +201,80 @@ export default function ImageEditPage() {
     }
   };
 
+  const saveToHistory = () => {
+    const maskCanvas = modalMaskCanvasRef.current;
+    if (!maskCanvas) return;
+    const ctx = maskCanvas.getContext('2d');
+    if (!ctx) return;
+    const data = ctx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push(data);
+    setHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
+  };
+
+  const handleUndo = () => {
+    if (historyIndex <= 0) return;
+    const maskCanvas = modalMaskCanvasRef.current;
+    if (!maskCanvas) return;
+    const ctx = maskCanvas.getContext('2d');
+    if (!ctx) return;
+    const newIndex = historyIndex - 1;
+    ctx.putImageData(history[newIndex], 0, 0);
+    setHistoryIndex(newIndex);
+  };
+
+  const handleRedo = () => {
+    if (historyIndex >= history.length - 1) return;
+    const maskCanvas = modalMaskCanvasRef.current;
+    if (!maskCanvas) return;
+    const ctx = maskCanvas.getContext('2d');
+    if (!ctx) return;
+    const newIndex = historyIndex + 1;
+    ctx.putImageData(history[newIndex], 0, 0);
+    setHistoryIndex(newIndex);
+  };
+
   const clearMask = () => {
-    const maskCanvas = maskCanvasRef.current;
+    const maskCanvas = modalMaskCanvasRef.current;
     if (!maskCanvas) return;
     const ctx = maskCanvas.getContext('2d');
     ctx?.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
-    saveToHistory();
+    setHasMask(false);
+    setHistory([]);
+    setHistoryIndex(-1);
+    // Save the cleared state as first history entry
+    if (ctx) {
+      const data = ctx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+      setHistory([data]);
+      setHistoryIndex(0);
+    }
   };
 
-  const getMaskUrl = (): Promise<string> => {
-    return new Promise((resolve) => {
-      const maskCanvas = maskCanvasRef.current;
-      if (!maskCanvas) { resolve(''); return; }
-      // Export at full resolution if we know the natural size
-      const nat = imageNaturalSize.current;
-      if (nat && (nat.w !== maskCanvas.width || nat.h !== maskCanvas.height)) {
-        // Scale mask to natural resolution
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = nat.w;
-        tempCanvas.height = nat.h;
-        const tempCtx = tempCanvas.getContext('2d');
-        if (tempCtx) {
-          tempCtx.drawImage(maskCanvas, 0, 0, maskCanvas.width, maskCanvas.height, 0, 0, nat.w, nat.h);
-          resolve(tempCanvas.toDataURL('image/png'));
-          return;
-        }
+  const getMaskUrl = async (): Promise<string> => {
+    const maskCanvas = modalMaskCanvasRef.current;
+    if (!maskCanvas) return '';
+    const nat = imageNaturalSize.current;
+    if (nat && (nat.w !== maskCanvas.width || nat.h !== maskCanvas.height)) {
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = nat.w;
+      tempCanvas.height = nat.h;
+      const tempCtx = tempCanvas.getContext('2d');
+      if (tempCtx) {
+        tempCtx.drawImage(maskCanvas, 0, 0, maskCanvas.width, maskCanvas.height, 0, 0, nat.w, nat.h);
+        return tempCanvas.toDataURL('image/png');
       }
-      resolve(maskCanvas.toDataURL('image/png'));
-    });
+    }
+    return maskCanvas.toDataURL('image/png');
   };
 
-  // Inpaint submit
+  // --- Submit handlers ---
   const handleInpaint = async () => {
     if (!imageUrl || !prompt.trim()) return;
+    if (!hasMask) {
+      toast.error('请先涂抹要修改的区域');
+      return;
+    }
     try {
       const maskUrl = await getMaskUrl();
       await submitTask('inpaint', {
@@ -294,14 +289,13 @@ export default function ImageEditPage() {
     }
   };
 
-  // Remove background (local processing)
   const handleRemoveBg = async () => {
     if (!imageUrl) return;
     setProcessing(true);
     setResultUrl('');
     setResultDimensions(null);
     try {
-      const maskUrl = await getMaskUrl();
+      const maskUrl = hasMask ? await getMaskUrl() : '';
       const res = await toolsApi.removeBgMask({
         image_url: imageUrl,
         mask_url: maskUrl,
@@ -318,34 +312,30 @@ export default function ImageEditPage() {
     }
   };
 
-  useEffect(() => {
-    if (imageUrl) loadImage(imageUrl);
-  }, [imageUrl, loadImage]);
-
-  // 当图片变化时读取实际分辨率
-  useEffect(() => {
-    if (!imageUrl) { setOriginalDimensions(null); return; }
-    const img = new window.Image();
-    img.onload = () => setOriginalDimensions({ w: img.naturalWidth, h: img.naturalHeight });
-    img.onerror = () => setOriginalDimensions(null);
-    img.src = getFullUrl(imageUrl);
-  }, [imageUrl]);
-
-  // Reset mask when switching tabs
+  // --- Tab switching ---
   const handleTabChange = (tab: TabKey) => {
     setActiveTab(tab);
-    clearMask();
+    setHasMask(false);
     setResultUrl('');
     setResultDimensions(null);
     setShowResultModal(false);
   };
 
   const handleZoom = (delta: number) => {
-    setZoom((prev) => Math.max(0.5, Math.min(3, prev + delta)));
+    setZoom((prev) => Math.max(0.2, Math.min(3, prev + delta)));
   };
 
   const brushCursor = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='${brushSize * 2}' height='${brushSize * 2}'%3E%3Ccircle cx='${brushSize}' cy='${brushSize}' r='${brushSize - 1}' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E") ${brushSize} ${brushSize}, crosshair`;
 
+  const costDisplay = originalDimensions
+    ? formatCostDisplay(estimateCostFromPixels(
+        clampDimensions(originalDimensions.w, originalDimensions.h).w *
+        clampDimensions(originalDimensions.w, originalDimensions.h).h,
+        1, 1
+      ))
+    : formatCostDisplay(estimateCostFromPixels(4194304, 1, 1));
+
+  // --- Params panel ---
   const paramsPanel = (
     <>
       {/* Tab switcher */}
@@ -374,12 +364,13 @@ export default function ImageEditPage() {
         </button>
       </div>
 
-      {/* Image source (shared) */}
+      {/* Image source */}
       <ImageSourceSelector
         projectId={projectId}
         imageUrl={imageUrl || null}
         onImageChange={(url) => {
           setImageUrl(url || '');
+          setHasMask(false);
         }}
         label="原始图片"
       />
@@ -394,49 +385,22 @@ export default function ImageEditPage() {
         </div>
       )}
 
-      {/* Brush size (shared) */}
-      <div>
-        <label className="mb-1.5 block text-sm font-medium text-foreground">
-          画笔大小: {brushSize}px
-        </label>
-        <input
-          type="range"
-          min="5"
-          max="80"
-          value={brushSize}
-          onChange={(e) => setBrushSize(Number(e.target.value))}
-          className="w-full accent-primary"
-        />
-      </div>
+      {/* Mask button - opens modal */}
+      <button
+        onClick={openMaskModal}
+        disabled={!imageUrl}
+        className="flex w-full items-center justify-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:border-primary/50 hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+      >
+        <Brush className="h-4 w-4" />
+        {hasMask ? '编辑遮罩' : '涂抹遮罩'}
+        {hasMask && (
+          <span className="ml-1 flex items-center gap-1 text-xs text-green-500">
+            <Check className="h-3 w-3" /> 已设置
+          </span>
+        )}
+      </button>
 
-      {/* Brush actions (shared) */}
-      <div className="flex gap-2">
-        <button
-          onClick={clearMask}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border py-2 text-xs text-muted-foreground hover:text-foreground hover:border-primary/50 transition-all"
-        >
-          <Eraser className="h-3 w-3" />
-          清除涂抹
-        </button>
-        <button
-          onClick={handleUndo}
-          disabled={historyIndex <= 0}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border py-2 text-xs text-muted-foreground hover:text-foreground hover:border-primary/50 disabled:opacity-30 transition-all"
-        >
-          <Undo2 className="h-3 w-3" />
-          撤销
-        </button>
-        <button
-          onClick={handleRedo}
-          disabled={historyIndex >= history.length - 1}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border py-2 text-xs text-muted-foreground hover:text-foreground hover:border-primary/50 disabled:opacity-30 transition-all"
-        >
-          <Redo2 className="h-3 w-3" />
-          重做
-        </button>
-      </div>
-
-      {/* Inpaint-specific: prompt */}
+      {/* Inpaint-specific */}
       {activeTab === 'inpaint' && (
         <>
           <PromptInput
@@ -449,7 +413,7 @@ export default function ImageEditPage() {
           />
           <button
             onClick={handleInpaint}
-            disabled={submitting || !imageUrl || !prompt.trim()}
+            disabled={submitting || !imageUrl || !prompt.trim() || !hasMask}
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-0.5"
           >
             {submitting ? (
@@ -461,20 +425,21 @@ export default function ImageEditPage() {
               <>
                 <Sparkles className="h-4 w-4" />
                 局部重绘
-                <span className="ml-1 text-xs opacity-80">{formatCostDisplay(originalDimensions ? estimateCostFromPixels(clampDimensions(originalDimensions.w, originalDimensions.h).w * clampDimensions(originalDimensions.w, originalDimensions.h).h, 1, 1) : estimateCostFromPixels(4194304, 1, 1))}</span>
+                <span className="ml-1 text-xs opacity-80">{costDisplay}</span>
               </>
             )}
           </button>
         </>
       )}
 
-      {/* Remove-bg-specific: color picker + process button */}
+      {/* Remove-bg-specific */}
       {activeTab === 'remove-bg' && (
         <>
           <div className="rounded-lg border border-border bg-muted/30 p-3">
             <p className="mb-2 text-xs text-muted-foreground">
-              用画笔涂抹要<strong className="text-foreground">保留</strong>的区域，
-              未涂抹区域将替换为背景色。
+              {hasMask
+                ? '已涂抹保留区域，未涂抹区域将替换为背景色。'
+                : '不涂抹则去除整个图片背景。涂抹可指定保留区域。'}
             </p>
             <label className="mb-2 block text-sm font-medium text-foreground">
               背景颜色
@@ -525,68 +490,25 @@ export default function ImageEditPage() {
     </>
   );
 
+  // --- Canvas area: preview + results ---
   const canvas = (
-    <div ref={containerRef} className="flex h-full flex-col">
-      {/* Canvas toolbar */}
-      {imageUrl && (
-        <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">
-              {imageNaturalSize.current
-                ? `${imageNaturalSize.current.w} × ${imageNaturalSize.current.h}px`
-                : ''}
-            </span>
-          </div>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => handleZoom(-0.2)}
-              className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-              title="缩小"
-            >
-              <ZoomOut className="h-4 w-4" />
-            </button>
-            <span className="w-12 text-center text-xs text-muted-foreground">{Math.round(zoom * 100)}%</span>
-            <button
-              onClick={() => handleZoom(0.2)}
-              className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-              title="放大"
-            >
-              <ZoomIn className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => setZoom(1)}
-              className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-              title="重置缩放"
-            >
-              <Maximize className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Canvas area */}
-      <div className="flex flex-1 items-center justify-center overflow-auto p-4">
+    <div className="flex h-full flex-col">
+      {/* Preview area */}
+      <div className="flex flex-1 items-center justify-center overflow-hidden p-4">
         {imageUrl ? (
-          <div
-            className="relative inline-block shadow-xl rounded-lg border border-border overflow-hidden"
-            style={{ transform: `scale(${zoom})`, transformOrigin: 'center' }}
-          >
-            <canvas ref={canvasRef} className="block" />
-            <canvas
-              ref={maskCanvasRef}
-              className="absolute left-0 top-0"
-              style={{ cursor: brushCursor }}
-              onMouseDown={handleMouseDown}
-              onMouseMove={draw}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseUp}
+          <div className="relative inline-block shadow-xl rounded-lg border border-border overflow-hidden max-w-full max-h-full">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={resolveImageUrl(imageUrl)}
+              alt="原图"
+              className="max-w-full object-contain"
+              style={{ maxHeight: 'calc(100vh - 360px)' }}
             />
-            {/* Instruction overlay */}
-            <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-lg bg-black/70 px-3 py-1.5 text-xs text-white">
-              {activeTab === 'inpaint'
-                ? '涂抹要替换的区域'
-                : '涂抹要保留的区域'}
-            </div>
+            {hasMask && (
+              <span className="absolute top-2 right-2 rounded-md bg-green-500/90 px-2 py-1 text-xs font-medium text-white backdrop-blur-sm">
+                遮罩已设置
+              </span>
+            )}
           </div>
         ) : (
           <div className="text-center">
@@ -602,14 +524,28 @@ export default function ImageEditPage() {
             </h3>
             <p className="text-sm text-muted-foreground">
               {activeTab === 'inpaint'
-                ? '上传图片，用画笔涂抹要修改的区域'
-                : '上传图片，用画笔涂抹要保留的区域'}
+                ? '上传图片，点击"涂抹遮罩"选择要修改的区域'
+                : '上传图片，涂抹可指定保留区域'}
             </p>
           </div>
         )}
       </div>
 
-      {/* Result Modal */}
+      {/* Results history */}
+      {activeTab === 'inpaint' && results.length > 0 && (
+        <div className="border-t border-border p-4">
+          <h4 className="mb-3 text-sm font-medium text-foreground">生成结果</h4>
+          <div className="flex gap-3 overflow-x-auto pb-2">
+            {results.map((r, i) => (
+              <div key={`${r.taskId}-${i}`} className="shrink-0 w-[200px]">
+                <ResultImageCard url={r.url} projectId={projectId} index={i} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Result modal (for remove-bg) */}
       {showResultModal && resultUrl && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
@@ -619,7 +555,6 @@ export default function ImageEditPage() {
             className="relative max-h-[85vh] w-auto max-w-3xl overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
             <div className="flex items-center justify-between border-b border-border px-5 py-3">
               <h3 className="text-sm font-semibold text-foreground">处理结果</h3>
               <button
@@ -629,7 +564,6 @@ export default function ImageEditPage() {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            {/* Image */}
             <div className="relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -644,10 +578,14 @@ export default function ImageEditPage() {
                 </span>
               )}
             </div>
-            {/* Actions */}
             <div className="flex gap-3 border-t border-border px-5 py-3">
               <button
-                onClick={() => downloadImage(resultUrl, `bg-removed-${Date.now()}.png`)}
+                onClick={() => {
+                  const link = document.createElement('a');
+                  link.href = resolveImageUrl(resultUrl);
+                  link.download = `bg-removed-${Date.now()}.png`;
+                  link.click();
+                }}
                 className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-all"
               >
                 <Download className="h-4 w-4" />
@@ -656,14 +594,135 @@ export default function ImageEditPage() {
               <button
                 onClick={() => {
                   setShowResultModal(false);
-                  clearMask();
+                  setImageUrl(resultUrl);
+                  setHasMask(false);
                 }}
                 className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all"
               >
                 <Paintbrush className="h-4 w-4" />
-                继续编辑
+                作为原图继续编辑
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mask painting modal */}
+      {showMaskModal && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/80">
+          {/* Modal header */}
+          <div className="flex items-center justify-between border-b border-border px-4 py-3 bg-card">
+            <div className="flex items-center gap-3">
+              <h3 className="text-sm font-semibold text-foreground">涂抹遮罩</h3>
+              <span className="text-xs text-muted-foreground">
+                {activeTab === 'inpaint' ? '涂抹要替换的区域' : '涂抹要保留的区域'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* Brush size */}
+              <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-muted">
+                <span className="text-xs text-muted-foreground">画笔</span>
+                <input
+                  type="range"
+                  min="5"
+                  max="80"
+                  value={brushSize}
+                  onChange={(e) => setBrushSize(Number(e.target.value))}
+                  className="w-24 accent-primary"
+                />
+                <span className="text-xs text-foreground w-8">{brushSize}px</span>
+              </div>
+              {/* Undo/Redo */}
+              <button
+                onClick={handleUndo}
+                disabled={historyIndex <= 0}
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30 transition-all"
+                title="撤销"
+              >
+                <Undo2 className="h-4 w-4" />
+              </button>
+              <button
+                onClick={handleRedo}
+                disabled={historyIndex >= history.length - 1}
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30 transition-all"
+                title="重做"
+              >
+                <Redo2 className="h-4 w-4" />
+              </button>
+              <button
+                onClick={clearMask}
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+                title="清除涂抹"
+              >
+                <Eraser className="h-4 w-4" />
+              </button>
+              {/* Zoom */}
+              <div className="flex items-center gap-1 px-2">
+                <button
+                  onClick={() => handleZoom(-0.2)}
+                  className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+                >
+                  <ZoomOut className="h-4 w-4" />
+                </button>
+                <span className="w-10 text-center text-xs text-muted-foreground">{Math.round(zoom * 100)}%</span>
+                <button
+                  onClick={() => handleZoom(0.2)}
+                  className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+                >
+                  <ZoomIn className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setZoom(1)}
+                  className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+                  title="重置缩放"
+                >
+                  <Maximize className="h-4 w-4" />
+                </button>
+              </div>
+              {/* Cancel */}
+              <button
+                onClick={cancelMask}
+                className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-all"
+              >
+                <X className="h-4 w-4" />
+                取消
+              </button>
+              {/* Confirm */}
+              <button
+                onClick={confirmMask}
+                className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-all"
+              >
+                <Check className="h-4 w-4" />
+                确认
+              </button>
+            </div>
+          </div>
+
+          {/* Canvas area */}
+          <div className="flex flex-1 items-center justify-center overflow-auto p-4">
+            {modalReady && imageNaturalSize.current && (
+              <div
+                className="relative inline-block shadow-2xl"
+                style={{ transform: `scale(${zoom})`, transformOrigin: 'center' }}
+              >
+                <canvas ref={modalCanvasRef} className="block" />
+                <canvas
+                  ref={modalMaskCanvasRef}
+                  className="absolute left-0 top-0"
+                  style={{ cursor: brushCursor }}
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={draw}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={handleMouseUp}
+                />
+              </div>
+            )}
+            {!modalReady && (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span className="text-sm">加载图片中...</span>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -674,7 +733,7 @@ export default function ImageEditPage() {
     <ToolLayout
       title="图片编辑"
       description="局部重绘 / 去除背景"
-      params={paramsPanel}
+      paramsPanel={paramsPanel}
       canvas={canvas}
     />
   );
