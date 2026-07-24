@@ -110,8 +110,21 @@ def _upload_to_tos(local_path: str, storage_cfg: dict) -> str:
         ),
     )
     key = f"gameart/{uuid.uuid4().hex[:12]}_{os.path.basename(local_path)}"
-    with open(local_path, "rb") as f:
-        s3_client.upload_fileobj(f, storage_cfg["bucket"], key)
+    try:
+        with open(local_path, "rb") as f:
+            s3_client.put_object(
+                Bucket=storage_cfg["bucket"],
+                Key=key,
+                Body=f,
+            )
+    except Exception as e:
+        import traceback
+        detail = traceback.format_exc()
+        # Extract botocore response details if available
+        if hasattr(e, 'response'):
+            resp = e.response
+            detail += f"\n--- Response Metadata ---\n{resp}"
+        raise RuntimeError(f"上传图片到对象存储失败: {e}\n详情:\n{detail}\nendpoint={endpoint}, bucket={storage_cfg['bucket']}, region={storage_cfg['region']}")
     return f"tos://{storage_cfg['bucket']}/{key}"
 
 
