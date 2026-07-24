@@ -6,12 +6,11 @@ import { Sparkles, Loader2, ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
-import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { PromptInput } from '@/components/tools/prompt-input';
 import { GenerationResultActions } from '@/components/tools/generation-result-actions';
 import { resolveImageUrl, projectsApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
-import { computeSize, estimateCost, formatCostDisplay, deriveRatio, findClosestTier } from '@/lib/types';
+import { formatCostDisplay, estimateCost } from '@/lib/types';
 import type { Task } from '@/lib/types';
 
 export default function ImageToImagePage() {
@@ -20,38 +19,13 @@ export default function ImageToImagePage() {
   const [imageUrl, setImageUrl] = useState('');
   const [prompt, setPrompt] = useState('');
   const [strength, setStrength] = useState(0.7);
-  const [ratio, setRatio] = useState('original');
-  const [resolution, setResolution] = useState('original');
   const [results, setResults] = useState<string[]>([]);
-  const [originalDimensions, setOriginalDimensions] = useState<{ w: number; h: number } | null>(null);
-
-  // If image is removed, reset to 'original' so it will use the next image's dimensions
-  useEffect(() => {
-    if (!imageUrl) {
-      setRatio('original');
-      setResolution('original');
-    }
-  }, [imageUrl]);
 
   // Load project style (for potential future use in img2img prompts)
   useEffect(() => {
     if (!projectId) return;
     projectsApi.get(projectId).catch(() => {});
   }, [projectId]);
-
-  // When image changes, load to get natural dimensions
-  useEffect(() => {
-    if (!imageUrl) {
-      setOriginalDimensions(null);
-      return;
-    }
-    const img = new window.Image();
-    img.onload = () => {
-      setOriginalDimensions({ w: img.naturalWidth, h: img.naturalHeight });
-    };
-    img.onerror = () => setOriginalDimensions(null);
-    img.src = resolveImageUrl(imageUrl);
-  }, [imageUrl]);
 
   // Wait for params to load
   if (!params.id) {
@@ -76,30 +50,9 @@ export default function ImageToImagePage() {
   const handleGenerate = async () => {
     if (!imageUrl || !prompt.trim()) return;
     try {
-      // Resolve ratio: 'original' → match to closest preset ratio
-      const actualRatio = ratio === 'original' && originalDimensions
-        ? deriveRatio(originalDimensions.w, originalDimensions.h)
-        : ratio === 'original'
-          ? '1:1'
-          : ratio;
-
-      // Resolve resolution: 'original' → find the preset tier closest to source image pixel count
-      let actualResolution: string;
-      if (resolution === 'original' && originalDimensions) {
-        const sourcePixels = originalDimensions.w * originalDimensions.h;
-        const tier = findClosestTier(sourcePixels);
-        actualResolution = computeSize(actualRatio, tier);
-      } else if (resolution === 'original') {
-        actualResolution = computeSize(actualRatio, '2K');
-      } else {
-        actualResolution = computeSize(actualRatio, resolution);
-      }
-
       await submitTask('image_to_image', {
         image_url: imageUrl,
         prompt,
-        ratio: actualRatio,
-        resolution: actualResolution,
         strength,
       });
       toast.success('任务提交成功');
@@ -136,18 +89,12 @@ export default function ImageToImagePage() {
           <span>大幅修改</span>
         </div>
       </div>
-      <RatioSelector value={ratio} onChange={setRatio} showOriginal originalLabel={originalDimensions ? `${originalDimensions.w}:${originalDimensions.h}` : undefined} />
-      <ResolutionSelector ratio={ratio} value={resolution} onChange={setResolution} showOriginal originalLabel={originalDimensions ? `${originalDimensions.w}×${originalDimensions.h}` : undefined} />
       <button
         onClick={handleGenerate}
         disabled={submitting || !imageUrl || !prompt.trim()}
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-0.5"
       >
-        {submitting ? <><Loader2 className="h-4 w-4 animate-spin" />提交中...</> : <><Sparkles className="h-4 w-4" />开始编辑<span className="ml-1 text-xs opacity-80">≈{formatCostDisplay(
-          resolution === 'original' && originalDimensions
-            ? estimateCost(findClosestTier(originalDimensions.w * originalDimensions.h), 1, 1)
-            : estimateCost(resolution === 'original' ? '2K' : resolution, 1, 1)
-        )}</span></>}
+        {submitting ? <><Loader2 className="h-4 w-4 animate-spin" />提交中...</> : <><Sparkles className="h-4 w-4" />开始编辑<span className="ml-1 text-xs opacity-80">{formatCostDisplay(estimateCost('2K', 1, 1))}</span></>}
       </button>
     </>
   );

@@ -2,6 +2,7 @@
 Image generation service.
 Calls image generation APIs (Seedream, DALL-E, etc.) to generate images.
 """
+import os
 import math
 import httpx
 import base64
@@ -17,6 +18,72 @@ _TIER_PIXELS = {
 
 _MIN_PIXELS = 921600
 _MAX_PIXELS = 16777216
+
+# 本地文件上传目录（与 image_processor.py 保持一致）
+_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
+
+# 文件扩展名 → MIME type 映射
+_EXT_MIME = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".bmp": "image/bmp",
+    ".tiff": "image/tiff",
+    ".tif": "image/tiff",
+    ".gif": "image/gif",
+    ".heic": "image/heic",
+    ".heif": "image/heif",
+}
+
+
+def _resolve_local_path(url: str) -> str | None:
+    """将 /uploads/xxx 相对路径解析为本地文件系统绝对路径。
+    返回 None 表示不是本地路径。
+    """
+    if url.startswith("/uploads/"):
+        return os.path.join(_UPLOAD_DIR, url[len("/uploads/"):])
+    if os.path.isabs(url) and os.path.isfile(url):
+        return url
+    # 相对路径兜底
+    candidate = os.path.join(_UPLOAD_DIR, url)
+    if os.path.isfile(candidate):
+        return candidate
+    return None
+
+
+def _to_base64_uri(file_path: str) -> str:
+    """读取本地图片文件并转换为 base64 data URI。"""
+    ext = os.path.splitext(file_path)[1].lower()
+    mime = _EXT_MIME.get(ext, "image/png")
+    with open(file_path, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode("utf-8")
+    return f"data:{mime};base64,{b64}"
+
+
+def resolve_image_input(image_url: str) -> str:
+    """将 image_url 转换为火山引擎 API 可接受的格式。
+
+    - http/https URL → 原样返回（公网可访问）
+    - data: URI → 原样返回（已是 base64）
+    - 本地路径（/uploads/xxx）→ 读取文件转为 base64 data URI
+    """
+    if not image_url:
+        return image_url
+
+    # 公网 URL 或 base64 data URI，直接使用
+    if image_url.startswith(("http://", "https://", "data:")):
+        return image_url
+
+    # 本地文件路径 → 转 base64
+    local_path = _resolve_local_path(image_url)
+    if local_path and os.path.isfile(local_path):
+        print(f"[Image API] Converting local file to base64: {image_url} -> {local_path}")
+        return _to_base64_uri(local_path)
+
+    # 兜底：无法解析的 URL 原样返回（让 API 报错）
+    print(f"[Image API] Warning: unable to resolve image URL: {image_url}")
+    return image_url
 
 
 def _compute_size(ratio: str, tier: str) -> str:
@@ -56,12 +123,22 @@ def _compute_size(ratio: str, tier: str) -> str:
 
 def _get_model_pixel_limits(model_name: str) -> tuple[int, int]:
     """Get min/max pixel limits based on model version.
-    - seedream-4.0: [921600, 16777216]   (1280x720 ~ 4096x4096)
-    - seedream-4.5 / 5.0-lite: [3686400, 4194304]  (2560x1440 ~ 2048x2048)
+    Model IDs use dashes, e.g. doubao-seedream-5-0-pro-260628
+    - seedream-5.0-pro:  [921600, 4194304]   (1280x720 ~ 2048x2048)
+    - seedream-5.0-lite: [3686400, 16777216] (2560x1440 ~ 4096x4096)
+    - seedream-4.5:      [3686400, 16777216] (2560x1440 ~ 4096x4096)
+    - seedream-4.0:      [921600, 16777216]  (1280x720 ~ 4096x4096)
     """
     name = (model_name or "").lower()
-    if "5.0" in name or "4.5" in name:
-        return 3686400, 4194304
+    # Check 5.0 Pro first (must precede generic 5.0 check)
+    if "5-0-pro" in name or "5.0-pro" in name:
+        return 921600, 4194304
+    # 5.0 Lite
+    if "5-0" in name or "5.0" in name:
+        return 3686400, 16777216
+    # 4.5
+    if "4-5" in name or "4.5" in name:
+        return 3686400, 16777216
     # Default to 4.0 limits (most permissive)
     return 921600, 16777216
 
@@ -132,22 +209,27 @@ async def generate_image(
     Supports text-to-image, image-to-image (image_url), and inpainting (mask_url).
     Returns list of image URLs or base64 data URLs.
     """
-    size = resolve_size(input_params, model.get("model_name", ""))
+    # Add reference image for img2img / inpaint
+    # 本地文件需转换为 base64 data URI，API 无法访问 localhost 路径
+    image_url = input_params.get("image_url")
+    mask_url = input_params.get("mask_url")
 
-    body = {
+    body: dict = {
         "model": model["model_name"],
         "prompt": prompt,
-        "size": size,
         "watermark": False,
     }
 
-    # Add reference image for img2img / inpaint
-    image_url = input_params.get("image_url")
-    mask_url = input_params.get("mask_url")
+    # 图生图 / 局部重绘：有参考图时不传 size，让 API 根据参考图自动决定输出尺寸
+    has_ref_image = bool(image_url)
+    if not has_ref_image:
+        size = resolve_size(input_params, model.get("model_name", ""))
+        body["size"] = size
+
     if image_url:
-        body["image"] = image_url
+        body["image"] = resolve_image_input(image_url)
     if mask_url:
-        body["mask"] = mask_url
+        body["mask"] = resolve_image_input(mask_url)
 
     url = model["api_base_url"].rstrip("/")
     headers = {
@@ -155,7 +237,7 @@ async def generate_image(
         "Content-Type": "application/json",
     }
 
-    print(f"[Image API] Request: model={model['model_name']}, size={size}, "
+    print(f"[Image API] Request: model={model['model_name']}, size={body.get('size', 'auto')}, "
           f"has_image={bool(image_url)}, has_mask={bool(mask_url)}")
 
     async with httpx.AsyncClient(timeout=120.0) as client:
