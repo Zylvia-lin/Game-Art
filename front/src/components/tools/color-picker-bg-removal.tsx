@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { X, Download, Pipette, Undo2, Check, Loader2, Eraser } from "lucide-react";
+import { X, Download, Pipette, Undo2, Check, Loader2, Eraser, Save } from "lucide-react";
 import { resolveImageUrl } from "@/lib/api";
 
 interface ColorPickerBgRemovalProps {
   imageUrl: string;
   onClose: () => void;
   onComplete: (resultUrl: string) => void;
+  onSave?: (resultBlob: Blob) => Promise<void>;
 }
 
 interface PickedColor {
@@ -16,7 +17,7 @@ interface PickedColor {
   b: number;
 }
 
-export function ColorPickerBgRemoval({ imageUrl, onClose, onComplete }: ColorPickerBgRemovalProps) {
+export function ColorPickerBgRemoval({ imageUrl, onClose, onComplete, onSave }: ColorPickerBgRemovalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
@@ -29,6 +30,7 @@ export function ColorPickerBgRemoval({ imageUrl, onClose, onComplete }: ColorPic
   const [imageLoaded, setImageLoaded] = useState(false);
   const [displayScale, setDisplayScale] = useState(1);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
 
   // Load image and draw to canvas
@@ -239,6 +241,22 @@ export function ColorPickerBgRemoval({ imageUrl, onClose, onComplete }: ColorPic
     const url = URL.createObjectURL(blob);
     setIsProcessing(false);
     onComplete(url);
+  };
+
+  const handleSave = async () => {
+    if (!onSave) return;
+    const canvas = previewCanvasRef.current;
+    if (!canvas) return;
+    setIsSaving(true);
+    try {
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, "image/png")
+      );
+      if (!blob) return;
+      await onSave(blob);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const colorToHex = (c: PickedColor) =>
@@ -464,6 +482,25 @@ export function ColorPickerBgRemoval({ imageUrl, onClose, onComplete }: ColorPic
             <Download className="h-4 w-4" />
             下载图片
           </button>
+          {onSave && (
+            <button
+              onClick={handleSave}
+              disabled={pickedColors.length === 0 || isSaving}
+              className="flex items-center gap-2 rounded-lg border border-primary/50 bg-primary/10 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  保存中...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  保存到生成结果
+                </>
+              )}
+            </button>
+          )}
           <button
             onClick={handleConfirm}
             disabled={pickedColors.length === 0 || isProcessing}

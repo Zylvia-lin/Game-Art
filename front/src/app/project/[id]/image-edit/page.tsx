@@ -48,7 +48,7 @@ export default function ImageEditPage() {
   // --- Derived state: inpaint results from completed tasks ---
   const results = useMemo(() => {
     return completedTasks
-      .filter((t) => t.tool_key === 'inpaint')
+      .filter((t) => t.tool_key === 'inpaint' || t.tool_key === 'remove_bg')
       .sort((a, b) => new Date(b.completed_at || 0).getTime() - new Date(a.completed_at || 0).getTime())
       .flatMap((t) => {
         const urls = Array.isArray(t.output_urls) ? t.output_urls : [];
@@ -355,6 +355,28 @@ export default function ImageEditPage() {
     toast.success('背景去除完成');
   };
 
+  const handleSaveToResults = async (resultBlob: Blob) => {
+    try {
+      // 1. Upload the processed image to backend
+      const file = new File([resultBlob], `bg-removed-${Date.now()}.png`, { type: 'image/png' });
+      const uploadRes = await generateApi.upload(file);
+
+      // 2. Create a completed task referencing the uploaded image
+      await generateApi.createCompletedTask({
+        project_id: projectId,
+        tool_key: 'remove_bg',
+        output_url: uploadRes.url,
+        output_name: '去除背景',
+      });
+
+      // 3. Refresh task list to show the new result
+      await refreshTasks();
+      toast.success('已保存到生成结果');
+    } catch (err) {
+      toast.error('保存失败: ' + (err instanceof Error ? err.message : String(err)));
+    }
+  };
+
   // --- Tab switching ---
   const handleTabChange = (tab: TabKey) => {
     setActiveTab(tab);
@@ -550,6 +572,7 @@ export default function ImageEditPage() {
           imageUrl={imageUrl}
           onClose={() => setShowColorPicker(false)}
           onComplete={handleColorPickerComplete}
+          onSave={handleSaveToResults}
         />
       )}
 

@@ -281,6 +281,12 @@ export const generateApi = {
   sceneMapGenerate: (data: Record<string, unknown> & { project_id: string }) =>
     generateApi.submit('scene_map_generate', data),
 
+  createCompletedTask: (data: { project_id: string; tool_key: string; output_url: string; output_name?: string }) =>
+    request<{ status: string; task_id: string }>('/api/generate/task/completed', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
   // File upload
   upload: async (file: File): Promise<{ url: string }> => {
     const formData = new FormData();

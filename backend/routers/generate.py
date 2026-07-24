@@ -50,6 +50,44 @@ class OptimizePromptRequest(BaseModel):
     tool_key: Optional[str] = None
 
 
+class CreateCompletedTaskRequest(BaseModel):
+    project_id: str
+    tool_key: str
+    output_url: str
+    output_name: Optional[str] = None
+
+
+@router.post("/task/completed", status_code=201)
+async def create_completed_task(data: CreateCompletedTaskRequest):
+    """Create a pre-completed task with a single output URL.
+    Used by client-side image processing (e.g. background removal) to save
+    results into the generation history without going through the AI pipeline."""
+    import json as _json
+    from datetime import datetime, timezone
+
+    project = await fetch_one("SELECT id FROM projects WHERE id = $1", data.project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail=f"项目 {data.project_id} 不存在")
+
+    now = datetime.now(timezone.utc)
+    row = await fetch_one(
+        """INSERT INTO tasks (project_id, tool_key, input_params, status, progress,
+                               output_urls, output_names, created_at, updated_at, completed_at)
+           VALUES ($1, $2, $3::jsonb, 'completed', 100,
+                   $4::jsonb, $5::jsonb, $6, $6, $6)
+           RETURNING id""",
+        data.project_id,
+        data.tool_key,
+        _json.dumps({"source": "local_processing"}),
+        _json.dumps([data.output_url]),
+        _json.dumps([data.output_name] if data.output_name else [None]),
+        now,
+    )
+    if not row:
+        raise HTTPException(status_code=500, detail="Failed to create task")
+    return {"status": "completed", "task_id": row["id"], "message": "Task created"}
+
+
 @router.post("/optimize-prompt")
 async def optimize_user_prompt(data: OptimizePromptRequest):
     """On-demand prompt optimization using LLM (DeepSeek etc.).
