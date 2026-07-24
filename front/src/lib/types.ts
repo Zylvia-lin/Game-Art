@@ -298,12 +298,23 @@ function round(n: number): number {
 // ── 图生图"使用原图"相关辅助 ────────────────────
 
 /**
- * 从图片宽高推导最简比例字符串（如 "16:9"）
+ * 从图片宽高推导最简比例字符串，并匹配到最接近的预设比例
+ * 如果原图比例与所有预设比例差异都很大，则返回最接近的那个
  */
 export function deriveRatio(w: number, h: number): string {
-  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
-  const g = gcd(w, h);
-  return `${w / g}:${h / g}`;
+  const actual = w / h;
+  let best = RATIO_OPTIONS[0];
+  let bestDiff = Infinity;
+  for (const opt of RATIO_OPTIONS) {
+    const [ow, oh] = opt.value.split(':').map(Number);
+    const optRatio = ow / oh;
+    const diff = Math.abs(actual - optRatio);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = opt;
+    }
+  }
+  return best.value;
 }
 
 /**

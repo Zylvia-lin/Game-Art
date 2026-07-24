@@ -54,9 +54,21 @@ def _compute_size(ratio: str, tier: str) -> str:
     return f"{width}x{height}"
 
 
-def _clamp_dimensions(w: int, h: int) -> tuple[int, int]:
-    """Clamp dimensions to Volcano Engine Seedream API limits:
-    - Total pixels: [921600, 4194304]
+def _get_model_pixel_limits(model_name: str) -> tuple[int, int]:
+    """Get min/max pixel limits based on model version.
+    - seedream-4.0: [921600, 16777216]   (1280x720 ~ 4096x4096)
+    - seedream-4.5 / 5.0-lite: [3686400, 4194304]  (2560x1440 ~ 2048x2048)
+    """
+    name = (model_name or "").lower()
+    if "5.0" in name or "4.5" in name:
+        return 3686400, 4194304
+    # Default to 4.0 limits (most permissive)
+    return 921600, 16777216
+
+
+def _clamp_dimensions(w: int, h: int, model_name: str = "") -> tuple[int, int]:
+    """Clamp dimensions to Volcano Engine Seedream API limits.
+    - Total pixels: model-dependent [MIN, MAX]
     - Aspect ratio: [1/16, 16]
     - Rounded to multiples of 8
     """
@@ -70,8 +82,8 @@ def _clamp_dimensions(w: int, h: int) -> tuple[int, int]:
     elif ar < 1 / 16:
         rw = max(8, round(rh / 16 / 8) * 8)
 
-    # Clamp total pixels
-    MIN_PX, MAX_PX = 921600, 4194304
+    # Clamp total pixels based on model version
+    MIN_PX, MAX_PX = _get_model_pixel_limits(model_name)
     total = rw * rh
     if total < MIN_PX:
         scale = (MIN_PX / total) ** 0.5
@@ -85,7 +97,7 @@ def _clamp_dimensions(w: int, h: int) -> tuple[int, int]:
     return rw, rh
 
 
-def resolve_size(input_params: dict) -> str:
+def resolve_size(input_params: dict, model_name: str = "") -> str:
     """
     Resolve size string from input params.
     Accepts either:
@@ -100,7 +112,7 @@ def resolve_size(input_params: dict) -> str:
         try:
             w, h = int(parts[0]), int(parts[1])
             if w > 0 and h > 0:
-                cw, ch = _clamp_dimensions(w, h)
+                cw, ch = _clamp_dimensions(w, h, model_name)
                 return f"{cw}x{ch}"
         except ValueError:
             pass
@@ -120,7 +132,7 @@ async def generate_image(
     Supports text-to-image, image-to-image (image_url), and inpainting (mask_url).
     Returns list of image URLs or base64 data URLs.
     """
-    size = resolve_size(input_params)
+    size = resolve_size(input_params, model.get("model_name", ""))
 
     body = {
         "model": model["model_name"],
