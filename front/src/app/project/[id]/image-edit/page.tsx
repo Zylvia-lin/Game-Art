@@ -11,7 +11,7 @@ import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { PromptInput } from '@/components/tools/prompt-input';
 import { resolveImageUrl, toolsApi, downloadImage } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
-import { estimateCost, formatCostDisplay } from '@/lib/types';
+import { estimateCostFromPixels, clampDimensions, formatCostDisplay } from '@/lib/types';
 import { toast } from 'sonner';
 
 type TabKey = 'inpaint' | 'remove-bg';
@@ -28,6 +28,7 @@ export default function ImageEditPage() {
   const [history, setHistory] = useState<ImageData[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [activeTab, setActiveTab] = useState<TabKey>('inpaint');
+  const [originalDimensions, setOriginalDimensions] = useState<{ w: number; h: number } | null>(null);
 
   // Remove-bg tab state
   const [bgColor, setBgColor] = useState('#FFFFFF');
@@ -222,6 +223,15 @@ export default function ImageEditPage() {
     if (imageUrl) loadImage(imageUrl);
   }, [imageUrl, loadImage]);
 
+  // 当图片变化时读取实际分辨率
+  useEffect(() => {
+    if (!imageUrl) { setOriginalDimensions(null); return; }
+    const img = new window.Image();
+    img.onload = () => setOriginalDimensions({ w: img.naturalWidth, h: img.naturalHeight });
+    img.onerror = () => setOriginalDimensions(null);
+    img.src = imageUrl.startsWith('http') ? imageUrl : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${imageUrl}`;
+  }, [imageUrl]);
+
   // Reset mask when switching tabs
   const handleTabChange = (tab: TabKey) => {
     setActiveTab(tab);
@@ -269,6 +279,16 @@ export default function ImageEditPage() {
         }}
         label="原始图片"
       />
+      {originalDimensions && (
+        <div className="text-xs text-muted-foreground">
+          原图分辨率：{originalDimensions.w} × {originalDimensions.h}px
+          {(() => {
+            const clamped = clampDimensions(originalDimensions.w, originalDimensions.h);
+            const changed = clamped.w !== originalDimensions.w || clamped.h !== originalDimensions.h;
+            return changed ? ` → 生成分辨率：${clamped.w} × ${clamped.h}px` : '';
+          })()}
+        </div>
+      )}
 
       {/* Brush size (shared) */}
       <div>
@@ -337,7 +357,7 @@ export default function ImageEditPage() {
               <>
                 <Sparkles className="h-4 w-4" />
                 局部重绘
-                <span className="ml-1 text-xs opacity-80">{formatCostDisplay(estimateCost('2K', 1, 1))}</span>
+                <span className="ml-1 text-xs opacity-80">{formatCostDisplay(originalDimensions ? estimateCostFromPixels(clampDimensions(originalDimensions.w, originalDimensions.h).w * clampDimensions(originalDimensions.w, originalDimensions.h).h, 1, 1) : estimateCostFromPixels(4194304, 1, 1))}</span>
               </>
             )}
           </button>

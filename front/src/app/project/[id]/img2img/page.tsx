@@ -10,7 +10,7 @@ import { PromptInput } from '@/components/tools/prompt-input';
 import { GenerationResultActions } from '@/components/tools/generation-result-actions';
 import { resolveImageUrl, projectsApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
-import { formatCostDisplay, estimateCost } from '@/lib/types';
+import { formatCostDisplay, estimateCostFromPixels, clampDimensions } from '@/lib/types';
 import type { Task } from '@/lib/types';
 
 export default function ImageToImagePage() {
@@ -20,6 +20,16 @@ export default function ImageToImagePage() {
   const [prompt, setPrompt] = useState('');
   const [strength, setStrength] = useState(0.7);
   const [results, setResults] = useState<string[]>([]);
+  const [originalDimensions, setOriginalDimensions] = useState<{ w: number; h: number } | null>(null);
+
+  // 当图片变化时读取实际分辨率
+  useEffect(() => {
+    if (!imageUrl) { setOriginalDimensions(null); return; }
+    const img = new window.Image();
+    img.onload = () => setOriginalDimensions({ w: img.naturalWidth, h: img.naturalHeight });
+    img.onerror = () => setOriginalDimensions(null);
+    img.src = resolveImageUrl(imageUrl);
+  }, [imageUrl]);
 
   // Load project style (for potential future use in img2img prompts)
   useEffect(() => {
@@ -70,6 +80,16 @@ export default function ImageToImagePage() {
         onImageChange={(url) => setImageUrl(url || '')}
         label="参考图片"
       />
+      {originalDimensions && (
+        <div className="text-xs text-muted-foreground">
+          原图分辨率：{originalDimensions.w} × {originalDimensions.h}px
+          {(() => {
+            const clamped = clampDimensions(originalDimensions.w, originalDimensions.h);
+            const changed = clamped.w !== originalDimensions.w || clamped.h !== originalDimensions.h;
+            return changed ? ` → 生成分辨率：${clamped.w} × ${clamped.h}px` : '';
+          })()}
+        </div>
+      )}
       <PromptInput value={prompt} onChange={setPrompt} toolKey="image_to_image" label="编辑描述" placeholder="描述你想要的修改，如：将颜色改为暖色调..." rows={3} />
       <div>
         <label className="mb-1.5 block text-sm font-medium text-foreground">
@@ -94,7 +114,7 @@ export default function ImageToImagePage() {
         disabled={submitting || !imageUrl || !prompt.trim()}
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-0.5"
       >
-        {submitting ? <><Loader2 className="h-4 w-4 animate-spin" />提交中...</> : <><Sparkles className="h-4 w-4" />开始编辑<span className="ml-1 text-xs opacity-80">{formatCostDisplay(estimateCost('2K', 1, 1))}</span></>}
+        {submitting ? <><Loader2 className="h-4 w-4 animate-spin" />提交中...</> : <><Sparkles className="h-4 w-4" />开始编辑<span className="ml-1 text-xs opacity-80">{formatCostDisplay(originalDimensions ? estimateCostFromPixels(clampDimensions(originalDimensions.w, originalDimensions.h).w * clampDimensions(originalDimensions.w, originalDimensions.h).h, 1, 1) : estimateCostFromPixels(4194304, 1, 1))}</span></>}
       </button>
     </>
   );
