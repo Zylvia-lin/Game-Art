@@ -92,7 +92,13 @@ def _upload_to_tos(local_path: str, storage_cfg: dict) -> str:
     import time
     from urllib.parse import quote
 
-    endpoint = storage_cfg["endpoint"]  # e.g. tos-s3-cn-guangzhou.volces.com
+    # Use S3-compatible endpoint as-is (tos-s3-cn-guangzhou.volces.com)
+    # For TOS native endpoint (tos-cn-xxx), convert to S3-compatible
+    raw_endpoint = storage_cfg["endpoint"]
+    if raw_endpoint.startswith("tos-") and not raw_endpoint.startswith("tos-s3-"):
+        endpoint = "tos-s3-" + raw_endpoint[len("tos-"):]
+    else:
+        endpoint = raw_endpoint
     bucket = storage_cfg["bucket"]
     region = storage_cfg["region"]
     ak = storage_cfg["access_key"]
@@ -113,8 +119,7 @@ def _upload_to_tos(local_path: str, storage_cfg: dict) -> str:
         ".gif": "image/gif",
     }.get(ext, "application/octet-stream")
 
-    # Build the URL: use path-style to avoid DNS issues with virtual-hosted
-    # https://{endpoint}/{bucket}/{key}
+    # Path-style URL: https://{endpoint}/{bucket}/{key}
     host = endpoint
     object_path = f"/{bucket}/{key}"
     url = f"https://{host}{object_path}"
@@ -186,7 +191,7 @@ def _upload_to_tos(local_path: str, storage_cfg: dict) -> str:
         "Content-Length": str(len(body)),
     }
 
-    full_url = f"https://{host}/{bucket}/{key}"
+    full_url = url  # already https://{bucket}.{endpoint}/{key}
     resp = httpx.put(full_url, content=body, headers=headers, timeout=30.0)
 
     if resp.status_code != 200:
