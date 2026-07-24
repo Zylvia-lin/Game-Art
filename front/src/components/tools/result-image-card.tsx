@@ -1,8 +1,16 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Download, FolderPlus, Check, Pencil, X, ZoomIn } from "lucide-react";
+import { Download, FolderPlus, Check, Pencil, X, ZoomIn, User, Package, Layout, Image as ImageIcon, Film } from "lucide-react";
 import { resolveImageUrl, assetsApi, downloadImage, generateApi } from "@/lib/api";
+
+const ASSET_TYPES = [
+  { value: "character", label: "角色", icon: User, color: "text-indigo-400" },
+  { value: "prop", label: "道具", icon: Package, color: "text-emerald-400" },
+  { value: "ui", label: "UI", icon: Layout, color: "text-sky-400" },
+  { value: "scene", label: "场景", icon: ImageIcon, color: "text-amber-400" },
+  { value: "animation_frame", label: "动画帧", icon: Film, color: "text-rose-400" },
+] as const;
 
 interface ResultImageCardProps {
   url: string;
@@ -30,6 +38,8 @@ export function ResultImageCard({
   const [renaming, setRenaming] = useState(false);
   const [addingToLibrary, setAddingToLibrary] = useState(false);
   const [added, setAdded] = useState(false);
+  const [addedType, setAddedType] = useState<string | null>(null);
+  const [showAssetTypeDialog, setShowAssetTypeDialog] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
@@ -78,21 +88,28 @@ export function ResultImageCard({
     downloadImage(url, `${displayName}.png`);
   }, [url, displayName]);
 
-  const handleAddToLibrary = async () => {
+  const handleAddToLibrary = async (assetType: string) => {
+    setShowAssetTypeDialog(false);
     setAddingToLibrary(true);
     try {
       await assetsApi.create({
         project_id: projectId,
         name: displayName,
-        type: "image",
+        type: assetType,
         url,
       });
       setAdded(true);
+      setAddedType(assetType);
     } catch (err) {
       console.error("Failed to add to library:", err);
     } finally {
       setAddingToLibrary(false);
     }
+  };
+
+  const handleOpenAssetDialog = () => {
+    if (added) return;
+    setShowAssetTypeDialog(true);
   };
 
   const handleImageClick = () => {
@@ -179,8 +196,8 @@ export function ResultImageCard({
             下载
           </button>
           <button
-            onClick={handleAddToLibrary}
-            disabled={addingToLibrary || added}
+            onClick={handleOpenAssetDialog}
+            disabled={addingToLibrary}
             className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-all ${
               added
                 ? "bg-emerald-500/20 text-emerald-400"
@@ -189,10 +206,53 @@ export function ResultImageCard({
             title="添加到资产库"
           >
             {added ? <Check className="h-3.5 w-3.5" /> : <FolderPlus className="h-3.5 w-3.5" />}
-            {added ? "已添加" : "添加到资产库"}
+            {added ? `已添加到${ASSET_TYPES.find(t => t.value === addedType)?.label || "资产库"}` : "添加到资产库"}
           </button>
         </div>
       </div>
+
+      {/* Asset type selection dialog */}
+      {showAssetTypeDialog && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          onClick={() => setShowAssetTypeDialog(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-foreground">选择资产类型</h3>
+              <button
+                onClick={() => setShowAssetTypeDialog(false)}
+                className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="mb-4 text-xs text-muted-foreground">将「{displayName}」添加到哪种资产类型？</p>
+            <div className="grid grid-cols-2 gap-2">
+              {ASSET_TYPES.map((t) => {
+                const Icon = t.icon;
+                return (
+                  <button
+                    key={t.value}
+                    onClick={() => handleAddToLibrary(t.value)}
+                    disabled={addingToLibrary}
+                    className="flex flex-col items-center gap-2 rounded-xl border border-border bg-muted/50 px-3 py-4 transition-all hover:border-primary/40 hover:bg-muted"
+                  >
+                    <Icon className={`h-6 w-6 ${t.color}`} />
+                    <span className="text-xs font-medium text-foreground">{t.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {addingToLibrary && (
+              <div className="mt-4 text-center text-xs text-muted-foreground">添加中...</div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Full-screen preview modal */}
       {showPreview && (
@@ -232,8 +292,8 @@ export function ResultImageCard({
                 下载
               </button>
               <button
-                onClick={handleAddToLibrary}
-                disabled={addingToLibrary || added}
+                onClick={handleOpenAssetDialog}
+                disabled={addingToLibrary}
                 className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-all ${
                   added
                     ? "bg-emerald-500/20 text-emerald-400"
@@ -242,7 +302,7 @@ export function ResultImageCard({
                 title="添加到资产库"
               >
                 {added ? <Check className="h-3.5 w-3.5" /> : <FolderPlus className="h-3.5 w-3.5" />}
-                {added ? "已添加" : "添加到资产库"}
+                {added ? `已添加到${ASSET_TYPES.find(t => t.value === addedType)?.label || "资产库"}` : "添加到资产库"}
               </button>
             </div>
           </div>
