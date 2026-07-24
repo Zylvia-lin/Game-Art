@@ -51,22 +51,25 @@ export function ResultImageCard({
   const [showPreview, setShowPreview] = useState(false);
   const [previewZoom, setPreviewZoom] = useState(1);
   const [deleting, setDeleting] = useState(false);
-
-  // Persist "added to library" state in localStorage
-  const storageKey = `asset_added:${projectId}:${url}`;
   const [addedType, setAddedType] = useState<string | null>(null);
 
   useEffect(() => {
     if (name) setDisplayName(name);
   }, [name]);
 
-  // Load persisted "added" state from localStorage
+  // Check if this image is already in the asset library (from database)
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(storageKey);
-      if (stored) setAddedType(stored);
-    } catch { /* ignore */ }
-  }, [storageKey]);
+    let cancelled = false;
+    const resolvedUrl = resolveImageUrl(url);
+    assetsApi.checkBatch(projectId, [resolvedUrl]).then((result) => {
+      if (cancelled) return;
+      const entry = result[resolvedUrl];
+      if (entry?.exists && entry.type) {
+        setAddedType(entry.type);
+      }
+    }).catch(() => { /* ignore */ });
+    return () => { cancelled = true; };
+  }, [projectId, url]);
 
   useEffect(() => {
     const img = new Image();
@@ -121,7 +124,6 @@ export function ResultImageCard({
         url,
       });
       setAddedType(assetType);
-      try { localStorage.setItem(storageKey, assetType); } catch { /* ignore */ }
     } catch (err) {
       console.error("Failed to add to library:", err);
     } finally {

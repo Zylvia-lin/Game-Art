@@ -4,7 +4,7 @@ Asset CRUD endpoints.
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
-from database import fetch_one, execute, get_pool
+from database import fetch_one, fetch_all, execute, get_pool
 import json
 
 router = APIRouter(prefix="/api/assets", tags=["assets"])
@@ -130,3 +130,29 @@ async def delete_asset(asset_id: str):
     if "DELETE 0" in result:
         raise HTTPException(status_code=404, detail="Asset not found")
     return {"success": True}
+
+
+class CheckBatchRequest(BaseModel):
+    project_id: str
+    urls: list[str]
+
+
+@router.post("/check-batch")
+async def check_batch(req: CheckBatchRequest):
+    """检查一组 URL 是否已添加到资产库，返回 { url: { exists, type, asset_id } }"""
+    if not req.urls:
+        return {}
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT url, type, id FROM assets WHERE project_id = $1 AND url = ANY($2)",
+            req.project_id, req.urls,
+        )
+    result = {}
+    for row in rows:
+        result[row["url"]] = {
+            "exists": True,
+            "type": row["type"],
+            "asset_id": str(row["id"]),
+        }
+    return result

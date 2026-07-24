@@ -228,6 +228,12 @@ export const assetsApi = {
     if (!isValidId(id)) throw new Error('Invalid asset ID');
     return request<void>(`/api/assets/${id}`, { method: 'DELETE' });
   },
+
+  checkBatch: (projectId: string, urls: string[]) =>
+    request<Record<string, { exists: boolean; type?: string; asset_id?: string }>>('/api/assets/check-batch', {
+      method: 'POST',
+      body: JSON.stringify({ project_id: projectId, urls }),
+    }),
 };
 
 // ============================================
