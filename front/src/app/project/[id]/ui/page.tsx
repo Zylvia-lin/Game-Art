@@ -9,6 +9,7 @@ import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { PromptInput } from '@/components/tools/prompt-input';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import type { Task } from '@/lib/types';
+import { estimateCostFromResolution, formatCostDisplay } from '@/lib/types';
 
 interface UIComponent {
   id: string;
@@ -174,6 +175,9 @@ export default function UIPage() {
       >
         {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
         {submitting ? '生成中...' : '生成'}
+        {!submitting && (
+          <span className="ml-1 text-xs opacity-80">≈{formatCostDisplay(estimateCostFromResolution(resolution, 1, sourceImage ? 1 : 0))}</span>
+        )}
       </button>
     </div>
   );

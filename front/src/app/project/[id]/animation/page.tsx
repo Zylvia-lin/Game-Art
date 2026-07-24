@@ -11,6 +11,7 @@ import { useTaskQueue } from '@/hooks/use-task-queue';
 import { resolveImageUrl, toolsApi } from '@/lib/api';
 import { PromptEditor } from '@/components/tools/prompt-editor';
 import type { Task } from '@/lib/types';
+import { estimateCostFromResolution, formatCostDisplay } from '@/lib/types';
 
 const SUB_TOOLS = [
   { key: 'text', label: '动作生成', desc: '描述动作，AI生成动画帧序列' },
@@ -250,6 +251,7 @@ export default function AnimationPage() {
             <>
               <Play size={18} />
               生成动画帧
+              <span className="ml-1 text-xs opacity-80">≈{formatCostDisplay(estimateCostFromResolution(resolution, 1))}</span>
             </>
           )}
         </button>

@@ -12,7 +12,7 @@ import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors'
 import { PromptInput } from '@/components/tools/prompt-input';
 import { resolveImageUrl, toolsApi, downloadImage } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
-import { computeSize } from '@/lib/types';
+import { computeSize, estimateCost, formatCostDisplay } from '@/lib/types';
 import { toast } from 'sonner';
 
 type TabKey = 'inpaint' | 'remove-bg';
@@ -344,6 +344,7 @@ export default function ImageEditPage() {
               <>
                 <Sparkles className="h-4 w-4" />
                 局部重绘
+                <span className="ml-1 text-xs opacity-80">≈{formatCostDisplay(estimateCost(resolution, 1, 1))}</span>
               </>
             )}
           </button>

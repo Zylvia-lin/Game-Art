@@ -8,7 +8,7 @@ import { StyleSelector, RatioSelector, ResolutionSelector } from '@/components/t
 import { PromptInput } from '@/components/tools/prompt-input';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { projectsApi, generateApi, resolveImageUrl, downloadImage, type Task } from '@/lib/api';
-import { computeSize } from '@/lib/types';
+import { computeSize, estimateCost, formatCostDisplay } from '@/lib/types';
 
 interface ImageItem {
   id: string;
@@ -160,6 +160,9 @@ export default function TextToImagePage() {
           <>
             <Sparkles className="h-4 w-4" />
             生成
+            <span className="ml-1 text-xs opacity-80">
+              ≈{formatCostDisplay(estimateCost(resolution, 1, 0))}
+            </span>
           </>
         )}
       </button>

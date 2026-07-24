@@ -12,6 +12,7 @@ import { GenerationResultActions } from '@/components/tools/generation-result-ac
 import { resolveImageUrl, projectsApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import type { Task } from '@/lib/types';
+import { estimateCostFromResolution, formatCostDisplay } from '@/lib/types';
 
 const SUB_TOOLS = [
   { key: 'tpose', label: '基础角色生成', desc: '生成标准站姿角色' },
@@ -218,7 +219,7 @@ export default function CharacterPage() {
         disabled={submitting || (subTool === 'directions' || subTool === 'part_split' ? !sourceImage : !prompt.trim()) || (subTool === 'tpose' && pose === 'custom' && !customPose.trim())}
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-0.5"
       >
-        {submitting ? <><Loader2 className="h-4 w-4 animate-spin" />提交中...</> : <><Sparkles className="h-4 w-4" />生成角色</>}
+        {submitting ? <><Loader2 className="h-4 w-4 animate-spin" />提交中...</> : <><Sparkles className="h-4 w-4" />生成角色<span className="ml-1 text-xs opacity-80">≈{formatCostDisplay(estimateCostFromResolution(resolution, 1, sourceImage ? 1 : 0))}</span></>}
       </button>
     </>
   );

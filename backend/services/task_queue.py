@@ -223,6 +223,15 @@ async def _process_single_task(task: dict):
                 json.dumps(result["output_urls"]),
             )
 
+        # Write billing record (independent of task/image lifecycle)
+        await _create_billing_record(
+            task["project_id"],
+            task["id"],
+            task["tool_key"],
+            task["input_params"],
+            result["output_urls"],
+        )
+
     except Exception as e:
         print(f"Task {task['id']} failed: {e}")
         await update_task_status(
@@ -262,3 +271,174 @@ def stop_processing():
     if _process_task and not _process_task.done():
         _process_task.cancel()
         _process_task = None
+
+
+# ── Billing ──────────────────────────────────────────────
+# Seedream pricing:
+#   Input image:  0.02 / image
+#   Output ≤ 2.36M px:  0.30 / image
+#   Output > 2.36M px:  0.60 / image
+PIXEL_THRESHOLD = 2_360_000
+INPUT_PRICE = 0.02
+OUTPUT_PRICE_LOW = 0.30
+OUTPUT_PRICE_HIGH = 0.60
+
+# Tool name mapping for billing display
+_TOOL_NAMES = {
+    "text_to_image": "文生图",
+    "image_to_image": "图生图",
+    "inpaint": "局部重绘",
+    "character_tpose": "角色T-Pose",
+    "character_three_view": "角色三视图",
+    "character_directions": "角色多方向",
+    "character_part_split": "角色拆分",
+    "prop_original": "道具原创",
+    "prop_variant": "道具变体",
+    "ui_layout_generate": "UI布局生成",
+    "ui_component_place": "UI组件放置",
+    "ui_component_split": "UI组件拆分",
+    "scene_map_generate": "场景地图",
+    "scene_map_split": "场景地图拆分",
+    "animation_action": "动作生成",
+}
+
+
+def _calculate_cost(input_params: dict, output_urls: list) -> dict:
+    """Calculate billing cost based on input/output and resolution."""
+    # Count input images (img2img, inpaint have input images)
+    input_image_count = 0
+    if input_params.get("source_image"):
+        input_image_count += 1
+    if input_params.get("mask_image"):
+        input_image_count += 1
+    if input_params.get("reference_image"):
+        input_image_count += 1
+
+    # Count output images
+    output_count = len(output_urls) if output_urls else 0
+    if output_count == 0:
+        return {"input_cost": 0, "output_cost": 0, "total_cost": 0, "total_pixels": 0}
+
+    # Parse resolution to get total pixels
+    resolution = input_params.get("resolution", "")
+    total_pixels = 0
+    if resolution and "x" in resolution:
+        try:
+            parts = resolution.lower().split("x")
+            total_pixels = int(parts[0]) * int(parts[1])
+        except (ValueError, IndexError):
+            pass
+
+    # Determine output price per image
+    if total_pixels > 0 and total_pixels <= PIXEL_THRESHOLD:
+        output_price = OUTPUT_PRICE_LOW
+    elif total_pixels > PIXEL_THRESHOLD:
+        output_price = OUTPUT_PRICE_HIGH
+    else:
+        # Fallback: no resolution info, assume high tier
+        output_price = OUTPUT_PRICE_HIGH
+
+    input_cost = round(input_image_count * INPUT_PRICE, 4)
+    output_cost = round(output_count * output_price, 4)
+    total_cost = round(input_cost + output_cost, 4)
+
+    return {
+        "input_cost": input_cost,
+        "output_cost": output_cost,
+        "total_cost": total_cost,
+        "total_pixels": total_pixels,
+    }
+
+
+async def _create_billing_record(
+    project_id: str,
+    task_id: str,
+    tool_key: str,
+    input_params: dict,
+    output_urls: list,
+):
+    """Create a billing record after task completion."""
+    cost = _calculate_cost(input_params, output_urls)
+    tool_name = _TOOL_NAMES.get(tool_key, tool_key)
+    resolution = input_params.get("resolution", "")
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """INSERT INTO billing_records
+               (project_id, task_id, tool_key, tool_name, image_count,
+                resolution, total_pixels, input_cost, output_cost, total_cost, status)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'completed')""",
+            project_id, task_id, tool_key, tool_name,
+            len(output_urls) if output_urls else 0,
+            resolution, cost["total_pixels"],
+            cost["input_cost"], cost["output_cost"], cost["total_cost"],
+        )
+
+
+async def get_billing_stats(period: str = "daily", days: int = 30) -> list:
+    """Get billing statistics grouped by date.
+    period: 'daily' or 'monthly'
+    """
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        if period == "monthly":
+            rows = await conn.fetch(
+                """SELECT
+                    TO_CHAR(created_at, 'YYYY-MM') as period,
+                    COUNT(*) as task_count,
+                    SUM(image_count) as total_images,
+                    SUM(input_cost) as total_input_cost,
+                    SUM(output_cost) as total_output_cost,
+                    SUM(total_cost) as total_cost
+                   FROM billing_records
+                   WHERE created_at >= NOW() - INTERVAL '%s days'
+                   GROUP BY TO_CHAR(created_at, 'YYYY-MM')
+                   ORDER BY period DESC""",
+                days,
+            )
+        else:
+            rows = await conn.fetch(
+                """SELECT
+                    TO_CHAR(created_at, 'YYYY-MM-DD') as period,
+                    COUNT(*) as task_count,
+                    SUM(image_count) as total_images,
+                    SUM(input_cost) as total_input_cost,
+                    SUM(output_cost) as total_output_cost,
+                    SUM(total_cost) as total_cost
+                   FROM billing_records
+                   WHERE created_at >= NOW() - INTERVAL '%s days'
+                   GROUP BY TO_CHAR(created_at, 'YYYY-MM-DD')
+                   ORDER BY period DESC""",
+                days,
+            )
+    return [dict(r) for r in rows]
+
+
+async def get_billing_summary() -> dict:
+    """Get overall billing summary."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """SELECT
+                COUNT(*) as total_tasks,
+                COALESCE(SUM(image_count), 0) as total_images,
+                COALESCE(SUM(input_cost), 0) as total_input_cost,
+                COALESCE(SUM(output_cost), 0) as total_output_cost,
+                COALESCE(SUM(total_cost), 0) as total_cost
+               FROM billing_records"""
+        )
+    return dict(row) if row else {}
+
+
+async def get_billing_records(limit: int = 50, offset: int = 0) -> list:
+    """Get billing records with pagination."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """SELECT * FROM billing_records
+               ORDER BY created_at DESC
+               LIMIT $1 OFFSET $2""",
+            limit, offset,
+        )
+    return [dict(r) for r in rows]

@@ -237,6 +237,65 @@ export function getDefaultResolution(_ratio: string) {
   return '2K';
 }
 
+// ── 定价计算 ──────────────────────────────────
+// Seedream 官方定价：
+//   输入图：0.02 元/张
+//   输出图 ≤ 236万像素：0.30 元/张
+//   输出图 > 236万像素：0.60 元/张
+const PIXEL_THRESHOLD = 2_360_000;
+const INPUT_PRICE = 0.02;
+const OUTPUT_PRICE_LOW = 0.30;
+const OUTPUT_PRICE_HIGH = 0.60;
+
+/**
+ * 根据分辨率档位计算输出图单价
+ */
+export function getOutputPrice(tier: string): number {
+  const tierConfig = RESOLUTION_TIERS.find((t) => t.value === tier);
+  const pixels = tierConfig?.targetPixels ?? 3686400;
+  return pixels <= PIXEL_THRESHOLD ? OUTPUT_PRICE_LOW : OUTPUT_PRICE_HIGH;
+}
+
+/**
+ * 计算单次生成的预估费用
+ * @param tier 分辨率档位
+ * @param outputCount 输出图数量（默认 1）
+ * @param inputCount 输入图数量（默认 0）
+ */
+export function estimateCost(tier: string, outputCount = 1, inputCount = 0): number {
+  const outputPrice = getOutputPrice(tier);
+  return round(inputCount * INPUT_PRICE + outputCount * outputPrice);
+}
+
+/**
+ * 根据分辨率字符串（如 "1920x1080"）计算预估费用
+ */
+export function estimateCostFromResolution(resolution: string, outputCount = 1, inputCount = 0): number {
+  const outputPrice = getOutputPriceFromResolution(resolution);
+  return round(inputCount * INPUT_PRICE + outputCount * outputPrice);
+}
+
+/**
+ * 格式化费用为显示字符串
+ */
+export function formatCostDisplay(cost: number): string {
+  return `¥${cost.toFixed(2)}`;
+}
+
+/**
+ * 根据分辨率字符串（如 "1920x1080"）计算输出图单价
+ */
+export function getOutputPriceFromResolution(resolution: string): number {
+  if (!resolution || !resolution.includes('x')) return OUTPUT_PRICE_HIGH;
+  const parts = resolution.toLowerCase().split('x');
+  const pixels = parseInt(parts[0]) * parseInt(parts[1]);
+  return pixels <= PIXEL_THRESHOLD ? OUTPUT_PRICE_LOW : OUTPUT_PRICE_HIGH;
+}
+
+function round(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 // 工具名称映射
 export const TOOL_NAME_MAP: Record<string, string> = {
   text2img: '文生图',

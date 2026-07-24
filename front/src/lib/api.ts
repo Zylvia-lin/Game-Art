@@ -362,3 +362,17 @@ export function downloadImage(url: string, filename?: string): void {
   link.click();
   document.body.removeChild(link);
 }
+
+// ============================================
+// Billing API
+// ============================================
+
+export const billingApi = {
+  getSummary: () => request(`${API_BASE}/api/billing/summary`),
+
+  getStats: (period: 'daily' | 'monthly' = 'daily', days = 30) =>
+    request(`${API_BASE}/api/billing/stats?period=${period}&days=${days}`),
+
+  getRecords: (limit = 50, offset = 0) =>
+    request(`${API_BASE}/api/billing/records?limit=${limit}&offset=${offset}`),
+};

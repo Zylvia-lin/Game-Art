@@ -10,6 +10,7 @@ import { PromptInput } from '@/components/tools/prompt-input';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { PromptEditor } from '@/components/tools/prompt-editor';
 import type { Task } from '@/lib/types';
+import { estimateCostFromResolution, formatCostDisplay } from '@/lib/types';
 
 const SUB_TOOLS = [
   { key: 'map_generate', label: '地图生成', desc: '根据描述生成游戏地图' },
@@ -165,6 +166,7 @@ export default function ScenePage() {
           <>
             <Sparkles className="h-4 w-4" />
             生成场景
+            <span className="ml-1 text-xs opacity-80">≈{formatCostDisplay(estimateCostFromResolution(resolution, 1, sourceImage ? 1 : 0))}</span>
           </>
         )}
       </button>

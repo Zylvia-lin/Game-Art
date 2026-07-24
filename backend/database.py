@@ -89,11 +89,30 @@ CREATE TABLE IF NOT EXISTS tasks (
     completed_at TIMESTAMPTZ
 );
 
+-- 账单记录（独立于 tasks，删除图片不影响账单）
+CREATE TABLE IF NOT EXISTS billing_records (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+    task_id UUID,
+    tool_key VARCHAR(100) NOT NULL,
+    tool_name VARCHAR(255),
+    image_count INTEGER NOT NULL DEFAULT 1,
+    resolution VARCHAR(50),
+    total_pixels BIGINT,
+    input_cost NUMERIC(10,4) DEFAULT 0,
+    output_cost NUMERIC(10,4) DEFAULT 0,
+    total_cost NUMERIC(10,4) DEFAULT 0,
+    status VARCHAR(50) DEFAULT 'completed',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- 索引
 CREATE INDEX IF NOT EXISTS idx_assets_project_id ON assets(project_id);
 CREATE INDEX IF NOT EXISTS idx_generations_project_id ON generations(project_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+CREATE INDEX IF NOT EXISTS idx_billing_project_id ON billing_records(project_id);
+CREATE INDEX IF NOT EXISTS idx_billing_created_at ON billing_records(created_at);
 """
 
 

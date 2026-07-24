@@ -17,6 +17,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Gamepad2,
+  BarChart3,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TOOLBOX_ITEMS, CREATION_ITEMS } from '@/lib/types';
@@ -45,6 +46,7 @@ export function Sidebar({ projectId }: SidebarProps) {
   const settingsItems = [
     { key: 'models', label: '模型配置', href: '/settings/models', icon: Settings },
     { key: 'prompts', label: '提示词管理', href: '/settings/prompts', icon: Type },
+    { key: 'billing', label: '账单统计', href: '/settings/billing', icon: BarChart3 },
   ];
 
   return (
