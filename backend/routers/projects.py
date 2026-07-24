@@ -205,9 +205,10 @@ async def list_project_assets(project_id: str, asset_type: Optional[str] = Query
         seen_task_ids.add(str(t["id"]))
 
         for i, url in enumerate(raw_urls):
-            if not isinstance(url, str):
+            if not isinstance(url, str) or not url:
                 continue
-            if not url.startswith("/uploads/"):
+            # Skip data: URLs (base64 inline images) — they can't be resolved by the backend
+            if url.startswith("data:"):
                 continue
             name = raw_names[i] if i < len(raw_names) and raw_names[i] else f"{t['tool_key']}_{i+1}"
             result.append({
@@ -227,7 +228,7 @@ async def list_project_assets(project_id: str, asset_type: Optional[str] = Query
     gen_rows = await fetch_all(
         """SELECT * FROM generations
            WHERE project_id = $1 AND status = 'completed'
-           AND output_urls IS NOT NULL AND output_urls != '[]'::jsonb
+           AND output_urls IS NOT NULL
            ORDER BY created_at DESC""",
         project_id,
     )
@@ -255,9 +256,10 @@ async def list_project_assets(project_id: str, asset_type: Optional[str] = Query
             raw_names = []
 
         for i, url in enumerate(raw_urls):
-            if not isinstance(url, str):
+            if not isinstance(url, str) or not url:
                 continue
-            if not url.startswith("/uploads/"):
+            # Skip data: URLs (base64 inline images) — they can't be resolved by the backend
+            if url.startswith("data:"):
                 continue
             name = raw_names[i] if i < len(raw_names) and raw_names[i] else f"{g['tool_key']}_{i+1}"
             result.append({

@@ -60,8 +60,8 @@ export default function TextToImagePage() {
         const names = t.output_names || [];
         for (let i = 0; i < t.output_urls!.length; i++) {
           const rawUrl = t.output_urls![i];
-          // Skip non-local URLs (external API URLs or base64 data URLs that weren't downloaded)
-          if (!rawUrl.startsWith("/uploads/")) continue;
+          // Skip empty or invalid URLs
+          if (!rawUrl || typeof rawUrl !== 'string') continue;
           items.push({
             id: `${t.id}-${i}`,
             url: resolveImageUrl(rawUrl),
