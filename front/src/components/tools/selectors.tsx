@@ -30,9 +30,10 @@ interface RatioSelectorProps {
   value: string;
   onChange: (value: string) => void;
   showOriginal?: boolean;
+  originalLabel?: string;
 }
 
-export function RatioSelector({ value, onChange, showOriginal = false }: RatioSelectorProps) {
+export function RatioSelector({ value, onChange, showOriginal = false, originalLabel }: RatioSelectorProps) {
   const options = showOriginal
     ? [{ value: 'original', label: '默认' }, ...IMAGE_RATIOS]
     : IMAGE_RATIOS;
@@ -41,22 +42,30 @@ export function RatioSelector({ value, onChange, showOriginal = false }: RatioSe
     <div>
       <label className="mb-1.5 block text-sm font-medium text-foreground">比例</label>
       <div className="grid grid-cols-3 gap-1.5">
-        {options.map((r) => (
-          <button
-            key={r.value}
-            onClick={() => onChange(r.value)}
-            className={`rounded-lg border px-2 py-1.5 text-xs font-medium transition-all ${
-              value === r.value
-                ? 'border-primary bg-primary/10 text-primary'
-                : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground'
-            }`}
-          >
-            {r.label}
-          </button>
-        ))}
+        {options.map((r) => {
+          const selected = value === r.value;
+          return (
+            <button
+              key={r.value}
+              onClick={() => onChange(r.value)}
+              className={`rounded-lg border px-2 py-1.5 text-xs font-medium transition-all ${
+                selected
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground'
+              }`}
+            >
+              {r.label}
+              {r.value === 'original' && originalLabel && (
+                <span className="block text-[10px] opacity-70 mt-0.5">{originalLabel}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
       {showOriginal && value === 'original' && (
-        <p className="mt-1 text-xs text-muted-foreground/70">使用原图比例</p>
+        <p className="mt-1 text-xs text-muted-foreground/70">
+          {originalLabel ? `使用原图比例 (${originalLabel})` : '使用原图比例（请先上传图片）'}
+        </p>
       )}
     </div>
   );
@@ -67,9 +76,10 @@ interface ResolutionSelectorProps {
   value: string;
   onChange: (value: string) => void;
   showOriginal?: boolean;
+  originalLabel?: string;
 }
 
-export function ResolutionSelector({ ratio, value, onChange, showOriginal = false }: ResolutionSelectorProps) {
+export function ResolutionSelector({ ratio, value, onChange, showOriginal = false, originalLabel }: ResolutionSelectorProps) {
   const options = showOriginal
     ? [{ value: 'original', label: '默认' }]
     : [];
@@ -92,7 +102,7 @@ export function ResolutionSelector({ ratio, value, onChange, showOriginal = fals
             >
               <div className="text-sm font-medium">{t.label}</div>
               <div className={`text-xs ${selected ? 'text-primary/70' : 'text-muted-foreground/60'}`}>
-                使用原图分辨率
+                {originalLabel ? `${originalLabel}px` : '待上传图片'}
               </div>
             </button>
           );

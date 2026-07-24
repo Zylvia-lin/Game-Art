@@ -24,7 +24,6 @@ export default function ImageToImagePage() {
   const [resolution, setResolution] = useState('original');
   const [results, setResults] = useState<string[]>([]);
   const [originalDimensions, setOriginalDimensions] = useState<{ w: number; h: number } | null>(null);
-  const showOriginal = !!originalDimensions;
 
   // If image is removed, reset to 'original' so it will use the next image's dimensions
   useEffect(() => {
@@ -136,8 +135,8 @@ export default function ImageToImagePage() {
           <span>大幅修改</span>
         </div>
       </div>
-      <RatioSelector value={ratio} onChange={setRatio} showOriginal={showOriginal} />
-      <ResolutionSelector ratio={ratio} value={resolution} onChange={setResolution} showOriginal={showOriginal} />
+      <RatioSelector value={ratio} onChange={setRatio} showOriginal originalLabel={originalDimensions ? `${originalDimensions.w}:${originalDimensions.h}` : undefined} />
+      <ResolutionSelector ratio={ratio} value={resolution} onChange={setResolution} showOriginal originalLabel={originalDimensions ? `${originalDimensions.w}×${originalDimensions.h}` : undefined} />
       <button
         onClick={handleGenerate}
         disabled={submitting || !imageUrl || !prompt.trim()}

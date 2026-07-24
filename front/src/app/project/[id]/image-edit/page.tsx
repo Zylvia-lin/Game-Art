@@ -12,7 +12,7 @@ import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors'
 import { PromptInput } from '@/components/tools/prompt-input';
 import { resolveImageUrl, toolsApi, downloadImage } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
-import { computeSize, estimateCost, formatCostDisplay } from '@/lib/types';
+import { computeSize, estimateCost, estimateCostFromPixels, formatCostDisplay, deriveRatio, clampDimensions } from '@/lib/types';
 import { toast } from 'sonner';
 
 type TabKey = 'inpaint' | 'remove-bg';
@@ -25,12 +25,13 @@ export default function ImageEditPage() {
   const [imageUrl, setImageUrl] = useState('');
   const [prompt, setPrompt] = useState('');
   const [brushSize, setBrushSize] = useState(20);
-  const [ratio, setRatio] = useState('1:1');
-  const [resolution, setResolution] = useState('2K');
+  const [ratio, setRatio] = useState('original');
+  const [resolution, setResolution] = useState('original');
   const [isDrawing, setIsDrawing] = useState(false);
   const [history, setHistory] = useState<ImageData[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [activeTab, setActiveTab] = useState<TabKey>('inpaint');
+  const [originalDimensions, setOriginalDimensions] = useState<{ w: number; h: number } | null>(null);
 
   // Remove-bg tab state
   const [bgColor, setBgColor] = useState('#FFFFFF');
@@ -60,6 +61,7 @@ export default function ImageEditPage() {
     const img = new window.Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
+      setOriginalDimensions({ w: img.naturalWidth, h: img.naturalHeight });
       const canvas = canvasRef.current;
       const maskCanvas = maskCanvasRef.current;
       if (!canvas || !maskCanvas) return;
@@ -187,12 +189,28 @@ export default function ImageEditPage() {
     if (!imageUrl || !prompt.trim()) return;
     try {
       const maskUrl = await getMaskUrl();
+      // Resolve ratio: 'original' → derive from source image dimensions
+      const actualRatio = ratio === 'original' && originalDimensions
+        ? deriveRatio(originalDimensions.w, originalDimensions.h)
+        : ratio === 'original'
+          ? '1:1'
+          : ratio;
+      // Resolve resolution: 'original' → use source image dimensions (clamped to API range)
+      let actualResolution: string;
+      if (resolution === 'original' && originalDimensions) {
+        const clamped = clampDimensions(originalDimensions.w, originalDimensions.h);
+        actualResolution = `${clamped.w}x${clamped.h}`;
+      } else if (resolution === 'original') {
+        actualResolution = computeSize(actualRatio, '2K');
+      } else {
+        actualResolution = computeSize(actualRatio, resolution);
+      }
       await submitTask('inpaint', {
         image_url: imageUrl,
         mask_url: maskUrl,
         prompt,
-        ratio,
-        resolution: computeSize(ratio, resolution),
+        ratio: actualRatio,
+        resolution: actualResolution,
       });
       toast.success('局部重绘任务已提交');
     } catch (err) {
@@ -225,6 +243,7 @@ export default function ImageEditPage() {
 
   useEffect(() => {
     if (imageUrl) loadImage(imageUrl);
+    else setOriginalDimensions(null);
   }, [imageUrl, loadImage]);
 
   // Reset mask when switching tabs
@@ -328,8 +347,8 @@ export default function ImageEditPage() {
             placeholder="描述遮罩区域要替换成什么，如：替换为金色皇冠..."
             rows={3}
           />
-          <RatioSelector value={ratio} onChange={setRatio} />
-          <ResolutionSelector ratio={ratio} value={resolution} onChange={setResolution} />
+          <RatioSelector value={ratio} onChange={setRatio} showOriginal originalLabel={originalDimensions ? `${originalDimensions.w}:${originalDimensions.h}` : undefined} />
+          <ResolutionSelector ratio={ratio} value={resolution} onChange={setResolution} showOriginal originalLabel={originalDimensions ? `${originalDimensions.w}×${originalDimensions.h}` : undefined} />
           <button
             onClick={handleInpaint}
             disabled={submitting || !imageUrl || !prompt.trim()}
@@ -344,7 +363,7 @@ export default function ImageEditPage() {
               <>
                 <Sparkles className="h-4 w-4" />
                 局部重绘
-                <span className="ml-1 text-xs opacity-80">≈{formatCostDisplay(estimateCost(resolution, 1, 1))}</span>
+                <span className="ml-1 text-xs opacity-80">≈{formatCostDisplay(resolution === 'original' && originalDimensions ? estimateCostFromPixels(originalDimensions.w * originalDimensions.h, 1, 1) : estimateCost(resolution, 1, 1))}</span>
               </>
             )}
           </button>

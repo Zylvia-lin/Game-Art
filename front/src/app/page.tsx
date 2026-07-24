@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Plus, FolderOpen, Trash2, MoreHorizontal, Gamepad2, Settings, Type } from 'lucide-react';
+import { Plus, FolderOpen, Trash2, MoreHorizontal, Gamepad2, Settings, Type, Pencil, Check, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { Sidebar } from '@/components/layout/sidebar';
 import { projectsApi } from '@/lib/api';
 import type { Project } from '@/lib/types';
@@ -183,6 +184,7 @@ export default function HomePage() {
                     key={project.id}
                     project={project}
                     onDelete={() => handleDelete(project.id)}
+                    onRename={(newName) => setProjects(prev => prev.map(p => p.id === project.id ? { ...p, name: newName } : p))}
                   />
                 ))}
               </div>
@@ -194,8 +196,45 @@ export default function HomePage() {
   );
 }
 
-function ProjectCard({ project, onDelete }: { project: Project; onDelete: () => void }) {
+function ProjectCard({ project, onDelete, onRename }: { project: Project; onDelete: () => void; onRename: (newName: string) => void }) {
   const [showMenu, setShowMenu] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleStartRename = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setShowMenu(false);
+    setEditName(project.name);
+    setEditing(true);
+  };
+
+  const handleCancelRename = () => {
+    setEditing(false);
+    setEditName('');
+  };
+
+  const handleSaveRename = async () => {
+    const name = editName.trim();
+    if (!name || name === project.name) {
+      handleCancelRename();
+      return;
+    }
+    setSaving(true);
+    try {
+      await projectsApi.update(project.id, { name });
+      onRename(name);
+      setEditing(false);
+      setEditName('');
+      toast.success('重命名成功');
+    } catch (err) {
+      console.error('Failed to rename project:', err);
+      toast.error('重命名失败');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="group relative rounded-xl border border-border bg-card p-5 shadow-sm hover:shadow-lg hover:border-primary/30 hover:-translate-y-0.5 transition-all duration-200">
@@ -203,9 +242,40 @@ function ProjectCard({ project, onDelete }: { project: Project; onDelete: () => 
         <div className="mb-3 flex h-24 items-center justify-center rounded-lg bg-accent/50">
           <Gamepad2 className="h-10 w-10 text-muted-foreground/50" />
         </div>
-        <h3 className="mb-1 text-base font-semibold text-foreground group-hover:text-primary transition-colors">
-          {project.name}
-        </h3>
+        {editing ? (
+          <div className="mb-1 flex items-center gap-1.5" onClick={(e) => e.preventDefault()}>
+            <input
+              autoFocus
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSaveRename();
+                if (e.key === 'Escape') handleCancelRename();
+              }}
+              disabled={saving}
+              className="min-w-0 flex-1 rounded-md border border-primary bg-input px-2 py-1 text-sm font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              placeholder="项目名称"
+            />
+            <button
+              onClick={handleSaveRename}
+              disabled={saving}
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              <Check className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={handleCancelRename}
+              disabled={saving}
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          <h3 className="mb-1 text-base font-semibold text-foreground group-hover:text-primary transition-colors">
+            {project.name}
+          </h3>
+        )}
         {project.description && (
           <p className="mb-2 text-sm text-muted-foreground line-clamp-2">{project.description}</p>
         )}
@@ -227,6 +297,13 @@ function ProjectCard({ project, onDelete }: { project: Project; onDelete: () => 
         </button>
         {showMenu && (
           <div className="absolute right-0 top-8 z-10 w-32 rounded-lg border border-border bg-card p-1 shadow-xl">
+            <button
+              onClick={handleStartRename}
+              className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm text-foreground hover:bg-accent transition-colors"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              重命名
+            </button>
             <button
               onClick={(e) => {
                 e.preventDefault();
