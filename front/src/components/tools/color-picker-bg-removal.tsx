@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { X, Download, Pipette, Undo2, Check, Loader2, Eraser, Save } from "lucide-react";
+import { X, Download, Pipette, Undo2, Check, Loader2, Eraser, Save, ArrowLeft } from "lucide-react";
 import { resolveImageUrl, API_BASE } from "@/lib/api";
 
 interface ColorPickerBgRemovalProps {
@@ -281,6 +281,14 @@ export function ColorPickerBgRemoval({ imageUrl, onClose, onComplete, onSave }: 
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3 bg-card">
         <div className="flex items-center gap-3">
+          <button
+            onClick={onClose}
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            返回
+          </button>
+          <div className="w-px h-5 bg-border" />
           <Eraser className="h-5 w-5 text-primary" />
           <h3 className="text-sm font-semibold text-foreground">去除背景 — 颜色拾取</h3>
           <span className="text-xs text-muted-foreground">
