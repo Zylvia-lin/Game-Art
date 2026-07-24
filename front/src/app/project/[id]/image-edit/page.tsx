@@ -10,7 +10,6 @@ import { clampDimensions, estimateCostFromPixels, formatCostDisplay } from '@/li
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { PromptInput } from '@/components/tools/prompt-input';
 import { ResultImageCard } from '@/components/tools/result-image-card';
-import { ColorPickerBgRemoval } from '@/components/tools/color-picker-bg-removal';
 import { toast } from 'sonner';
 import { ToolLayout } from '@/components/tools/tool-layout';
 
@@ -27,7 +26,6 @@ export default function ImageEditPage() {
   const [imageUrl, setImageUrl] = useState('');
   const [originalDimensions, setOriginalDimensions] = useState<{ w: number; h: number } | null>(null);
   const [prompt, setPrompt] = useState('');
-  const [showColorPicker, setShowColorPicker] = useState(false);
 
   // Mask modal state
   const [showMaskModal, setShowMaskModal] = useState(false);
@@ -343,40 +341,6 @@ export default function ImageEditPage() {
     }
   };
 
-  const handleRemoveBg = () => {
-    if (!imageUrl) return;
-    setShowColorPicker(true);
-  };
-
-  const handleColorPickerComplete = (resultUrl: string) => {
-    setShowColorPicker(false);
-    // Set the result as the new image for further editing
-    setImageUrl(resultUrl);
-    toast.success('背景去除完成');
-  };
-
-  const handleSaveToResults = async (resultBlob: Blob) => {
-    try {
-      // 1. Upload the processed image to backend
-      const file = new File([resultBlob], `bg-removed-${Date.now()}.png`, { type: 'image/png' });
-      const uploadRes = await generateApi.upload(file);
-
-      // 2. Create a completed task referencing the uploaded image
-      await generateApi.createCompletedTask({
-        project_id: projectId,
-        tool_key: 'remove_bg',
-        output_url: uploadRes.url,
-        output_name: '去除背景',
-      });
-
-      // 3. Refresh task list to show the new result
-      await refreshTasks();
-      toast.success('已保存到生成结果');
-    } catch (err) {
-      toast.error('保存失败: ' + (err instanceof Error ? err.message : String(err)));
-    }
-  };
-
   // --- Tab switching ---
   const handleTabChange = (tab: TabKey) => {
     setActiveTab(tab);
@@ -420,17 +384,6 @@ export default function ImageEditPage() {
         >
           <Paintbrush className="h-3.5 w-3.5" />
           局部重绘
-        </button>
-        <button
-          onClick={() => setActiveTab('remove-bg')}
-          className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-all ${
-            activeTab === 'remove-bg'
-              ? 'bg-background text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <Eraser className="h-3.5 w-3.5" />
-          去除背景
         </button>
       </div>
 
@@ -503,24 +456,6 @@ export default function ImageEditPage() {
         </>
       )}
 
-      {/* Remove-bg-specific */}
-      {activeTab === 'remove-bg' && (
-        <>
-          <div className="rounded-lg border border-border bg-muted/30 p-3">
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              选择背景类型后点击"去除背景"按钮，AI 将自动识别并移除背景，生成透明 PNG。支持通用场景、人像、商品三种模式。
-            </p>
-          </div>
-          <button
-            onClick={handleRemoveBg}
-            disabled={genCooldown || !imageUrl}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-0.5"
-          >
-            <Wand2 className="h-4 w-4" />
-            去除背景
-          </button>
-        </>
-      )}
     </>
   );
 
@@ -556,16 +491,6 @@ export default function ImageEditPage() {
             </p>
           </div>
         </div>
-      )}
-
-      {/* Color picker background removal modal */}
-      {showColorPicker && imageUrl && (
-        <ColorPickerBgRemoval
-          imageUrl={imageUrl}
-          onClose={() => setShowColorPicker(false)}
-          onComplete={handleColorPickerComplete}
-          onSave={handleSaveToResults}
-        />
       )}
 
       {/* Mask painting modal */}

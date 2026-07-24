@@ -194,6 +194,7 @@ export const TOOLBOX_ITEMS = [
   { key: 'text2img', label: '文生图', href: '/text2img', icon: 'Image' },
   { key: 'img2img', label: '图生图', href: '/img2img', icon: 'ImagePlus' },
   { key: 'image-edit', label: '图片编辑', href: '/image-edit', icon: 'Paintbrush' },
+  { key: 'remove-bg', label: '去除背景', href: '/remove-bg', icon: 'Eraser' },
 ] as const;
 
 // 工具页面 key 映射
@@ -224,6 +225,7 @@ export const TOOL_NAV_ITEMS = [
   { label: '文生图', href: '/text2img' },
   { label: '图生图', href: '/img2img' },
   { label: '图片编辑', href: '/image-edit' },
+  { label: '去除背景', href: '/remove-bg' },
 ] as const;
 
 // 兼容别名
