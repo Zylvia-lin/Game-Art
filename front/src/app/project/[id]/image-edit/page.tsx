@@ -2,14 +2,15 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
-import { Eraser, Paintbrush, Sparkles, Loader2, Undo2, Redo2, Download, X, Check, Wand2, ZoomIn, ZoomOut, Maximize, Brush } from 'lucide-react';
+import { Eraser, Paintbrush, Sparkles, Loader2, Undo2, Redo2, X, Check, Wand2, ZoomIn, ZoomOut, Maximize, Brush } from 'lucide-react';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { useButtonCooldown } from '@/hooks/use-button-cooldown';
-import { resolveImageUrl, toolsApi, generateApi } from '@/lib/api';
+import { resolveImageUrl, generateApi } from '@/lib/api';
 import { clampDimensions, estimateCostFromPixels, formatCostDisplay } from '@/lib/types';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { PromptInput } from '@/components/tools/prompt-input';
 import { ResultImageCard } from '@/components/tools/result-image-card';
+import { ColorPickerBgRemoval } from '@/components/tools/color-picker-bg-removal';
 import { toast } from 'sonner';
 import { ToolLayout } from '@/components/tools/tool-layout';
 
@@ -26,8 +27,7 @@ export default function ImageEditPage() {
   const [imageUrl, setImageUrl] = useState('');
   const [originalDimensions, setOriginalDimensions] = useState<{ w: number; h: number } | null>(null);
   const [prompt, setPrompt] = useState('');
-  const [bgColor, setBgColor] = useState('#FFFFFF');
-  const [processing, setProcessing] = useState(false);
+  const [showColorPicker, setShowColorPicker] = useState(false);
 
   // Mask modal state
   const [showMaskModal, setShowMaskModal] = useState(false);
@@ -39,11 +39,6 @@ export default function ImageEditPage() {
   const [hasMask, setHasMask] = useState(false);
   const [modalReady, setModalReady] = useState(false);
   const [savedMaskUrl, setSavedMaskUrl] = useState('');
-
-  // Result modal state (for remove-bg)
-  const [showResultModal, setShowResultModal] = useState(false);
-  const [resultUrl, setResultUrl] = useState('');
-  const [resultDimensions, setResultDimensions] = useState<{ w: number; h: number } | null>(null);
 
   // Refs
   const modalCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -348,32 +343,16 @@ export default function ImageEditPage() {
     }
   };
 
-  const handleRemoveBg = async () => {
+  const handleRemoveBg = () => {
     if (!imageUrl) return;
-    genTrigger();
-    setProcessing(true);
-    setResultUrl('');
-    setResultDimensions(null);
-    try {
-      let res: { url: string };
-      if (hasMask && savedMaskUrl) {
-        res = await toolsApi.removeBgMask({
-          image_url: imageUrl,
-          mask_url: savedMaskUrl,
-          bg_color: bgColor,
-        });
-      } else {
-        res = await toolsApi.removeBackground({ image_url: imageUrl });
-      }
-      setResultUrl(res.url);
-      setShowResultModal(true);
-      toast.success('背景去除完成');
-    } catch (err) {
-      console.error('Remove bg failed:', err);
-      toast.error('处理失败，请重试');
-    } finally {
-      setProcessing(false);
-    }
+    setShowColorPicker(true);
+  };
+
+  const handleColorPickerComplete = (resultUrl: string) => {
+    setShowColorPicker(false);
+    // Set the result as the new image for further editing
+    setImageUrl(resultUrl);
+    toast.success('背景去除完成');
   };
 
   // --- Tab switching ---
@@ -381,9 +360,6 @@ export default function ImageEditPage() {
     setActiveTab(tab);
     setHasMask(false);
     setSavedMaskUrl('');
-    setResultUrl('');
-    setResultDimensions(null);
-    setShowResultModal(false);
   };
 
   const handleZoom = (delta: number) => {
@@ -509,54 +485,17 @@ export default function ImageEditPage() {
       {activeTab === 'remove-bg' && (
         <>
           <div className="rounded-lg border border-border bg-muted/30 p-3">
-            <p className="mb-2 text-xs text-muted-foreground">
-              {hasMask
-                ? '已涂抹保留区域，未涂抹区域将替换为背景色。'
-                : '不涂抹则去除整个图片背景。涂抹可指定保留区域。'}
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              点击"去除背景"后，在弹出的面板中点击图片上的背景区域拾取颜色，可多次拾取不同颜色。拖动容差滑块控制匹配范围，实时预览透明效果。
             </p>
-            <label className="mb-2 block text-sm font-medium text-foreground">
-              背景颜色
-            </label>
-            <div className="flex items-center gap-3">
-              <input
-                type="color"
-                value={bgColor}
-                onChange={(e) => setBgColor(e.target.value)}
-                className="h-10 w-16 cursor-pointer rounded-lg border border-border bg-background"
-              />
-              <div className="flex gap-1.5">
-                {['#FFFFFF', '#000000', '#00FF00', '#FF0000', '#0000FF'].map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setBgColor(c)}
-                    className="h-8 w-8 rounded-lg border-2 transition-all"
-                    style={{
-                      backgroundColor: c,
-                      borderColor: bgColor === c ? 'var(--primary)' : 'var(--border)',
-                    }}
-                  >
-                    {bgColor === c && <Check className="h-4 w-4 mx-auto text-primary-foreground mix-blend-difference" />}
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
           <button
             onClick={handleRemoveBg}
-            disabled={processing || genCooldown || !imageUrl}
+            disabled={genCooldown || !imageUrl}
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-0.5"
           >
-            {processing ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                处理中...
-              </>
-            ) : (
-              <>
-                <Wand2 className="h-4 w-4" />
-                去除背景
-              </>
-            )}
+            <Wand2 className="h-4 w-4" />
+            去除背景
           </button>
         </>
       )}
@@ -605,67 +544,13 @@ export default function ImageEditPage() {
         </div>
       )}
 
-      {/* Result modal (for remove-bg) */}
-      {showResultModal && resultUrl && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-          onClick={() => setShowResultModal(false)}
-        >
-          <div
-            className="relative max-h-[85vh] w-auto max-w-3xl overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-border px-5 py-3">
-              <h3 className="text-sm font-semibold text-foreground">处理结果</h3>
-              <button
-                onClick={() => setShowResultModal(false)}
-                className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="relative">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={resolveImageUrl(resultUrl)}
-                alt="处理结果"
-                className="max-h-[60vh] w-full object-contain"
-                onLoad={(e) => setResultDimensions({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
-              />
-              {resultDimensions && (
-                <span className="absolute top-2 right-2 rounded-md bg-black/70 px-2 py-1 text-xs font-medium text-white backdrop-blur-sm">
-                  {resultDimensions.w} × {resultDimensions.h}px
-                </span>
-              )}
-            </div>
-            <div className="flex gap-3 border-t border-border px-5 py-3">
-              <button
-                onClick={() => {
-                  const link = document.createElement('a');
-                  link.href = resolveImageUrl(resultUrl);
-                  link.download = `bg-removed-${Date.now()}.png`;
-                  link.click();
-                }}
-                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-all"
-              >
-                <Download className="h-4 w-4" />
-                下载图片
-              </button>
-              <button
-                onClick={() => {
-                  setShowResultModal(false);
-                  setImageUrl(resultUrl);
-                  setHasMask(false);
-                  setSavedMaskUrl('');
-                }}
-                className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all"
-              >
-                <Paintbrush className="h-4 w-4" />
-                作为原图继续编辑
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Color picker background removal modal */}
+      {showColorPicker && imageUrl && (
+        <ColorPickerBgRemoval
+          imageUrl={imageUrl}
+          onClose={() => setShowColorPicker(false)}
+          onComplete={handleColorPickerComplete}
+        />
       )}
 
       {/* Mask painting modal */}

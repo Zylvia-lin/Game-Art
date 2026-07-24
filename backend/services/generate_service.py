@@ -80,12 +80,8 @@ async def execute_generation(
 
     await report(70)
 
-    # Post-process: only for creation tools — download + remove white background
-    if tool_key in _BG_REMOVAL_TOOLS:
-        processed_urls = await _post_process_images(output_urls)
-    else:
-        # Toolbox tools: download images locally but skip background removal
-        processed_urls = await _download_images_only(output_urls)
+    # Download generated images to local storage (no auto background removal)
+    processed_urls = await _download_images_only(output_urls)
 
     await report(90)
 
