@@ -421,17 +421,6 @@ export default function ImageEditPage() {
           <Paintbrush className="h-3.5 w-3.5" />
           局部重绘
         </button>
-        <button
-          onClick={() => handleTabChange('remove-bg')}
-          className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-all ${
-            activeTab === 'remove-bg'
-              ? 'bg-background text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <Eraser className="h-3.5 w-3.5" />
-          去除背景
-        </button>
       </div>
 
       {/* Image source */}
@@ -548,19 +537,11 @@ export default function ImageEditPage() {
         <div className="flex flex-1 items-center justify-center">
           <div className="text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-accent">
-              {activeTab === 'inpaint' ? (
-                <Paintbrush className="h-8 w-8 text-muted-foreground" />
-              ) : (
-                <Eraser className="h-8 w-8 text-muted-foreground" />
-              )}
+              <Paintbrush className="h-8 w-8 text-muted-foreground" />
             </div>
-            <h3 className="mb-1 text-sm font-medium text-foreground">
-              {activeTab === 'inpaint' ? '局部重绘' : '去除背景'}
-            </h3>
+            <h3 className="mb-1 text-sm font-medium text-foreground">局部重绘</h3>
             <p className="text-sm text-muted-foreground">
-              {activeTab === 'inpaint'
-                ? '上传图片，点击"涂抹遮罩"选择要修改的区域'
-                : '上传图片，涂抹可指定保留区域'}
+              上传图片，点击"涂抹遮罩"选择要修改的区域
             </p>
           </div>
         </div>
@@ -584,7 +565,7 @@ export default function ImageEditPage() {
             <div className="flex items-center gap-3">
               <h3 className="text-sm font-semibold text-foreground">涂抹遮罩</h3>
               <span className="text-xs text-muted-foreground">
-                {activeTab === 'inpaint' ? '涂抹要替换的区域' : '涂抹要保留的区域'}
+                涂抹要替换的区域
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -706,7 +687,7 @@ export default function ImageEditPage() {
   return (
     <ToolLayout
       title="图片编辑"
-      description="局部重绘 / 去除背景"
+      description="局部重绘"
       paramsPanel={paramsPanel}
       canvas={canvas}
     />
