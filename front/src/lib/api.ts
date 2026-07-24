@@ -77,8 +77,14 @@ export interface Task {
 // Helper
 // ============================================
 
-function isValidId(id: unknown): id is string {
-  return typeof id === 'string' && id.length > 0;
+function isValidId(id: unknown): boolean {
+  if (typeof id === 'string') return id.length > 0;
+  if (typeof id === 'number') return Number.isFinite(id);
+  return false;
+}
+
+function toIdString(id: unknown): string {
+  return String(id);
 }
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
@@ -218,15 +224,18 @@ export const assetsApi = {
       body: JSON.stringify(data),
     }),
 
-  update: (id: string, data: { name?: string; type?: string; finalized?: boolean }) =>
-    request<Asset>(`/api/assets/${id}`, {
+  update: (id: string | number, data: { name?: string; type?: string; finalized?: boolean }) => {
+    const idStr = toIdString(id);
+    return request<Asset>(`/api/assets/${idStr}`, {
       method: 'PUT',
       body: JSON.stringify(data),
-    }),
+    });
+  },
 
-  delete: (id: string) => {
-    if (!isValidId(id)) throw new Error('Invalid asset ID');
-    return request<void>(`/api/assets/${id}`, { method: 'DELETE' });
+  delete: (id: string | number) => {
+    const idStr = toIdString(id);
+    if (!isValidId(idStr)) throw new Error('Invalid asset ID');
+    return request<void>(`/api/assets/${idStr}`, { method: 'DELETE' });
   },
 
   checkBatch: (projectId: string, urls: string[]) =>
