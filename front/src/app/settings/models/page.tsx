@@ -295,7 +295,7 @@ export default function ModelsSettingsPage() {
               </button>
               <button
                 onClick={handleSave}
-                disabled={saving || !form.name || !form.api_base_url || !form.api_key || !form.model_name}
+                disabled={saving || !form.name || !form.api_base_url || !form.api_key || (form.type !== 'tool' && !form.model_name)}
                 className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary py-2 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 transition-all"
               >
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : '保存'}
