@@ -85,14 +85,22 @@ class AIRemoveBgRequest(BaseModel):
 def _upload_to_tos(local_path: str, storage_cfg: dict) -> str:
     """
     Upload a local file to TOS (S3-compatible) and return tos:// URL.
-    TOS S3 endpoint only supports virtual-hosted style + SigV4.
-    Endpoint format: tos-s3-cn-guangzhou.volces.com
-    boto3 virtual-hosted style auto-builds: https://{bucket}.tos-s3-{region}.volces.com
+    TOS virtual-hosted style requires the non-s3 endpoint format:
+      tos-s3-cn-guangzhou.volces.com → tos-cn-guangzhou.volces.com
+    so that boto3 builds host: bucket.tos-cn-guangzhou.volces.com (matches TOS PutObject docs).
     """
     from botocore.config import Config as BotoConfig
+
+    # Strip 's3-' from endpoint: tos-s3-cn-guangzhou → tos-cn-guangzhou
+    raw_endpoint = storage_cfg["endpoint"]
+    if "tos-s3-" in raw_endpoint:
+        endpoint = raw_endpoint.replace("tos-s3-", "tos-")
+    else:
+        endpoint = raw_endpoint
+
     s3_client = boto3.client(
         "s3",
-        endpoint_url=f"https://{storage_cfg['endpoint']}",
+        endpoint_url=f"https://{endpoint}",
         aws_access_key_id=storage_cfg["access_key"],
         aws_secret_access_key=storage_cfg["secret_key"],
         region_name=storage_cfg["region"],
