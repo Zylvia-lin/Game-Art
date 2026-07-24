@@ -141,7 +141,7 @@ async def ai_remove_bg_endpoint(data: AIRemoveBgRequest):
     # Resolve local file path
     image_url = data.image_url
     if image_url.startswith("/uploads/"):
-        local_path = os.path.join(settings.upload_dir, image_url.replace("/uploads/", ""))
+        local_path = os.path.join(settings.UPLOAD_DIR, image_url.replace("/uploads/", ""))
     elif image_url.startswith("http"):
         raise HTTPException(
             status_code=400,
