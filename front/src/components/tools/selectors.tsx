@@ -128,6 +128,11 @@ export function ResolutionSelector({ ratio, value, onChange, showOriginal = fals
           );
         })}
       </div>
+      {showOriginal && value === 'original' && (
+        <p className="mt-1 text-xs text-muted-foreground/70">
+          {originalLabel ? `使用原图分辨率 (${originalLabel}px)` : '使用原图分辨率（请先上传图片）'}
+        </p>
+      )}
     </div>
   );
 }
