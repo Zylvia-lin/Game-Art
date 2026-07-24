@@ -15,7 +15,7 @@ SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS model_configs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL,
-    type VARCHAR(50) NOT NULL CHECK (type IN ('text', 'image', 'bg_remove')),
+    type VARCHAR(50) NOT NULL CHECK (type IN ('text', 'image', 'tool')),
     provider VARCHAR(100),
     api_base_url TEXT,
     api_key TEXT,
@@ -25,12 +25,12 @@ CREATE TABLE IF NOT EXISTS model_configs (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 如果表已存在，更新 CHECK 约束以支持 bg_remove 类型
+-- 如果表已存在，更新 CHECK 约束以支持 tool 类型
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE table_name = 'model_configs' AND constraint_name = 'model_configs_type_check') THEN
         ALTER TABLE model_configs DROP CONSTRAINT model_configs_type_check;
-        ALTER TABLE model_configs ADD CONSTRAINT model_configs_type_check CHECK (type IN ('text', 'image', 'bg_remove'));
+        ALTER TABLE model_configs ADD CONSTRAINT model_configs_type_check CHECK (type IN ('text', 'image', 'tool'));
     END IF;
 END $$;
 

@@ -87,8 +87,13 @@ async def ai_remove_bg_endpoint(data: AIRemoveBgRequest):
     """
     # Load API key from model_configs (type = 'tool' - 火山工具模型)
     config = await fetch_one(
-        "SELECT * FROM model_configs WHERE type = 'tool' AND is_active = true LIMIT 1"
+        "SELECT * FROM model_configs WHERE type = 'tool' AND is_default = true LIMIT 1"
     )
+    if not config:
+        # Fallback: any tool config
+        config = await fetch_one(
+            "SELECT * FROM model_configs WHERE type = 'tool' LIMIT 1"
+        )
     if not config:
         raise HTTPException(
             status_code=400,
@@ -104,7 +109,7 @@ async def ai_remove_bg_endpoint(data: AIRemoveBgRequest):
     if not api_key:
         raise HTTPException(
             status_code=400,
-            detail="bg_remove model config has no api_key. Please set it in Model Settings."
+            detail="工具模型配置缺少 api_key。请在模型设置中配置火山引擎 API Key。"
         )
 
     # Resolve image URL to absolute if relative

@@ -25,10 +25,6 @@ const PROVIDER_CONFIG = {
     luma: { name: 'Luma AI', apiUrl: 'https://api.lumalabs.ai/v1', defaultModel: 'dream-machine' },
     custom: { name: '自定义', apiUrl: '', defaultModel: '' },
   },
-  bg_remove: {
-    volcengine: { name: '火山引擎', apiUrl: 'https://mediakit.cn-beijing.volces.com/api/v1/tools-sync/remove-image-background', defaultModel: '' },
-    custom: { name: '自定义', apiUrl: '', defaultModel: '' },
-  },
   tool: {
     volcengine: { name: '火山引擎', apiUrl: 'https://mediakit.cn-beijing.volces.com', defaultModel: '' },
     custom: { name: '自定义', apiUrl: '', defaultModel: '' },
@@ -115,7 +111,7 @@ export default function ModelsSettingsPage() {
     setSaving(true);
     try {
       const data: ModelConfigCreate = {
-        type: form.type as 'text' | 'image',
+        type: form.type as 'text' | 'image' | 'tool',
         name: form.name,
         provider: form.provider,
         api_base_url: form.api_base_url,
@@ -177,7 +173,7 @@ export default function ModelsSettingsPage() {
 
   const textConfigs = configs.filter((c) => c.type === 'text');
   const imageConfigs = configs.filter((c) => c.type === 'image');
-  const bgRemoveConfigs = configs.filter((c) => c.type === 'bg_remove');
+  const toolConfigs = configs.filter((c) => c.type === 'tool');
 
   return (
     <div className="mx-auto max-w-4xl p-6">
@@ -213,7 +209,7 @@ export default function ModelsSettingsPage() {
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-foreground">模型类型</label>
                 <div className="flex gap-2">
-                  {(['text', 'image', 'bg_remove'] as const).map((t) => (
+                  {(['text', 'image', 'tool'] as const).map((t) => (
                     <button
                       key={t}
                       onClick={() => handleTypeChange(t)}
@@ -221,7 +217,7 @@ export default function ModelsSettingsPage() {
                         form.type === t ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-primary/50'
                       }`}
                     >
-                      {t === 'text' ? '文本模型' : t === 'image' ? '图片模型' : t === 'bg_remove' ? '去背景' : t}
+                      {t === 'text' ? '文本模型' : t === 'image' ? '图片模型' : '工具'}
                     </button>
                   ))}
                 </div>
@@ -399,14 +395,14 @@ export default function ModelsSettingsPage() {
         )}
       </div>
 
-      {bgRemoveConfigs.length > 0 && (
+      {toolConfigs.length > 0 && (
         <div>
           <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-foreground">
             <Eraser className="h-5 w-5 text-primary" />
-            去背景模型
+            工具模型
           </h2>
           <div className="space-y-3">
-            {bgRemoveConfigs.map((config) => (
+            {toolConfigs.map((config) => (
               <div key={config.id} className="flex items-center justify-between rounded-xl border border-border bg-card p-4 hover:border-primary/30 transition-all">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">

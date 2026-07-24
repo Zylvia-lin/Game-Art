@@ -354,7 +354,7 @@ export const toolsApi = {
       body: JSON.stringify(data),
     }),
   removeBackgroundAI: (data: { image_url: string; scene?: string }) =>
-    request<{ url: string; width: number; height: number }>('/api/tools/remove-bg-ai', {
+    request<{ url: string; width: number; height: number }>('/api/tools/ai-remove-bg', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
