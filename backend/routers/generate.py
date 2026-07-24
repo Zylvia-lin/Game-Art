@@ -203,6 +203,4 @@ async def rename_output(task_id: str, req: RenameOutputRequest):
         json.dumps(names),
         task_id,
     )
-    return {"success": True}
-    )
-    return {"success": True, "name": names[index]}
+    return {"success": True, "name": names[req.index]}
