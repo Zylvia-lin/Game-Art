@@ -33,6 +33,13 @@ export function useTaskQueue({ projectId, onTaskComplete, onTaskError }: UseTask
   useEffect(() => { onCompleteRef.current = onTaskComplete; }, [onTaskComplete]);
   useEffect(() => { onErrorRef.current = onTaskError; }, [onTaskError]);
 
+  // Track which task IDs have already been notified (prevents duplicates in StrictMode)
+  const notifiedTaskIds = useRef<Set<string>>(new Set());
+
+  // Always-current snapshot of tasks (avoids stale closure in polling)
+  const tasksRef = useRef<Task[]>([]);
+  useEffect(() => { tasksRef.current = tasks; }, [tasks]);
+
   // Initial load: fetch existing tasks for this project
   const refreshTasks = useCallback(async () => {
     if (!projectId) return;
@@ -55,27 +62,39 @@ export function useTaskQueue({ projectId, onTaskComplete, onTaskError }: UseTask
     const pollTaskStatus = async () => {
       try {
         const updatedTasks = await generateApi.getProjectTasks(projectId);
+        // Detect status transitions BEFORE setTasks (side-effect-free updater)
+        const transitions: { task: Task; kind: 'completed' | 'failed' }[] = [];
+        for (const updated of updatedTasks) {
+          const prev = tasksRef.current.find(t => t.id === updated.id);
+          if (!prev || prev.status === updated.status) continue;
+          if (updated.status === 'completed') {
+            if (!notifiedTaskIds.current.has(updated.id)) {
+              notifiedTaskIds.current.add(updated.id);
+              transitions.push({ task: updated, kind: 'completed' });
+            }
+          } else if (updated.status === 'failed') {
+            if (!notifiedTaskIds.current.has(updated.id)) {
+              notifiedTaskIds.current.add(updated.id);
+              transitions.push({ task: updated, kind: 'failed' });
+            }
+          }
+        }
+        // Fire callbacks outside of setTasks
+        for (const { task, kind } of transitions) {
+          if (kind === 'completed') onCompleteRef.current?.(task);
+          else onErrorRef.current?.(task);
+        }
         setTasks(prev => {
           const taskMap = new Map(updatedTasks.map(t => [t.id, t]));
           const merged = prev.map(t => {
             const updated = taskMap.get(t.id);
             if (!updated) return t;
-            // Check for status transitions
-            if (prev.find(pt => pt.id === t.id)?.status !== updated.status) {
-              if (updated.status === 'completed') {
-                onCompleteRef.current?.(updated);
-              } else if (updated.status === 'failed') {
-                onErrorRef.current?.(updated);
-              }
-            }
             return updated;
           });
-
           // Add any new tasks from server that we don't have locally
           for (const t of updatedTasks) {
             if (!merged.find(m => m.id === t.id)) merged.push(t);
           }
-
           return merged;
         });
       } catch (error) {

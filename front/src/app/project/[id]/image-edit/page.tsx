@@ -33,6 +33,7 @@ export default function ImageEditPage() {
   // Remove-bg tab state
   const [bgColor, setBgColor] = useState('#FFFFFF');
   const [resultUrl, setResultUrl] = useState('');
+  const [resultDimensions, setResultDimensions] = useState<{ w: number; h: number } | null>(null);
   const [processing, setProcessing] = useState(false);
 
   const { submitting, submitTask } = useTaskQueue({ projectId });
@@ -202,7 +203,7 @@ export default function ImageEditPage() {
     if (!imageUrl) return;
     setProcessing(true);
     setResultUrl('');
-    try {
+    setResultDimensions(null);
       const maskUrl = await getMaskUrl();
       const res = await toolsApi.removeBgMask({
         image_url: imageUrl,
@@ -237,6 +238,7 @@ export default function ImageEditPage() {
     setActiveTab(tab);
     clearMask();
     setResultUrl('');
+    setResultDimensions(null);
   };
 
   const brushCursor = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='${brushSize * 2}' height='${brushSize * 2}'%3E%3Ccircle cx='${brushSize}' cy='${brushSize}' r='${brushSize - 1}' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E") ${brushSize} ${brushSize}, crosshair`;
@@ -445,13 +447,19 @@ export default function ImageEditPage() {
       ) : resultUrl ? (
         /* Remove-bg result display */
         <div className="flex w-full max-w-2xl flex-col items-center gap-4">
-          <div className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="relative overflow-hidden rounded-xl border border-border bg-card">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={resolveImageUrl(resultUrl)}
               alt="处理结果"
               className="max-h-[500px] w-full object-contain"
+              onLoad={(e) => setResultDimensions({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
             />
+            {resultDimensions && (
+              <span className="absolute top-2 right-2 rounded-md bg-black/70 px-2 py-1 text-xs font-medium text-white backdrop-blur-sm">
+                {resultDimensions.w} × {resultDimensions.h}px
+              </span>
+            )}
           </div>
           <div className="flex gap-3">
             <button
@@ -464,6 +472,7 @@ export default function ImageEditPage() {
             <button
               onClick={() => {
                 setResultUrl('');
+                setResultDimensions(null);
                 clearMask();
               }}
               className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
