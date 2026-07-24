@@ -25,6 +25,30 @@ const UPLOAD_CATEGORIES = [
   { value: 'image', label: '其他图片' },
 ] as const;
 
+// Map generated image tool_key to display label
+const TOOL_KEY_LABELS: Record<string, string> = {
+  text_to_image: '文生图',
+  image_to_image: '图生图',
+  inpaint: '局部重绘',
+  character_tpose: '角色T-pose',
+  character_directions: '多方向',
+  character_three_view: '三视图',
+  character_part_split: '部件拆分',
+  animation_text: '动作生成',
+  animation_frame_extract: '帧提取',
+  prop_generate: '道具生成',
+  prop_variant: '变体衍生',
+  ui_layout_generate: 'UI布局',
+  ui_component_place: '组件摆放',
+  ui_component_split: 'UI拆分',
+  scene_map_generate: '地图生成',
+  scene_map_split: '地图拆分',
+};
+
+function getAssetTypeLabel(type: string): string {
+  return ASSET_TYPES.find((t) => t.value === type)?.label || TOOL_KEY_LABELS[type] || type;
+}
+
 export default function AssetsPage() {
   const params = useParams();
   const projectId = params.id;
@@ -342,7 +366,7 @@ export default function AssetsPage() {
                 <div className="border-t border-border p-2">
                   <p className="truncate text-xs font-medium text-foreground">{asset.name}</p>
                   <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="text-[10px] text-muted-foreground">{ASSET_TYPES.find(t => t.value === asset.type)?.label || asset.type}</span>
+                    <span className="text-[10px] text-muted-foreground">{getAssetTypeLabel(asset.type)}</span>
                     {asset.description && (
                       <span className="truncate text-[10px] text-muted-foreground/60">· {asset.description}</span>
                     )}
