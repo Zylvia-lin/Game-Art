@@ -159,6 +159,9 @@ async def list_project_assets(project_id: str, asset_type: Optional[str] = Query
         for i, url in enumerate(output_urls):
             if not isinstance(url, str):
                 continue
+            # Only include local file paths (uploaded images), skip external/base64 URLs
+            if not url.startswith("/uploads/"):
+                continue
             name = output_names[i] if i < len(output_names) and output_names[i] else f"{g['tool_key']}_{i+1}"
             result.append({
                 "id": f"gen-{g['id']}-{i}",
