@@ -267,9 +267,33 @@ export default function TextToImagePage() {
                       className="h-full w-full object-cover transition-all duration-300 group-hover:scale-105"
                       loading="lazy"
                     />
-                    {/* Name badge - top left */}
+                    {/* Hover overlay */}
+                    <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/60 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                      <button
+                        onClick={() => setPreviewIdx(idx)}
+                        className="flex h-9 w-9 items-center justify-center rounded-lg bg-background/90 text-foreground hover:bg-background"
+                        title="预览"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDownload(img.url, `${img.name}.png`)}
+                        className="flex h-9 w-9 items-center justify-center rounded-lg bg-background/90 text-foreground hover:bg-background"
+                        title="下载"
+                      >
+                        <Download className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => setDeleteIdx(idx)}
+                        className="flex h-9 w-9 items-center justify-center rounded-lg bg-destructive/90 text-white hover:bg-destructive"
+                        title="删除"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                    {/* Name badge - top left (z-10 to sit above hover overlay) */}
                     {editingIdx === idx ? (
-                      <div className="absolute inset-x-0 top-0 flex items-center gap-1 bg-black/80 px-2 py-1.5 backdrop-blur-sm">
+                      <div className="absolute inset-x-0 top-0 z-20 flex items-center gap-1 bg-black/80 px-2 py-1.5 backdrop-blur-sm">
                         <input
                           autoFocus
                           value={editingName}
@@ -298,7 +322,7 @@ export default function TextToImagePage() {
                         </button>
                       </div>
                     ) : (
-                      <div className="absolute inset-x-0 top-0 flex items-center gap-1 bg-gradient-to-b from-black/70 to-transparent px-2 py-1.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                      <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-1 bg-gradient-to-b from-black/70 to-transparent px-2 py-1.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
                         <span className="flex-1 truncate text-xs text-white drop-shadow">{img.name}</span>
                         <button
                           onClick={() => handleStartRename(idx)}
@@ -309,30 +333,6 @@ export default function TextToImagePage() {
                         </button>
                       </div>
                     )}
-                    {/* Hover overlay */}
-                    <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/60 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                      <button
-                        onClick={() => setPreviewIdx(idx)}
-                        className="flex h-9 w-9 items-center justify-center rounded-lg bg-background/90 text-foreground hover:bg-background"
-                        title="预览"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDownload(img.url, `${img.name}.png`)}
-                        className="flex h-9 w-9 items-center justify-center rounded-lg bg-background/90 text-foreground hover:bg-background"
-                        title="下载"
-                      >
-                        <Download className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => setDeleteIdx(idx)}
-                        className="flex h-9 w-9 items-center justify-center rounded-lg bg-destructive/90 text-white hover:bg-destructive"
-                        title="删除"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
                   </div>
                 ))}
               </div>
