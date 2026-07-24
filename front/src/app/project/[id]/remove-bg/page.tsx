@@ -199,8 +199,6 @@ export default function RemoveBgPage() {
     <ToolLayout
       title="去除背景"
       description="AI 智能识别并移除图片背景"
-      toolKey="remove_bg"
-      toolName="去除背景"
       paramsPanel={paramsPanel}
       canvas={canvas}
     />
