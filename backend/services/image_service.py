@@ -7,6 +7,7 @@ import io
 import math
 import httpx
 import base64
+import numpy as np
 from PIL import Image
 from urllib.parse import urlparse
 
@@ -143,6 +144,47 @@ def _get_image_dimensions(image_url: str) -> tuple[int, int] | None:
         print(f"[Image API] Failed to read image dimensions: {e}")
 
     return None
+
+
+def _preprocess_mask_binary(mask_input: str) -> str:
+    """将遮罩图转换为纯黑/纯白的二值化格式。
+    白色(255) = 需要重绘的区域，黑色(0) = 保持不变。
+    支持 data: URI 输入，返回 data: URI。
+    """
+    if not mask_input.startswith("data:"):
+        return mask_input
+
+    try:
+        header, b64data = mask_input.split(",", 1)
+        raw = base64.b64decode(b64data)
+        img = Image.open(io.BytesIO(raw))
+
+        # 转为 RGBA 以读取 alpha 通道
+        img = img.convert("RGBA")
+        r, g, b, a = img.split()
+
+        # 创建二值化遮罩：有颜色或 alpha > 128 的像素 → 白色，其余 → 黑色
+        r_arr = np.array(r)
+        g_arr = np.array(g)
+        b_arr = np.array(b)
+        a_arr = np.array(a)
+
+        # 任何 RGB 通道有值 或 alpha > 128 → 白色
+        mask_array = ((r_arr > 128) | (g_arr > 128) | (b_arr > 128) | (a_arr > 128))
+
+        # 生成纯黑白 RGB 图
+        binary = Image.new("RGB", img.size, (0, 0, 0))
+        binary_array = np.where(mask_array, 255, 0).astype(np.uint8)
+        binary = Image.fromarray(binary_array)
+
+        buf = io.BytesIO()
+        binary.save(buf, format="PNG")
+        b64_out = base64.b64encode(buf.getvalue()).decode("utf-8")
+        print(f"[Image API] Mask preprocessed to binary B&W: {img.size[0]}x{img.size[1]}")
+        return f"data:image/png;base64,{b64_out}"
+    except Exception as e:
+        print(f"[Image API] WARNING: mask preprocessing failed: {e}, using original")
+        return mask_input
 
 
 def _compute_size(ratio: str, tier: str) -> str:
@@ -314,7 +356,8 @@ async def generate_image(
     if image_url:
         body["image"] = resolve_image_input(image_url)
     if mask_url:
-        body["mask"] = resolve_image_input(mask_url)
+        resolved_mask = resolve_image_input(mask_url)
+        body["mask"] = _preprocess_mask_binary(resolved_mask)
 
     url = model["api_base_url"].rstrip("/")
     headers = {

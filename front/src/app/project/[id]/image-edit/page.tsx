@@ -178,23 +178,37 @@ export default function ImageEditPage() {
   };
 
   const confirmMask = () => {
-    // Save mask data URL while canvas is still mounted (modal closes after this)
+    // Export mask as binary black/white: transparent → black, white brush → white
     const maskCanvas = modalMaskCanvasRef.current;
     if (maskCanvas) {
       const nat = imageNaturalSize.current;
-      if (nat && (nat.w !== maskCanvas.width || nat.h !== maskCanvas.height)) {
+      const exportMask = (src: HTMLCanvasElement, w: number, h: number) => {
         const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = nat.w;
-        tempCanvas.height = nat.h;
+        tempCanvas.width = w;
+        tempCanvas.height = h;
         const tempCtx = tempCanvas.getContext('2d');
-        if (tempCtx) {
-          tempCtx.drawImage(maskCanvas, 0, 0, maskCanvas.width, maskCanvas.height, 0, 0, nat.w, nat.h);
-          setSavedMaskUrl(tempCanvas.toDataURL('image/png'));
-        } else {
-          setSavedMaskUrl(maskCanvas.toDataURL('image/png'));
+        if (!tempCtx) return '';
+        // Black background
+        tempCtx.fillStyle = '#000000';
+        tempCtx.fillRect(0, 0, w, h);
+        tempCtx.drawImage(src, 0, 0, src.width, src.height, 0, 0, w, h);
+        // Convert any colored pixels to pure white
+        const imgData = tempCtx.getImageData(0, 0, w, h);
+        const d = imgData.data;
+        for (let i = 0; i < d.length; i += 4) {
+          if (d[i] > 0 || d[i + 1] > 0 || d[i + 2] > 0) {
+            d[i] = 255; d[i + 1] = 255; d[i + 2] = 255;
+          }
         }
+        tempCtx.putImageData(imgData, 0, 0);
+        return tempCanvas.toDataURL('image/png');
+      };
+      if (nat && (nat.w !== maskCanvas.width || nat.h !== maskCanvas.height)) {
+        const dataUrl = exportMask(maskCanvas, nat.w, nat.h);
+        if (dataUrl) setSavedMaskUrl(dataUrl);
       } else {
-        setSavedMaskUrl(maskCanvas.toDataURL('image/png'));
+        const dataUrl = exportMask(maskCanvas, maskCanvas.width, maskCanvas.height);
+        if (dataUrl) setSavedMaskUrl(dataUrl);
       }
     }
     setHasMask(true);
@@ -283,11 +297,30 @@ export default function ImageEditPage() {
     setHistoryIndex(newIndex);
   };
 
+  // Keyboard shortcuts: Ctrl+Z undo, Ctrl+Shift+Z / Ctrl+Y redo
+  useEffect(() => {
+    if (!showMaskModal) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      if (e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      } else if ((e.key === 'z' && e.shiftKey) || e.key === 'y') {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showMaskModal, historyIndex, history]);
+
   const clearMask = () => {
     const maskCanvas = modalMaskCanvasRef.current;
     if (!maskCanvas) return;
     const ctx = maskCanvas.getContext('2d');
-    ctx?.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+    if (ctx) {
+      ctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+    }
     setHasMask(false);
     setSavedMaskUrl('');
     setHistory([]);
@@ -303,18 +336,33 @@ export default function ImageEditPage() {
   const getMaskUrl = async (): Promise<string> => {
     const maskCanvas = modalMaskCanvasRef.current;
     if (!maskCanvas) return '';
+    // Export with black background: transparent → black, white brush → white
     const nat = imageNaturalSize.current;
-    if (nat && (nat.w !== maskCanvas.width || nat.h !== maskCanvas.height)) {
+    const exportMask = (src: HTMLCanvasElement, w: number, h: number) => {
       const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = nat.w;
-      tempCanvas.height = nat.h;
+      tempCanvas.width = w;
+      tempCanvas.height = h;
       const tempCtx = tempCanvas.getContext('2d');
-      if (tempCtx) {
-        tempCtx.drawImage(maskCanvas, 0, 0, maskCanvas.width, maskCanvas.height, 0, 0, nat.w, nat.h);
-        return tempCanvas.toDataURL('image/png');
+      if (!tempCtx) return '';
+      // Black background
+      tempCtx.fillStyle = '#000000';
+      tempCtx.fillRect(0, 0, w, h);
+      tempCtx.drawImage(src, 0, 0, src.width, src.height, 0, 0, w, h);
+      // Convert any colored pixels to pure white
+      const imgData = tempCtx.getImageData(0, 0, w, h);
+      const d = imgData.data;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i] > 0 || d[i + 1] > 0 || d[i + 2] > 0) {
+          d[i] = 255; d[i + 1] = 255; d[i + 2] = 255;
+        }
       }
+      tempCtx.putImageData(imgData, 0, 0);
+      return tempCanvas.toDataURL('image/png');
+    };
+    if (nat && (nat.w !== maskCanvas.width || nat.h !== maskCanvas.height)) {
+      return exportMask(maskCanvas, nat.w, nat.h);
     }
-    return maskCanvas.toDataURL('image/png');
+    return exportMask(maskCanvas, maskCanvas.width, maskCanvas.height);
   };
 
   // --- Submit handlers ---
