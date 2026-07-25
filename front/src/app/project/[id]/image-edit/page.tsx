@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
-import { Eraser, Paintbrush, Sparkles, Loader2, Undo2, Redo2, X, Check, Wand2, ZoomIn, ZoomOut, Maximize, Brush } from 'lucide-react';
+import { Eraser, Paintbrush, Sparkles, Loader2, Undo2, Redo2, X, Check, Wand2, ZoomIn, ZoomOut, Maximize, Brush, Eye } from 'lucide-react';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { useButtonCooldown } from '@/hooks/use-button-cooldown';
 import { resolveImageUrl, generateApi } from '@/lib/api';
@@ -41,7 +41,12 @@ export default function ImageEditPage() {
   // Refs
   const modalCanvasRef = useRef<HTMLCanvasElement>(null);
   const modalMaskCanvasRef = useRef<HTMLCanvasElement>(null);
+  const maskPreviewRef = useRef<HTMLCanvasElement>(null);
   const imageNaturalSize = useRef<{ w: number; h: number } | null>(null);
+  const savedMaskUrlRef = useRef<string>('');
+
+  // Keep ref in sync with state so loadModalImage can read it
+  useEffect(() => { savedMaskUrlRef.current = savedMaskUrl; }, [savedMaskUrl]);
 
   // --- Derived state: inpaint results from completed tasks ---
   const results = useMemo(() => {
@@ -82,9 +87,41 @@ export default function ImageEditPage() {
       if (maskCtx) maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
       setHistory([]);
       setHistoryIndex(-1);
-      setHasMask(false);
-      setSavedMaskUrl('');
       setModalReady(true);
+
+      // Restore previous mask if exists
+      const prevMask = savedMaskUrlRef.current;
+      if (prevMask) {
+        const mi = new window.Image();
+        mi.onload = () => {
+          if (!maskCtx) return;
+          // Draw white brush strokes as semi-transparent red (matching the brush color)
+          const tc = document.createElement('canvas');
+          tc.width = nat.w;
+          tc.height = nat.h;
+          const tctx = tc.getContext('2d');
+          if (!tctx) return;
+          tctx.drawImage(mi, 0, 0, nat.w, nat.h);
+          const md = tctx.getImageData(0, 0, nat.w, nat.h);
+          const d = md.data;
+          for (let i = 0; i < d.length; i += 4) {
+            if (d[i] > 128) {
+              d[i] = 239; d[i + 1] = 68; d[i + 2] = 68; d[i + 3] = 128;
+            } else {
+              d[i + 3] = 0; // transparent
+            }
+          }
+          tctx.putImageData(md, 0, 0);
+          maskCtx.drawImage(tc, 0, 0);
+          // Save restored state as initial history entry
+          const restored = maskCtx.getImageData(0, 0, nat.w, nat.h);
+          setHistory([restored]);
+          setHistoryIndex(0);
+        };
+        mi.src = prevMask;
+      } else {
+        setHasMask(false);
+      }
     };
 
     // For data:/blob: URIs, load directly (no fetch needed)
@@ -166,6 +203,89 @@ export default function ImageEditPage() {
     img.onerror = () => setOriginalDimensions(null);
     img.src = resolveImageUrl(imageUrl);
   }, [imageUrl]);
+
+  // --- Draw mask preview: original image + semi-transparent red overlay ---
+  useEffect(() => {
+    if (!hasMask || !savedMaskUrl || !imageUrl) return;
+    const canvas = maskPreviewRef.current;
+    if (!canvas) return;
+
+    const fullUrl = resolveImageUrl(imageUrl);
+
+    // Load original image via fetch+blob to avoid CORS taint
+    const loadImg = (src: string): Promise<HTMLImageElement> => {
+      return new Promise((resolve, reject) => {
+        if (src.startsWith('data:') || src.startsWith('blob:')) {
+          const img = new window.Image();
+          img.onload = () => resolve(img);
+          img.onerror = reject;
+          img.src = src;
+        } else {
+          fetch(src)
+            .then((r) => r.blob())
+            .then((b) => {
+              const url = URL.createObjectURL(b);
+              const img = new window.Image();
+              img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+              img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('img load failed')); };
+              img.src = url;
+            })
+            .catch(reject);
+        }
+      });
+    };
+
+    const loadMask = (src: string): Promise<HTMLImageElement> => {
+      return new Promise((resolve, reject) => {
+        const img = new window.Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = src;
+      });
+    };
+
+    (async () => {
+      try {
+        const [img, maskImg] = await Promise.all([
+          loadImg(fullUrl),
+          loadMask(savedMaskUrl),
+        ]);
+        const w = img.naturalWidth;
+        const h = img.naturalHeight;
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        // 1. Draw original image
+        ctx.drawImage(img, 0, 0);
+
+        // 2. Read mask pixels and draw semi-transparent red overlay
+        const tmp = document.createElement('canvas');
+        tmp.width = w;
+        tmp.height = h;
+        const tmpCtx = tmp.getContext('2d');
+        if (!tmpCtx) return;
+        tmpCtx.drawImage(maskImg, 0, 0, w, h);
+        const maskData = tmpCtx.getImageData(0, 0, w, h);
+        const md = maskData.data;
+
+        const overlay = ctx.getImageData(0, 0, w, h);
+        const od = overlay.data;
+        for (let i = 0; i < md.length; i += 4) {
+          // White pixel in mask (R > 128) → semi-transparent red
+          if (md[i] > 128) {
+            od[i]     = Math.round(od[i]     * 0.5 + 239 * 0.5); // R
+            od[i + 1] = Math.round(od[i + 1] * 0.5 + 68  * 0.5); // G
+            od[i + 2] = Math.round(od[i + 2] * 0.5 + 68  * 0.5); // B
+          }
+        }
+        ctx.putImageData(overlay, 0, 0);
+      } catch {
+        // Silently ignore load failures
+      }
+    })();
+  }, [hasMask, savedMaskUrl, imageUrl]);
 
   // --- Mask modal operations ---
   const openMaskModal = () => {
@@ -471,6 +591,23 @@ export default function ImageEditPage() {
           </span>
         )}
       </button>
+
+      {/* Mask preview: original image + mask overlay */}
+      {hasMask && savedMaskUrl && imageUrl && (
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Eye className="h-3.5 w-3.5" />
+            <span>遮罩预览</span>
+            <span className="text-[10px] text-muted-foreground/60">红色区域将被重绘</span>
+          </div>
+          <div className="relative overflow-hidden rounded-lg border border-border">
+            <canvas
+              ref={maskPreviewRef}
+              className="block w-full"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Inpaint-specific */}
       {activeTab === 'inpaint' && (
