@@ -1,0 +1,16 @@
+node_modules
+.next
+build
+dist
+.git
+.env
+.env.local
+*.md
+docs
+assets
+.VSCodeCounter
+.pnpm-store
+.codegraph
+.coze
+.preview
+.cozeproj

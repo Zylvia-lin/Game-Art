@@ -123,6 +123,69 @@ pnpm install
 pnpm dev               # 端口 3000
 ```
 
+## Docker 部署
+
+使用 Docker Compose 一键启动全部服务（前端 + 后端 + PostgreSQL）。
+
+### 环境要求
+
+- **Docker** >= 20.10
+- **Docker Compose** >= 2.0
+
+### 快速启动
+
+```bash
+# 1. 准备环境变量（可选，有默认值）
+cp .env.docker.example .env.docker
+
+# 2. 构建并启动所有服务
+docker compose --env-file .env.docker up -d --build
+
+# 3. 查看服务状态
+docker compose ps
+
+# 4. 查看日志
+docker compose logs -f
+```
+
+启动后访问：
+- **前端**: http://localhost:3000
+- **后端 API 文档**: http://localhost:8000/docs
+- **健康检查**: http://localhost:8000/api/health
+
+### 服务架构
+
+| 服务 | 镜像/构建 | 端口 | 说明 |
+|------|----------|------|------|
+| `postgres` | `postgres:16-alpine` | 5432 | PostgreSQL 数据库，数据卷持久化 |
+| `backend` | `backend/Dockerfile` | 8000 | Python FastAPI，uv 包管理 |
+| `frontend` | `front/Dockerfile` | 3000 | Next.js standalone 生产构建 |
+
+### 常用命令
+
+```bash
+# 停止服务
+docker compose down
+
+# 停止并清除数据卷（重置数据库）
+docker compose down -v
+
+# 重新构建并启动
+docker compose up -d --build
+
+# 仅重启某个服务
+docker compose restart backend
+```
+
+### 环境变量
+
+Docker 部署通过 `.env.docker` 文件或环境变量配置，详见 [.env.docker.example](./.env.docker.example)。
+
+### 数据持久化
+
+- `postgres_data` 卷：PostgreSQL 数据库文件
+- `uploads_data` 卷：后端生成/上传的图片文件
+
 ## 环境变量
 
 ### 后端 (`backend/.env`)
