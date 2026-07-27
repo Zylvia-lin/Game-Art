@@ -37,6 +37,7 @@ export default function ImageEditPage() {
   const [hasMask, setHasMask] = useState(false);
   const [modalReady, setModalReady] = useState(false);
   const [savedMaskUrl, setSavedMaskUrl] = useState('');
+  const [savedRawMaskUrl, setSavedRawMaskUrl] = useState('');
 
   // Refs
   const modalCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -44,9 +45,11 @@ export default function ImageEditPage() {
   const maskPreviewRef = useRef<HTMLCanvasElement>(null);
   const imageNaturalSize = useRef<{ w: number; h: number } | null>(null);
   const savedMaskUrlRef = useRef<string>('');
+  const savedRawMaskUrlRef = useRef<string>('');
 
-  // Keep ref in sync with state so loadModalImage can read it
+  // Keep refs in sync with state
   useEffect(() => { savedMaskUrlRef.current = savedMaskUrl; }, [savedMaskUrl]);
+  useEffect(() => { savedRawMaskUrlRef.current = savedRawMaskUrl; }, [savedRawMaskUrl]);
 
   // --- Derived state: inpaint results from completed tasks ---
   const results = useMemo(() => {
@@ -89,36 +92,18 @@ export default function ImageEditPage() {
       setHistoryIndex(-1);
       setModalReady(true);
 
-      // Restore previous mask if exists
-      const prevMask = savedMaskUrlRef.current;
-      if (prevMask) {
+      // Restore previous mask from raw image (preserves accumulated brush alpha)
+      const prevRaw = savedRawMaskUrlRef.current;
+      if (prevRaw) {
         const mi = new window.Image();
         mi.onload = () => {
           if (!maskCtx) return;
-          // Draw white brush strokes as semi-transparent red (matching the brush color)
-          const tc = document.createElement('canvas');
-          tc.width = nat.w;
-          tc.height = nat.h;
-          const tctx = tc.getContext('2d');
-          if (!tctx) return;
-          tctx.drawImage(mi, 0, 0, nat.w, nat.h);
-          const md = tctx.getImageData(0, 0, nat.w, nat.h);
-          const d = md.data;
-          for (let i = 0; i < d.length; i += 4) {
-            if (d[i] > 128) {
-              d[i] = 239; d[i + 1] = 68; d[i + 2] = 68; d[i + 3] = 128;
-            } else {
-              d[i + 3] = 0; // transparent
-            }
-          }
-          tctx.putImageData(md, 0, 0);
-          maskCtx.drawImage(tc, 0, 0);
-          // Save restored state as initial history entry
+          maskCtx.drawImage(mi, 0, 0, nat.w, nat.h);
           const restored = maskCtx.getImageData(0, 0, nat.w, nat.h);
           setHistory([restored]);
           setHistoryIndex(0);
         };
-        mi.src = prevMask;
+        mi.src = prevRaw;
       } else {
         setHasMask(false);
       }
@@ -204,15 +189,15 @@ export default function ImageEditPage() {
     img.src = resolveImageUrl(imageUrl);
   }, [imageUrl]);
 
-  // --- Draw mask preview: original image + semi-transparent red overlay ---
+  // --- Draw mask preview: original image + mask overlay (raw mask, no pixel conversion) ---
   useEffect(() => {
-    if (!hasMask || !savedMaskUrl || !imageUrl) return;
+    if (!hasMask || !savedRawMaskUrl || !imageUrl) return;
     const canvas = maskPreviewRef.current;
     if (!canvas) return;
 
     // Use same-origin path via Next.js rewrite proxy (no CORS issues)
     const imgSrc = imageUrl.startsWith('http')
-      ? new URL(imageUrl).pathname  // extract /uploads/... from full URL
+      ? new URL(imageUrl).pathname
       : imageUrl.startsWith('/')
         ? imageUrl
         : `/${imageUrl}`;
@@ -229,33 +214,15 @@ export default function ImageEditPage() {
       // 1. Draw original image as base
       ctx.drawImage(img, 0, 0);
 
-      // 2. Load binary mask and overlay semi-transparent red on masked areas
+      // 2. Draw raw mask directly on top (same as what was painted)
       const maskImg = new window.Image();
       maskImg.onload = () => {
-        const tmp = document.createElement('canvas');
-        tmp.width = w;
-        tmp.height = h;
-        const tmpCtx = tmp.getContext('2d');
-        if (!tmpCtx) return;
-        tmpCtx.drawImage(maskImg, 0, 0, w, h);
-        const maskData = tmpCtx.getImageData(0, 0, w, h).data;
-
-        // Read original image pixels and blend red where mask is white
-        const baseData = ctx.getImageData(0, 0, w, h);
-        const bd = baseData.data;
-        for (let i = 0; i < maskData.length; i += 4) {
-          if (maskData[i] > 128) {
-            bd[i]     = Math.round(bd[i]     * 0.5 + 239 * 0.5);
-            bd[i + 1] = Math.round(bd[i + 1] * 0.5 + 68  * 0.5);
-            bd[i + 2] = Math.round(bd[i + 2] * 0.5 + 68  * 0.5);
-          }
-        }
-        ctx.putImageData(baseData, 0, 0);
+        ctx.drawImage(maskImg, 0, 0, w, h);
       };
-      maskImg.src = savedMaskUrl;
+      maskImg.src = savedRawMaskUrl;
     };
     img.src = imgSrc;
-  }, [hasMask, savedMaskUrl, imageUrl]);
+  }, [hasMask, savedRawMaskUrl, imageUrl]);
 
   // --- Mask modal operations ---
   const openMaskModal = () => {
@@ -268,9 +235,13 @@ export default function ImageEditPage() {
   };
 
   const confirmMask = () => {
-    // Export mask as binary black/white: transparent → black, white brush → white
+    // Export mask as binary black/white for API, and save raw canvas for restore
     const maskCanvas = modalMaskCanvasRef.current;
     if (maskCanvas) {
+      // Save raw mask canvas as-is (preserves accumulated brush alpha for restore & preview)
+      setSavedRawMaskUrl(maskCanvas.toDataURL('image/png'));
+
+      // Generate binary black/white mask for API
       const nat = imageNaturalSize.current;
       const exportMask = (src: HTMLCanvasElement, w: number, h: number) => {
         const tempCanvas = document.createElement('canvas');
@@ -312,6 +283,7 @@ export default function ImageEditPage() {
     setHistoryIndex(-1);
     setHasMask(false);
     setSavedMaskUrl('');
+    setSavedRawMaskUrl('');
     setModalReady(false);
   };
 
@@ -413,6 +385,7 @@ export default function ImageEditPage() {
     }
     setHasMask(false);
     setSavedMaskUrl('');
+    setSavedRawMaskUrl('');
     setHistory([]);
     setHistoryIndex(-1);
     // Save the cleared state as first history entry
@@ -484,6 +457,7 @@ export default function ImageEditPage() {
     setActiveTab(tab);
     setHasMask(false);
     setSavedMaskUrl('');
+    setSavedRawMaskUrl('');
   };
 
   const handleZoom = (delta: number) => {
@@ -533,6 +507,7 @@ export default function ImageEditPage() {
           setImageUrl(url || '');
           setHasMask(false);
           setSavedMaskUrl('');
+          setSavedRawMaskUrl('');
         }}
         label="原始图片"
       />
@@ -563,7 +538,7 @@ export default function ImageEditPage() {
       </button>
 
       {/* Mask preview: original image + mask overlay */}
-      {hasMask && savedMaskUrl && imageUrl && (
+      {hasMask && savedRawMaskUrl && imageUrl && (
         <div className="space-y-1.5">
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Eye className="h-3.5 w-3.5" />
