@@ -283,6 +283,8 @@ export default function CharacterPage() {
     <ToolLayout
       title="角色生成"
       description="生成游戏角色：T-pose、三视图、多方向、部件拆分"
+      toolKey={TOOL_KEY_MAP[subTool]}
+      toolName={SUB_TOOLS.find(t => t.key === subTool)?.label || '角色生成'}
       paramsPanel={paramsPanel}
       canvas={canvas}
     />

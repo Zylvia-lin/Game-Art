@@ -61,7 +61,7 @@ export default function PromptsSettingsPage() {
   // Group prompts by category
   const groups = [
     { label: '基础生成', keys: ['text_to_image', 'image_to_image', 'inpaint'] },
-    { label: '角色', keys: ['character_tpose', 'character_directions', 'character_part_split'] },
+    { label: '角色', keys: ['character_tpose', 'character_three_view', 'character_directions', 'character_part_split'] },
     { label: '动画', keys: ['animation_text', 'animation_frame_extract'] },
     { label: '道具', keys: ['prop_generate', 'prop_variant'] },
     { label: 'UI', keys: ['ui_layout_generate', 'ui_component_place', 'ui_component_split'] },
