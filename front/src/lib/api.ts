@@ -7,8 +7,9 @@ export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:800
 export interface Project {
   id: string;
   name: string;
+  description: string | null;
+  cover_url: string | null;
   style: string;
-  description?: string;
   created_at: string;
   updated_at: string;
 }
@@ -16,7 +17,7 @@ export interface Project {
 export interface ModelConfig {
   id: string;
   name: string;
-  type: string;
+  type: 'text' | 'image' | 'video' | 'tool';
   provider: string;
   api_base_url: string;
   api_key: string;
@@ -26,7 +27,7 @@ export interface ModelConfig {
   output_price: number;
   output_price_high: number;
   pixel_threshold: number;
-  price_unit: string;
+  price_unit: 'per_image' | 'per_1M_tokens' | 'per_1k_calls';
   created_at: string;
   updated_at: string;
 }
@@ -44,13 +45,15 @@ export interface SystemPrompt {
 export interface Asset {
   id: string;
   project_id: string;
+  generation_id: string | null;
   name: string;
+  description: string;
   type: string;
   url: string;
   finalized: boolean;
-  metadata?: Record<string, unknown>;
+  metadata_: Record<string, unknown> | null;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
 }
 
 export interface Generation {
@@ -132,7 +135,7 @@ export const projectsApi = {
     return request<Project>(`/api/projects/${id}`);
   },
 
-  create: (data: { name: string; style: string; description?: string }) =>
+  create: (data: { name: string; style?: string; description?: string }) =>
     request<Project>('/api/projects', {
       method: 'POST',
       body: JSON.stringify(data),

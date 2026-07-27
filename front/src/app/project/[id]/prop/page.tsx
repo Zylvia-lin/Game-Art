@@ -19,7 +19,7 @@ import type { ModelConfig } from '@/lib/types';
 
 export default function PropPage() {
   const params = useParams();
-  const projectId = params.id;
+  const projectId = params.id as string;
   const [subTool, setSubTool] = useState<string>('generate');
   const [prompt, setPrompt] = useState('');
   const [style, setStyle] = useState('pixel');

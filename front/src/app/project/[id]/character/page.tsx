@@ -39,7 +39,7 @@ const TOOL_KEY_MAP: Record<string, string> = {
 
 export default function CharacterPage() {
   const params = useParams();
-  const projectId = params.id;
+  const projectId = params.id as string;
   const [projectStyle, setProjectStyle] = useState<string>('pixel');
 
   // Load project to get default style

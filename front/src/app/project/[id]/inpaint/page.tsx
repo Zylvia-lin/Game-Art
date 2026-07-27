@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { Sparkles, Loader2, Undo2, Redo2, Eraser, Paintbrush } from 'lucide-react';
 import { ToolLayout } from '@/components/tools/tool-layout';
@@ -16,7 +16,7 @@ import type { ModelConfig } from '@/lib/types';
 
 export default function InpaintPage() {
   const params = useParams();
-  const projectId = params.id;
+  const projectId = params.id as string;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
   const [imageUrl, setImageUrl] = useState('');

@@ -35,7 +35,7 @@ const COLORS = ['#6366f1', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4'
 
 export default function UIPage() {
   const params = useParams();
-  const projectId = params.id;
+  const projectId = params.id as string;
   const [subTool, setSubTool] = useState<string>('layout_generate');
   const [prompt, setPrompt] = useState('');
   const [ratio, setRatio] = useState('16:9');

@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 export default function ProjectWorkspacePage() {
   const params = useParams();
   const router = useRouter();
-  const projectId = params.id;
+  const projectId = params.id as string;
 
   useEffect(() => {
     // 进入项目后默认跳转到角色生成页面

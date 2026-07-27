@@ -21,7 +21,7 @@ const SCENES = [
 
 export default function RemoveBgPage() {
   const params = useParams();
-  const projectId = params.id;
+  const projectId = params.id as string;
   const [imageUrl, setImageUrl] = useState('');
   const [scene, setScene] = useState('general');
   const [processing, setProcessing] = useState(false);

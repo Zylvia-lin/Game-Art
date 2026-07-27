@@ -44,7 +44,7 @@ interface ExtractedFrame {
 
 export default function AnimationPage() {
   const { id } = useParams();
-  const projectId = id;
+  const projectId = id as string;
   const [subTool, setSubTool] = useState('text');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');

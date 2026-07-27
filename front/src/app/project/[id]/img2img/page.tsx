@@ -18,7 +18,7 @@ import type { ModelConfig } from '@/lib/types';
 
 export default function ImageToImagePage() {
   const params = useParams();
-  const projectId = params.id;
+  const projectId = params.id as string;
   const [imageUrl, setImageUrl] = useState('');
   const [prompt, setPrompt] = useState('');
   const [ratio, setRatio] = useState('1:1');

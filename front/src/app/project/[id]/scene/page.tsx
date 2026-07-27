@@ -33,7 +33,7 @@ const toolKeyMap: Record<string, string> = {
 
 export default function ScenePage() {
   const params = useParams();
-  const projectId = params.id;
+  const projectId = params.id as string;
   const [subTool, setSubTool] = useState<string>('map_generate');
   const [prompt, setPrompt] = useState('');
   const [mapType, setMapType] = useState('top');

@@ -52,7 +52,7 @@ function getAssetTypeLabel(type: string): string {
 
 export default function AssetsPage() {
   const params = useParams();
-  const projectId = params.id;
+  const projectId = params.id as string;
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
