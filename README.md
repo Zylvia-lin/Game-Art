@@ -224,9 +224,6 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
 ## 文档
-
-- [AGENTS.md](./AGENTS.md) — AI Agent 上下文，项目架构与约定
-- [DESIGN.md](./DESIGN.md) — 设计规范，品牌、色彩、交互
 - [docs/development-guide.md](./docs/development-guide.md) — 完整开发指南（架构、数据库、API、组件、业务流程）
 
 ## License
