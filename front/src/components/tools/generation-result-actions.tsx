@@ -9,11 +9,11 @@ interface GenerationResultActionsProps {
   projectId: string;
   imageUrl: string;
   imageType?: 'character' | 'prop' | 'scene' | 'ui' | 'general';
-  assetId?: number;
+  assetId?: string;
   finalized?: boolean;
   onFinalizeChange?: (finalized: boolean) => void;
   showAddToLibrary?: boolean;
-  onAddedToLibrary?: (assetId: number) => void;
+  onAddedToLibrary?: (assetId: string) => void;
 }
 
 export function GenerationResultActions({

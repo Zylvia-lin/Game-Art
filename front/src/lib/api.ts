@@ -59,11 +59,12 @@ export interface Asset {
 export interface Generation {
   id: string;
   project_id: string;
-  task_id: string;
   tool_key: string;
-  prompt: string;
-  result_url?: string;
-  status: string;
+  input_params: Record<string, unknown> | null;
+  output_urls: string[];
+  output_names?: string[];
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  error_message: string | null;
   created_at: string;
 }
 
@@ -71,14 +72,16 @@ export interface Task {
   id: string;
   project_id: string;
   tool_key: string;
-  status: string;
+  input_params: Record<string, unknown>;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
   progress: number;
-  result_url?: string;
-  output_urls?: string[];
+  output_urls: string[];
   output_names?: string[];
-  error?: string;
+  error_message: string | null;
   created_at: string;
   updated_at: string;
+  started_at: string | null;
+  completed_at: string | null;
 }
 
 // ============================================
@@ -204,7 +207,20 @@ export const modelsApi = {
     return request<ModelConfig>(`/api/models/${id}`);
   },
 
-  create: (data: Omit<ModelConfig, 'id' | 'created_at' | 'updated_at'>) =>
+  create: (data: {
+    type: string;
+    name: string;
+    provider: string;
+    api_base_url: string;
+    api_key: string;
+    model_name: string;
+    is_default?: boolean;
+    input_price?: number;
+    output_price?: number;
+    output_price_high?: number;
+    pixel_threshold?: number;
+    price_unit?: string;
+  }) =>
     request<ModelConfig>('/api/models', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -251,7 +267,7 @@ export const promptsApi = {
 // ============================================
 
 export const assetsApi = {
-  create: (data: { project_id: string; name: string; type: string; url: string; description?: string }) =>
+  create: (data: { project_id: string; name: string; type: string; url: string; description?: string; metadata?: Record<string, unknown> }) =>
     request<Asset>('/api/assets', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -284,7 +300,7 @@ export const assetsApi = {
 
 export const generateApi = {
   submit: (toolKey: string, data: Record<string, unknown>) =>
-    request<Task>(`/api/generate/${toolKey}`, {
+    request<{ status: string; task_id: string; message: string }>(`/api/generate/${toolKey}`, {
       method: 'POST',
       body: JSON.stringify(data),
     }),

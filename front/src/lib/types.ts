@@ -382,7 +382,7 @@ export function estimateCostFromModelWithPixels(
  */
 export function deriveRatio(w: number, h: number): string {
   const actual = w / h;
-  let best = RATIO_OPTIONS[0];
+  let best: typeof RATIO_OPTIONS[number] = RATIO_OPTIONS[0];
   let bestDiff = Infinity;
   for (const opt of RATIO_OPTIONS) {
     const [ow, oh] = opt.value.split(':').map(Number);
