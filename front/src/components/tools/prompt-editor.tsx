@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronDown, ChevronUp, Save, Check } from 'lucide-react';
 import { promptsApi } from '@/lib/api';
 
@@ -10,28 +10,21 @@ interface PromptEditorProps {
 }
 
 export function PromptEditor({ toolKey, toolName }: PromptEditorProps) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [prompt, setPrompt] = useState('');
-  const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const loadPrompt = async () => {
-    if (loaded) return;
-    try {
-      const data = await promptsApi.get(toolKey);
+  // Auto-load prompt on mount
+  useEffect(() => {
+    promptsApi.get(toolKey).then(data => {
       setPrompt(data.prompt_content);
-      setLoaded(true);
-    } catch {
+    }).catch(() => {
       setPrompt('// 提示词加载失败，请检查后端服务是否启动');
-      setLoaded(true);
-    }
-  };
+    });
+  }, [toolKey]);
 
-  const handleExpand = () => {
-    if (!expanded) loadPrompt();
-    setExpanded(!expanded);
-  };
+  const handleExpand = () => setExpanded(!expanded);
 
   const handleSave = async () => {
     setSaving(true);

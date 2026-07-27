@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 from database import get_pool, fetch_one, fetch_all
 from services.generate_service import execute_generation
 
-_processing = False
 _process_task: asyncio.Task | None = None
 
 
@@ -332,19 +331,15 @@ async def _process_single_task(task: dict):
 
 
 async def _process_queue():
-    """Background loop that processes pending tasks."""
-    global _processing
+    """Background loop that processes pending tasks concurrently without limits."""
     while True:
         try:
-            if not _processing:
-                _processing = True
-                task = await _get_next_pending_task()
-                if task:
-                    await _process_single_task(task)
-                _processing = False
-            await asyncio.sleep(2)
+            task = await _get_next_pending_task()
+            if task:
+                asyncio.create_task(_process_single_task(task))
+            else:
+                await asyncio.sleep(2)
         except Exception as e:
-            _processing = False
             print(f"Queue processing error: {e}")
             await asyncio.sleep(5)
 

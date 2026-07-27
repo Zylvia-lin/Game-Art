@@ -336,6 +336,13 @@ async def init_db():
                    model_name = COALESCE(model_name, '旧数据(模型未记录)')
              WHERE unit_type IS NULL;
         """)
+        # Migration: increase cost precision for text/tool billing (tiny amounts)
+        await conn.execute("""
+            ALTER TABLE billing_records
+                ALTER COLUMN input_cost TYPE NUMERIC(14,8),
+                ALTER COLUMN output_cost TYPE NUMERIC(14,8),
+                ALTER COLUMN total_cost TYPE NUMERIC(14,8);
+        """)
     print("[DB] Tables initialized")
 
 

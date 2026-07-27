@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Save, Loader2, FileText, Check, ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { promptsApi } from '@/lib/api';
@@ -15,38 +15,35 @@ export default function PromptsSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const fetchPrompts = async () => {
-    try {
-      const data = await promptsApi.list();
+  // On mount: load all prompts, auto-select first one
+  useEffect(() => {
+    promptsApi.list().then(data => {
       setPrompts(data);
-      if (data.length > 0 && !selectedKey) {
+      if (data.length > 0) {
         setSelectedKey(data[0].tool_key);
-        setEditContent(data[0].prompt_content);
       }
-    } catch {
-      setPrompts([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, []);
 
-  useEffect(() => { fetchPrompts(); }, []);
-
-  const handleSelect = (key: string) => {
-    const p = prompts.find((p) => p.tool_key === key);
+  // When selectedKey changes: load that prompt's content from local state
+  useEffect(() => {
+    if (!selectedKey) return;
+    const p = prompts.find(p => p.tool_key === selectedKey);
     if (p) {
-      setSelectedKey(key);
       setEditContent(p.prompt_content);
       setSaved(false);
     }
-  };
+  }, [selectedKey]);
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (!selectedKey) return;
     setSaving(true);
     try {
       await promptsApi.update(selectedKey, { prompt_content: editContent });
-      setPrompts(prompts.map((p) => p.tool_key === selectedKey ? { ...p, prompt_content: editContent } : p));
+      // Update local state for the saved prompt
+      setPrompts(prev => prev.map(p =>
+        p.tool_key === selectedKey ? { ...p, prompt_content: editContent } : p
+      ));
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
@@ -54,15 +51,15 @@ export default function PromptsSettingsPage() {
     } finally {
       setSaving(false);
     }
-  };
+  }, [selectedKey, editContent]);
 
-  const selectedPrompt = prompts.find((p) => p.tool_key === selectedKey);
+  const selectedPrompt = prompts.find(p => p.tool_key === selectedKey);
 
   // Group prompts by category
   const groups = [
     { label: '系统', keys: ['prompt_optimize'] },
     { label: '基础生成', keys: ['text_to_image', 'image_to_image', 'inpaint'] },
-    { label: '角色', keys: ['character_tpose', 'character_three_view', 'character_directions', 'character_part_split'] },
+    { label: '角色', keys: ['character_tpose', 'character_three_view', 'character_directions_4', 'character_directions_8', 'character_directions', 'character_part_split'] },
     { label: '动画', keys: ['animation_text', 'animation_frame_extract'] },
     { label: '道具', keys: ['prop_generate', 'prop_variant'] },
     { label: 'UI', keys: ['ui_layout_generate', 'ui_component_place', 'ui_component_split'] },
@@ -93,7 +90,7 @@ export default function PromptsSettingsPage() {
                   return (
                     <button
                       key={key}
-                      onClick={() => handleSelect(key)}
+                      onClick={() => setSelectedKey(key)}
                       className={`w-full rounded-lg px-3 py-2 text-left text-sm transition-all ${
                         selectedKey === key
                           ? 'bg-primary/10 text-primary font-medium'

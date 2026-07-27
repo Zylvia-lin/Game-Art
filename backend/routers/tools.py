@@ -263,7 +263,7 @@ async def ai_remove_bg_endpoint(data: AIRemoveBgRequest):
         # Create billing record for tool usage (per_1k_calls: 每次调用计为 0.001 千次)
         output_unit_price = float(config.get("output_price", 0) or 0)  # 元/千次
         output_units = 0.001  # 1 次调用 = 0.001 千次
-        total_cost = round(output_units * output_unit_price, 6)
+        total_cost = round(output_units * output_unit_price, 8)
 
         pool = await get_pool()
         async with pool.acquire() as conn:

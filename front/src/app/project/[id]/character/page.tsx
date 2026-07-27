@@ -25,10 +25,9 @@ const SUB_TOOLS = [
 ] as const;
 
 const POSE_OPTIONS = [
-  { key: 'tpose', label: 'T-pose', desc: '双臂平伸' },
-  { key: 'apose', label: 'A-pose', desc: '双臂微张' },
-  { key: 'free', label: '无限制', desc: 'AI自由发挥' },
-  { key: 'custom', label: '自定义', desc: '手动输入姿势' },
+  { key: 'apose', label: 'A-pose', desc: '双臂微张', prompt: '专业的A-pose姿势，双臂微张与身体呈45度夹角自然下垂，双腿微微分开与肩同宽，身体呈A字形' },
+  { key: 'free', label: '无限制', desc: 'AI自由发挥', prompt: '自然站立姿势' },
+  { key: 'custom', label: '自定义', desc: '手动输入姿势', prompt: '' },
 ] as const;
 
 const TOOL_KEY_MAP: Record<string, string> = {
@@ -58,22 +57,28 @@ export default function CharacterPage() {
   useEffect(() => {
     const saved = sessionStorage.getItem('preselect_image');
     if (saved) {
-      setSourceImage(saved);
+      setSourceImages(prev => ({ ...prev, tpose: saved }));
       sessionStorage.removeItem('preselect_image');
     }
   }, []);
 
   const [subTool, setSubTool] = useState<string>('tpose');
-  const [prompt, setPrompt] = useState('');
+  const [prompts, setPrompts] = useState<Record<string, string>>({});
   const [style, setStyle] = useState(projectStyle);
   const [directions, setDirections] = useState(8);
-  const [pose, setPose] = useState<string>('tpose');
+  const [pose, setPose] = useState<string>('apose');
   const [customPose, setCustomPose] = useState('');
   const [ratio, setRatio] = useState('1:1');
-  const [resolution, setResolution] = useState('1024x1024');
-  const [sourceImage, setSourceImage] = useState<string | null>(null);
+  const [resolution, setResolution] = useState('1080p');
+  const [sourceImages, setSourceImages] = useState<Record<string, string | null>>({});
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<ModelConfig | null>(null);
+
+  // Per-sub-tool derived values
+  const prompt = prompts[subTool] || '';
+  const sourceImage = sourceImages[subTool] || null;
+  const setPrompt = (value: string) => setPrompts(prev => ({ ...prev, [subTool]: value }));
+  const setSourceImage = (value: string | null) => setSourceImages(prev => ({ ...prev, [subTool]: value }));
 
   const { submitting, submitTask, completedTasks, refreshTasks } = useTaskQueue({
     projectId,
@@ -110,13 +115,12 @@ export default function CharacterPage() {
 
   const handleGenerate = async () => {
     if (subTool === 'tpose' && !prompt.trim()) return;
-    if ((subTool === 'directions' || subTool === 'part_split') && !sourceImage) return;
-    if (subTool === 'three_view' && !prompt.trim() && !sourceImage) return;
+    if ((subTool === 'directions' || subTool === 'part_split' || subTool === 'three_view') && !sourceImage) return;
     genTrigger();
 
     // Resolve pose text
     const poseText = subTool === 'tpose'
-      ? pose === 'custom' ? customPose : POSE_OPTIONS.find(p => p.key === pose)?.label || 'T-pose'
+      ? pose === 'custom' ? customPose : POSE_OPTIONS.find(p => p.key === pose)?.prompt || '专业的A-pose姿势，双臂微张与身体呈45度夹角自然下垂'
       : undefined;
 
     try {
@@ -126,7 +130,7 @@ export default function CharacterPage() {
         directions,
         pose: poseText,
         style,
-        ratio,
+        ratio: subTool === 'three_view' ? '16:9' : subTool === 'directions' ? '1:1' : ratio,
         resolution,
         model_id: selectedModelId || undefined,
       });
@@ -137,8 +141,7 @@ export default function CharacterPage() {
     }
   };
 
-  const needsImage = subTool === 'directions' || subTool === 'part_split';
-  const optionalImage = subTool === 'three_view';
+  const needsImage = subTool === 'directions' || subTool === 'part_split' || subTool === 'three_view';
 
   // Wait for params to load
   if (!params.id) {
@@ -171,12 +174,12 @@ export default function CharacterPage() {
         </div>
       </div>
 
-      {(needsImage || optionalImage) && (
+      {needsImage && (
         <ImageSourceSelector
           projectId={String(projectId)}
           imageUrl={sourceImage}
           onImageChange={setSourceImage}
-          label={needsImage ? '角色图片' : '参考图片（可选）'}
+          label="角色图片"
           assetType="character"
         />
       )}
@@ -193,11 +196,13 @@ export default function CharacterPage() {
         value={prompt}
         onChange={setPrompt}
         toolKey="character"
-        label={needsImage ? '补充描述（可选）' : optionalImage && sourceImage ? '补充描述（可选）' : '角色描述'}
-        placeholder={needsImage ? '描述需要调整的内容...' : optionalImage && sourceImage ? '描述需要调整的内容...' : '描述角色外观，如：身穿银色铠甲的女骑士，手持长剑...'}
+        label={needsImage ? '补充描述（可选）' : '角色描述'}
+        placeholder={needsImage ? '描述需要调整的内容...' : '描述角色外观，如：身穿银色铠甲的女骑士，手持长剑...'}
         rows={3}
       />
-      <StyleSelector value={style} onChange={setStyle} />
+      {subTool !== 'three_view' && subTool !== 'directions' && (
+        <StyleSelector value={style} onChange={setStyle} />
+      )}
       {subTool === 'tpose' && (
         <div className="space-y-3">
           <div>
@@ -250,11 +255,13 @@ export default function CharacterPage() {
           </div>
         </div>
       )}
-      <RatioSelector value={ratio} onChange={setRatio} />
-      <ResolutionSelector ratio={ratio} value={resolution} onChange={setResolution} />
+      {subTool !== 'three_view' && subTool !== 'directions' && (
+        <RatioSelector value={ratio} onChange={setRatio} />
+      )}
+      <ResolutionSelector ratio={subTool === 'three_view' ? '16:9' : subTool === 'directions' ? '1:1' : ratio} value={resolution} onChange={setResolution} />
       <button
         onClick={handleGenerate}
-        disabled={submitting || genCooldown || (subTool === 'directions' || subTool === 'part_split' ? !sourceImage : !prompt.trim()) || (subTool === 'tpose' && pose === 'custom' && !customPose.trim())}
+        disabled={submitting || genCooldown || (subTool === 'directions' || subTool === 'part_split' || subTool === 'three_view' ? !sourceImage : !prompt.trim()) || (subTool === 'tpose' && pose === 'custom' && !customPose.trim())}
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-0.5"
       >
         {submitting ? <><Loader2 className="h-4 w-4 animate-spin" />提交中...</> : <><Sparkles className="h-4 w-4" />生成角色<span className="ml-1 text-xs opacity-80">≈{formatCostDisplay(estimateCostFromModel(selectedModel, resolution, 1, sourceImage ? 1 : 0))}</span></>}
@@ -292,11 +299,16 @@ export default function CharacterPage() {
     </div>
   );
 
+  // Use direction-specific prompt key so PromptEditor shows the correct prompt
+  const displayToolKey = subTool === 'directions'
+    ? `character_directions_${directions}`
+    : TOOL_KEY_MAP[subTool];
+
   return (
     <ToolLayout
       title="角色生成"
       description="生成游戏角色：T-pose、三视图、多方向、部件拆分"
-      toolKey={TOOL_KEY_MAP[subTool]}
+      toolKey={displayToolKey}
       toolName={SUB_TOOLS.find(t => t.key === subTool)?.label || '角色生成'}
       paramsPanel={paramsPanel}
       canvas={canvas}

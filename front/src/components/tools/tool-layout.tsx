@@ -29,7 +29,7 @@ export function ToolLayout({ title, description, toolKey, toolName, params, para
         <div className="space-y-4">{leftPanel}</div>
         {toolKey && toolName && (
           <div className="mt-4">
-            <PromptEditor toolKey={toolKey} toolName={toolName} />
+            <PromptEditor key={toolKey} toolKey={toolKey} toolName={toolName} />
           </div>
         )}
       </div>

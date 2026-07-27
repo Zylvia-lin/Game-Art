@@ -124,9 +124,9 @@ async def optimize_user_prompt(data: OptimizePromptRequest):
     # Calculate cost from model pricing
     input_unit_price = float(model.get("input_price", 0) or 0)
     output_unit_price = float(model.get("output_price", 0) or 0)
-    input_cost = round(input_units * input_unit_price, 4)
-    output_cost = round(output_units * output_unit_price, 4)
-    total_cost = round(input_cost + output_cost, 4)
+    input_cost = round(input_units * input_unit_price, 8)
+    output_cost = round(output_units * output_unit_price, 8)
+    total_cost = round(input_cost + output_cost, 8)
 
     # Create billing record
     try:

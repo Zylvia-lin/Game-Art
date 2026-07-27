@@ -51,8 +51,19 @@ async def execute_generation(
     await report(10)
 
     # Load system prompt from DB
+    # For character_directions, try direction-specific prompt first (e.g. character_directions_4)
+    prompt_key = tool_key
+    directions = input_params.get("directions")
+    if directions and tool_key == "character_directions":
+        specific_key = f"character_directions_{directions}"
+        specific_row = await fetch_one(
+            "SELECT * FROM system_prompts WHERE tool_key = $1", specific_key
+        )
+        if specific_row:
+            prompt_key = specific_key
+
     prompt_row = await fetch_one(
-        "SELECT * FROM system_prompts WHERE tool_key = $1", tool_key
+        "SELECT * FROM system_prompts WHERE tool_key = $1", prompt_key
     )
     system_prompt = prompt_row["prompt_content"] if prompt_row else ""
 
@@ -136,8 +147,11 @@ def _build_final_prompt(system_prompt: str, user_prompt: str, input_params: dict
     # Replace {pose} with actual pose description (strong injection)
     if pose:
         final = final.replace("{pose}", pose)
+        # If system prompt doesn't use {pose} placeholder, append pose as strong instruction
+        if "{pose}" not in system_prompt:
+            final = f"{final}\n\n[姿势严格要求：{pose}，必须严格按照此姿势，不得有偏差]"
     else:
-        final = final.replace("{pose}", "标准站立姿势，双臂自然张开呈T字形")
+        final = final.replace("{pose}", "")
 
     # Replace {directions} if present
     if directions:

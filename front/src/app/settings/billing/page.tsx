@@ -118,7 +118,13 @@ export default function BillingPage() {
     setTimeout(() => setExporting(false), 1000);
   };
 
-  const formatCost = (n: number) => `¥${Number(n || 0).toFixed(2)}`;
+  const formatCost = (n: number) => {
+    const v = Number(n || 0);
+    if (v === 0) return '¥0';
+    if (v < 0.01) return `¥${v.toFixed(5)}`;
+    if (v < 1) return `¥${v.toFixed(4)}`;
+    return `¥${v.toFixed(2)}`;
+  };
   const formatDate = (iso: string) => {
     if (!iso) return '-';
     const d = new Date(iso);
