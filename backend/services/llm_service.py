@@ -1,9 +1,11 @@
 """
 LLM service for on-demand prompt optimization.
 Uses LangChain to call text generation models (DeepSeek, OpenAI, etc.).
+System prompt is loaded from the database (system_prompts table, tool_key='prompt_optimize').
 """
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
+from database import fetch_one
 
 
 async def optimize_prompt(
@@ -13,28 +15,23 @@ async def optimize_prompt(
 ) -> str:
     """
     Optimize a user prompt using an LLM via LangChain.
-    This is called on-demand when the user clicks the optimize button.
-
-    Args:
-        user_prompt: The user's raw prompt text
-        model: Model config dict with model_name, api_key, api_base_url
-        tool_key: Optional tool key for context-aware optimization
+    System prompt is loaded from DB (tool_key='prompt_optimize').
     """
-    try:
-        # Build system instruction based on tool type
-        if tool_key:
-            system_content = (
-                f"你是专业的游戏美术提示词工程师，擅长为{tool_key}场景优化提示词。"
-                "请根据用户输入的提示词，补充细节、丰富描述、增强画面感。"
-                "直接输出优化后的提示词，不要解释，不要添加多余标记。"
-            )
-        else:
-            system_content = (
-                "你是专业的游戏美术提示词工程师。"
-                "请根据用户输入的提示词，补充细节、丰富描述、增强画面感。"
-                "直接输出优化后的提示词，不要解释，不要添加多余标记。"
-            )
+    # Load system prompt for optimization from DB
+    prompt_row = await fetch_one(
+        "SELECT prompt_content FROM system_prompts WHERE tool_key = 'prompt_optimize'"
+    )
+    system_content = prompt_row["prompt_content"] if prompt_row else ""
 
+    # Fallback if no DB prompt configured
+    if not system_content:
+        system_content = (
+            "你是专业的游戏美术提示词工程师。"
+            "请根据用户输入的提示词，补充细节、丰富描述、增强画面感。"
+            "始终使用中文输出，直接输出优化后的提示词，不要解释。"
+        )
+
+    try:
         llm = ChatOpenAI(
             model=model["model_name"],
             openai_api_key=model["api_key"],
@@ -50,7 +47,6 @@ async def optimize_prompt(
 
         response = await llm.ainvoke(messages)
         content = response.content
-        # LangChain may return content as a list of blocks or an object
         if isinstance(content, list):
             content = "".join(
                 block.get("text", "") if isinstance(block, dict)

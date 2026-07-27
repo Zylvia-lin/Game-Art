@@ -115,21 +115,33 @@ def _build_final_prompt(system_prompt: str, user_prompt: str, input_params: dict
     if resolution:
         context_parts.append(f"Resolution: {resolution}")
 
+    pose = input_params.get("pose")
+    directions = input_params.get("directions")
+
     context_str = ", ".join(context_parts) if context_parts else ""
 
-    # If system prompt has {user_prompt} placeholder, replace it
+    # Build the final prompt with placeholder replacement
+    # Support {user_prompt} and {pose} placeholders in system prompts
     if "{user_prompt}" in system_prompt:
-        # Inject context before user prompt
         if context_str:
             final = system_prompt.replace("{user_prompt}", f"{user_prompt}\n\n[{context_str}]")
         else:
             final = system_prompt.replace("{user_prompt}", user_prompt)
     else:
-        # Prepend system prompt
         if context_str:
             final = f"{system_prompt}\n\n{user_prompt}\n\n[{context_str}]"
         else:
             final = f"{system_prompt}\n\n{user_prompt}" if system_prompt else user_prompt
+
+    # Replace {pose} with actual pose description (strong injection)
+    if pose:
+        final = final.replace("{pose}", pose)
+    else:
+        final = final.replace("{pose}", "标准站立姿势，双臂自然张开呈T字形")
+
+    # Replace {directions} if present
+    if directions:
+        final = final.replace("{directions}", f"{directions}方向")
 
     return final.strip()
 

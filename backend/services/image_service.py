@@ -4,6 +4,7 @@ Calls image generation APIs (Seedream, DALL-E, etc.) to generate images.
 """
 import os
 import io
+import json
 import math
 import httpx
 import base64
@@ -272,6 +273,16 @@ def _clamp_dimensions(w: int, h: int, model_name: str = "") -> tuple[int, int]:
         rh = max(8, round(rh * scale / 8) * 8)
         rw = max(8, round(rh * (w / h) / 8) * 8)
 
+    # Seedream 5.0 models have tight pixel minimums — rounding to 8-multiples
+    # can drop below MIN_PX. Re-clamp with a safety margin for these models.
+    name = (model_name or "").lower()
+    if "5-0" in name or "5.0" in name:
+        total = rw * rh
+        if total < MIN_PX:
+            scale = ((MIN_PX / total) ** 0.5) * 1.01
+            rh = max(8, round(rh * scale / 8) * 8)
+            rw = max(8, round(rh * (w / h) / 8) * 8)
+
     return rw, rh
 
 
@@ -295,9 +306,17 @@ def resolve_size(input_params: dict, model_name: str = "") -> str:
         except ValueError:
             pass
 
-    # Tier label → compute from ratio
+    # Tier label → compute from ratio, then clamp to model limits
     ratio = str(input_params.get("ratio", "1:1"))
-    return _compute_size(ratio, resolution)
+    size_str = _compute_size(ratio, resolution)
+    parts_w = size_str.split("x")
+    if len(parts_w) == 2:
+        try:
+            cw, ch = _clamp_dimensions(int(parts_w[0]), int(parts_w[1]), model_name)
+            return f"{cw}x{ch}"
+        except ValueError:
+            pass
+    return size_str
 
 
 async def generate_image(
@@ -379,9 +398,12 @@ async def generate_image(
         response = await client.post(url, json=body, headers=headers)
         if response.status_code != 200:
             error_text = response.text
-            print(f"[Image API] Error {response.status_code}: {error_text}")
-            print(f"[Image API] Request body: size={body.get('size')}, has_image={bool(body.get('image'))}")
-            # Try to extract a human-readable message from the API error
+            print(f"[Image API] ===== ERROR {response.status_code} =====")
+            print(f"[Image API] Model: {model.get('model_name')}")
+            print(f"[Image API] URL: {url}")
+            print(f"[Image API] Request body: {json.dumps(body, ensure_ascii=False, default=str)}")
+            print(f"[Image API] Response: {error_text}")
+            print(f"[Image API] ===== END ERROR =====")
             try:
                 error_json = response.json()
                 if isinstance(error_json, dict):
@@ -393,7 +415,7 @@ async def generate_image(
                 else:
                     msg = error_text
             except Exception:
-                msg = error_text[:300]
+                msg = error_text[:500]
             raise Exception(f"Image API error {response.status_code}: {msg}")
 
         data = response.json()

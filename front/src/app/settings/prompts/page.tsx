@@ -60,6 +60,7 @@ export default function PromptsSettingsPage() {
 
   // Group prompts by category
   const groups = [
+    { label: '系统', keys: ['prompt_optimize'] },
     { label: '基础生成', keys: ['text_to_image', 'image_to_image', 'inpaint'] },
     { label: '角色', keys: ['character_tpose', 'character_three_view', 'character_directions', 'character_part_split'] },
     { label: '动画', keys: ['animation_text', 'animation_frame_extract'] },

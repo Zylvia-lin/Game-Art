@@ -320,7 +320,7 @@ export function TaskQueuePanel({ projectId, onTaskComplete }: TaskQueuePanelProp
                         title={task.error_message || undefined}
                       >
                         {task.error_message
-                          ? task.error_message.slice(0, 200) + (task.error_message.length > 200 ? '...' : '')
+                          ? (task.error_message.length > 300 ? task.error_message.slice(0, 300) + '...' : task.error_message)
                           : task.input_params?.prompt
                             ? String(task.input_params.prompt).slice(0, 40) + (String(task.input_params.prompt).length > 40 ? '...' : '')
                             : formatTime(task.completed_at || task.created_at)}

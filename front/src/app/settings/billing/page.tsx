@@ -202,7 +202,6 @@ export default function BillingPage() {
               value={exportFrom}
               onChange={(e) => setExportFrom(e.target.value)}
               max={today}
-              defaultValue={thirtyDaysAgo}
               className="rounded-lg border border-border bg-input px-2 py-1.5 text-xs text-foreground focus:border-primary focus:outline-none"
             />
             <span className="text-xs text-muted-foreground">至</span>
@@ -211,7 +210,6 @@ export default function BillingPage() {
               value={exportTo}
               onChange={(e) => setExportTo(e.target.value)}
               max={today}
-              defaultValue={today}
               className="rounded-lg border border-border bg-input px-2 py-1.5 text-xs text-foreground focus:border-primary focus:outline-none"
             />
             <button
