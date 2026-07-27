@@ -235,6 +235,107 @@ async def init_db():
                 END IF;
             END $$;
         """)
+        # Migration: add pricing columns to model_configs
+        await conn.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'model_configs' AND column_name = 'input_price'
+                ) THEN
+                    ALTER TABLE model_configs ADD COLUMN input_price NUMERIC(10,6) DEFAULT 0;
+                END IF;
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'model_configs' AND column_name = 'output_price'
+                ) THEN
+                    ALTER TABLE model_configs ADD COLUMN output_price NUMERIC(10,6) DEFAULT 0;
+                END IF;
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'model_configs' AND column_name = 'price_unit'
+                ) THEN
+                    ALTER TABLE model_configs ADD COLUMN price_unit VARCHAR(50) DEFAULT 'per_image';
+                END IF;
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'model_configs' AND column_name = 'output_price_high'
+                ) THEN
+                    ALTER TABLE model_configs ADD COLUMN output_price_high NUMERIC(10,6) DEFAULT 0;
+                END IF;
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'model_configs' AND column_name = 'pixel_threshold'
+                ) THEN
+                    ALTER TABLE model_configs ADD COLUMN pixel_threshold BIGINT DEFAULT 2360000;
+                END IF;
+            END $$;
+        """)
+        # Migration: add model/billing detail columns to billing_records
+        await conn.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'billing_records' AND column_name = 'model_id'
+                ) THEN
+                    ALTER TABLE billing_records ADD COLUMN model_id UUID;
+                END IF;
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'billing_records' AND column_name = 'model_name'
+                ) THEN
+                    ALTER TABLE billing_records ADD COLUMN model_name VARCHAR(255);
+                END IF;
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'billing_records' AND column_name = 'unit_type'
+                ) THEN
+                    ALTER TABLE billing_records ADD COLUMN unit_type VARCHAR(50);
+                END IF;
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'billing_records' AND column_name = 'input_units'
+                ) THEN
+                    ALTER TABLE billing_records ADD COLUMN input_units NUMERIC(10,2) DEFAULT 0;
+                END IF;
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'billing_records' AND column_name = 'output_units'
+                ) THEN
+                    ALTER TABLE billing_records ADD COLUMN output_units NUMERIC(10,2) DEFAULT 0;
+                END IF;
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'billing_records' AND column_name = 'input_unit_price'
+                ) THEN
+                    ALTER TABLE billing_records ADD COLUMN input_unit_price NUMERIC(10,6) DEFAULT 0;
+                END IF;
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'billing_records' AND column_name = 'output_unit_price'
+                ) THEN
+                    ALTER TABLE billing_records ADD COLUMN output_unit_price NUMERIC(10,6) DEFAULT 0;
+                END IF;
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'billing_records' AND column_name = 'user_id'
+                ) THEN
+                    ALTER TABLE billing_records ADD COLUMN user_id UUID;
+                END IF;
+            END $$;
+        """)
+        # Migration: backfill unit_type + model_name for old billing records
+        await conn.execute("""
+            UPDATE billing_records
+               SET unit_type = CASE
+                       WHEN tool_key = 'prompt_optimize' THEN 'per_1M_tokens'
+                       WHEN tool_key = 'remove_bg' THEN 'per_1k_calls'
+                       ELSE 'per_image'
+                   END,
+                   model_name = COALESCE(model_name, '旧数据(模型未记录)')
+             WHERE unit_type IS NULL;
+        """)
     print("[DB] Tables initialized")
 
 

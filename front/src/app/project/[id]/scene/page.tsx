@@ -12,7 +12,9 @@ import { useTaskQueue } from '@/hooks/use-task-queue';
 import { useButtonCooldown } from '@/hooks/use-button-cooldown';
 import { PromptEditor } from '@/components/tools/prompt-editor';
 import type { Task } from '@/lib/types';
-import { estimateCostFromResolution, formatCostDisplay } from '@/lib/types';
+import { estimateCostFromModel, formatCostDisplay } from '@/lib/types';
+import { ModelSelector } from '@/components/tools/model-selector';
+import type { ModelConfig } from '@/lib/types';
 
 const SUB_TOOLS = [
   { key: 'map_generate', label: '地图生成', desc: '根据描述生成游戏地图' },
@@ -39,6 +41,8 @@ export default function ScenePage() {
   const [ratio, setRatio] = useState('16:9');
   const [resolution, setResolution] = useState('1920x1080');
   const [sourceImage, setSourceImage] = useState<string | null>(null);
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<ModelConfig | null>(null);
 
   const handleTaskComplete = useCallback((_task: Task) => {}, []);
   const { submitting, submitTask } = useTaskQueue({ projectId, onTaskComplete: handleTaskComplete });
@@ -77,6 +81,7 @@ export default function ScenePage() {
         tile_size: tileSize,
         ratio,
         resolution,
+        model_id: selectedModelId || undefined,
       });
       toast.success('任务提交成功');
     } catch (err) {
@@ -114,6 +119,14 @@ export default function ScenePage() {
           assetType="scene"
         />
       )}
+      <ModelSelector
+        type="image"
+        value={selectedModelId}
+        onChange={(id, model) => {
+          setSelectedModelId(id);
+          setSelectedModel(model);
+        }}
+      />
       <PromptInput
         value={prompt}
         onChange={setPrompt}
@@ -175,7 +188,7 @@ export default function ScenePage() {
           <>
             <Sparkles className="h-4 w-4" />
             生成场景
-            <span className="ml-1 text-xs opacity-80">≈{formatCostDisplay(estimateCostFromResolution(resolution, 1, sourceImage ? 1 : 0))}</span>
+            <span className="ml-1 text-xs opacity-80">≈{formatCostDisplay(estimateCostFromModel(selectedModel, resolution, 1, sourceImage ? 1 : 0))}</span>
           </>
         )}
       </button>

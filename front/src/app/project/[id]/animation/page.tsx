@@ -13,7 +13,9 @@ import { useButtonCooldown } from '@/hooks/use-button-cooldown';
 import { resolveImageUrl, toolsApi } from '@/lib/api';
 import { PromptEditor } from '@/components/tools/prompt-editor';
 import type { Task } from '@/lib/types';
-import { estimateCostFromResolution, formatCostDisplay } from '@/lib/types';
+import { estimateCostFromModel, formatCostDisplay } from '@/lib/types';
+import { ModelSelector } from '@/components/tools/model-selector';
+import type { ModelConfig } from '@/lib/types';
 
 const SUB_TOOLS = [
   { key: 'text', label: '动作生成', desc: '描述动作，AI生成动画帧序列' },
@@ -51,6 +53,8 @@ export default function AnimationPage() {
   const [ratio, setRatio] = useState('16:9');
   const [resolution, setResolution] = useState('1280x720');
   const [error, setError] = useState<string | null>(null);
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<ModelConfig | null>(null);
 
   // 帧提取（本地处理）相关状态
   const [extractRows, setExtractRows] = useState(4);
@@ -92,6 +96,7 @@ export default function AnimationPage() {
         frame_count: frameCount,
         ratio,
         resolution,
+        model_id: selectedModelId || undefined,
       });
       toast.success('任务已提交，请在任务队列中查看进度');
     } catch (err) {
@@ -149,6 +154,16 @@ export default function AnimationPage() {
         </div>
       </div>
 
+      {subTool === 'text' && (
+        <ModelSelector
+          type="image"
+          value={selectedModelId}
+          onChange={(id, model) => {
+            setSelectedModelId(id);
+            setSelectedModel(model);
+          }}
+        />
+      )}
       <ImageSourceSelector
         label={subTool === 'frame_extract' ? 'Sprite 网格图' : '角色图片'}
         projectId={String(projectId)}
@@ -258,7 +273,7 @@ export default function AnimationPage() {
             <>
               <Play size={18} />
               生成动画帧
-              <span className="ml-1 text-xs opacity-80">≈{formatCostDisplay(estimateCostFromResolution(resolution, 1))}</span>
+              <span className="ml-1 text-xs opacity-80">≈{formatCostDisplay(estimateCostFromModel(selectedModel, resolution, 1, imageUrl ? 1 : 0))}</span>
             </>
           )}
         </button>

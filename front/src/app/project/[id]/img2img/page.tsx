@@ -12,7 +12,9 @@ import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors'
 import { projectsApi, generateApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { useButtonCooldown } from '@/hooks/use-button-cooldown';
-import { computeSize, estimateCost, formatCostDisplay } from '@/lib/types';
+import { computeSize, estimateCostFromModel, formatCostDisplay } from '@/lib/types';
+import { ModelSelector } from '@/components/tools/model-selector';
+import type { ModelConfig } from '@/lib/types';
 
 export default function ImageToImagePage() {
   const params = useParams();
@@ -22,6 +24,8 @@ export default function ImageToImagePage() {
   const [ratio, setRatio] = useState('1:1');
   const [resolution, setResolution] = useState('2K');
   const [error, setError] = useState<string | null>(null);
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<ModelConfig | null>(null);
 
   // Load project style (for potential future use in img2img prompts)
   useEffect(() => {
@@ -75,6 +79,7 @@ export default function ImageToImagePage() {
         prompt,
         ratio,
         resolution: computeSize(ratio, resolution),
+        model_id: selectedModelId || undefined,
       });
       toast.success('任务提交成功');
     } catch (err) {
@@ -85,6 +90,14 @@ export default function ImageToImagePage() {
 
   const paramsPanel = (
     <>
+      <ModelSelector
+        type="image"
+        value={selectedModelId}
+        onChange={(id, model) => {
+          setSelectedModelId(id);
+          setSelectedModel(model);
+        }}
+      />
       <ImageSourceSelector
         projectId={String(projectId)}
         imageUrl={imageUrl || null}
@@ -114,7 +127,7 @@ export default function ImageToImagePage() {
             <Sparkles className="h-4 w-4" />
             生成
             <span className="ml-1 text-xs opacity-80">
-              {formatCostDisplay(estimateCost(resolution, 1, 1))}
+              {formatCostDisplay(estimateCostFromModel(selectedModel, resolution, 1, 1))}
             </span>
           </>
         )}

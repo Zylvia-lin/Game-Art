@@ -36,10 +36,12 @@ async def execute_generation(
     tool_key: str,
     input_params: dict,
     on_progress=None,
+    model_config: dict | None = None,
 ) -> dict:
     """
     Execute a generation task.
     System prompt is directly injected into user prompt (no LLM call).
+    Accepts optional model_config from caller; falls back to default image model.
     Returns {"output_urls": [...], "final_prompt": "..."}
     """
     async def report(pct: int):
@@ -66,10 +68,12 @@ async def execute_generation(
 
     await report(30)
 
-    # Get default image model
-    image_model = await fetch_one(
-        "SELECT * FROM model_configs WHERE type = 'image' AND is_default = true LIMIT 1"
-    )
+    # Use provided model config or fall back to default image model
+    image_model = model_config
+    if not image_model:
+        image_model = await fetch_one(
+            "SELECT * FROM model_configs WHERE type = 'image' AND is_default = true LIMIT 1"
+        )
     if not image_model:
         raise Exception("No image model configured. Please add an image model in settings.")
 

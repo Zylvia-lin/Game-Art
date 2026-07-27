@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { BarChart3, TrendingUp, Image as ImageIcon, DollarSign, Calendar, ArrowLeft } from 'lucide-react';
+import { BarChart3, TrendingUp, Image as ImageIcon, DollarSign, Calendar, ArrowLeft, Download, Filter } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { billingApi } from '@/lib/api';
+import { billingApi, projectsApi } from '@/lib/api';
 
 interface BillingSummary {
   total_tasks: number;
@@ -34,9 +34,26 @@ interface BillingRecord {
   input_cost: number;
   output_cost: number;
   total_cost: number;
+  model_id: string | null;
+  model_name: string | null;
+  unit_type: string | null;
+  input_units: number;
+  output_units: number;
   status: string;
   created_at: string;
 }
+
+interface ProjectOption {
+  id: string;
+  name: string;
+}
+
+const MODEL_TYPES = [
+  { value: '', label: '全部类型' },
+  { value: 'per_image', label: '图片模型' },
+  { value: 'per_1M_tokens', label: '文本模型' },
+  { value: 'per_1k_calls', label: '工具模型' },
+];
 
 type PeriodType = 'daily' | 'monthly';
 
@@ -49,13 +66,32 @@ export default function BillingPage() {
   const [days, setDays] = useState(30);
   const [loading, setLoading] = useState(true);
 
+  // Filters
+  const [projects, setProjects] = useState<ProjectOption[]>([]);
+  const [filterProjectId, setFilterProjectId] = useState('');
+  const [filterModelType, setFilterModelType] = useState('');
+
+  // Export
+  const [exportFrom, setExportFrom] = useState('');
+  const [exportTo, setExportTo] = useState('');
+  const [exporting, setExporting] = useState(false);
+
+  // Load project list for filter
+  useEffect(() => {
+    projectsApi.list().then(ps => {
+      setProjects(ps.map(p => ({ id: p.id, name: p.name })));
+    }).catch(() => {});
+  }, []);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
+      const pid = filterProjectId || undefined;
+      const mt = filterModelType || undefined;
       const [sumRes, statsRes, recRes] = await Promise.all([
-        billingApi.getSummary(),
-        billingApi.getStats(period, days),
-        billingApi.getRecords(50, 0),
+        billingApi.getSummary(pid, mt),
+        billingApi.getStats(period, days, pid, mt),
+        billingApi.getRecords(50, 0, pid, mt),
       ]);
       setSummary(sumRes);
       setStats(statsRes.data || []);
@@ -65,11 +101,22 @@ export default function BillingPage() {
     } finally {
       setLoading(false);
     }
-  }, [period, days]);
+  }, [period, days, filterProjectId, filterModelType]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const handleExport = () => {
+    if (!exportFrom || !exportTo) return;
+    setExporting(true);
+    const url = billingApi.getExportUrl(exportFrom, exportTo, filterProjectId || undefined, filterModelType || undefined);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `billing_${exportFrom}_${exportTo}.csv`;
+    a.click();
+    setTimeout(() => setExporting(false), 1000);
+  };
 
   const formatCost = (n: number) => `¥${Number(n || 0).toFixed(2)}`;
   const formatDate = (iso: string) => {
@@ -77,8 +124,9 @@ export default function BillingPage() {
     const d = new Date(iso);
     return d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
   };
+  const today = new Date().toISOString().slice(0, 10);
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
 
-  // Calculate max for chart scaling
   const maxCost = Math.max(...stats.map((s) => Number(s.total_cost || 0)), 0.01);
   const maxImages = Math.max(...stats.map((s) => Number(s.total_images || 0)), 1);
 
@@ -125,6 +173,58 @@ export default function BillingPage() {
       </header>
 
       <div className="mx-auto max-w-6xl px-6 py-6">
+        {/* Filters + Export bar */}
+        <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <select
+            value={filterProjectId}
+            onChange={(e) => setFilterProjectId(e.target.value)}
+            className="rounded-lg border border-border bg-input px-3 py-1.5 text-sm text-foreground focus:border-primary focus:outline-none"
+          >
+            <option value="">全部项目</option>
+            {projects.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <select
+            value={filterModelType}
+            onChange={(e) => setFilterModelType(e.target.value)}
+            className="rounded-lg border border-border bg-input px-3 py-1.5 text-sm text-foreground focus:border-primary focus:outline-none"
+          >
+            {MODEL_TYPES.map(t => (
+              <option key={t.value} value={t.value}>{t.label}</option>
+            ))}
+          </select>
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">导出:</span>
+            <input
+              type="date"
+              value={exportFrom}
+              onChange={(e) => setExportFrom(e.target.value)}
+              max={today}
+              defaultValue={thirtyDaysAgo}
+              className="rounded-lg border border-border bg-input px-2 py-1.5 text-xs text-foreground focus:border-primary focus:outline-none"
+            />
+            <span className="text-xs text-muted-foreground">至</span>
+            <input
+              type="date"
+              value={exportTo}
+              onChange={(e) => setExportTo(e.target.value)}
+              max={today}
+              defaultValue={today}
+              className="rounded-lg border border-border bg-input px-2 py-1.5 text-xs text-foreground focus:border-primary focus:outline-none"
+            />
+            <button
+              onClick={handleExport}
+              disabled={exporting || !exportFrom || !exportTo}
+              className="flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 disabled:opacity-50 transition-all"
+            >
+              <Download className="h-3.5 w-3.5" />
+              {exporting ? '导出中...' : '导出CSV'}
+            </button>
+          </div>
+        </div>
+
         {loading ? (
           <div className="flex h-96 items-center justify-center">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -184,45 +284,64 @@ export default function BillingPage() {
                       <div
                         key={stat.period}
                         className="group relative flex flex-1 flex-col items-center gap-1"
-                        style={{ minWidth: '40px' }}
+                        style={{ minWidth: '44px' }}
                       >
-                        {/* Tooltip */}
-                        <div className="pointer-events-none absolute -top-2 left-1/2 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg border border-border bg-popover px-3 py-2 text-xs opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
-                          <div className="font-medium text-foreground">{stat.period}</div>
-                          <div className="mt-1 text-muted-foreground">
-                            <span className="text-foreground">{stat.total_images || 0}</span> 张图
-                          </div>
-                          <div className="text-muted-foreground">
-                            <span className="text-foreground">{formatCost(stat.total_cost)}</span>
+                        {/* Hover tooltip */}
+                        <div className="pointer-events-none absolute -top-2 left-1/2 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg border border-border bg-popover/95 px-3 py-2 text-xs opacity-0 shadow-xl backdrop-blur transition-all group-hover:opacity-100">
+                          <div className="font-semibold text-foreground text-xs">{stat.period}</div>
+                          <div className="mt-1.5 space-y-0.5">
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <span className="h-2 w-2 rounded-full bg-orange-400/70 inline-block" />
+                              费用: <span className="text-foreground font-medium">{formatCost(stat.total_cost)}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <span className="h-2 w-2 rounded-full bg-chart-2/70 inline-block" />
+                              图片: <span className="text-foreground font-medium">{stat.total_images || 0} 张</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <span className="h-2 w-2 rounded-full bg-chart-3/70 inline-block" />
+                              任务: <span className="text-foreground font-medium">{stat.task_count || 0} 次</span>
+                            </div>
                           </div>
                         </div>
 
-                        {/* Bars */}
-                        <div className="flex h-40 w-full items-end justify-center gap-0.5">
+                        <div className="flex w-full justify-center gap-0.5 h-5">
+                          <span
+                            className="text-[9px] text-orange-400/90 font-medium text-center leading-tight"
+                            style={{ width: '14px' }}
+                            title={formatCost(stat.total_cost)}
+                          >
+                            {Number(stat.total_cost) > 0 ? (Number(stat.total_cost) < 1 ? Number(stat.total_cost).toFixed(1) : Math.round(Number(stat.total_cost))) : ''}
+                          </span>
+                          <span
+                            className="text-[9px] text-chart-2/80 font-medium text-center leading-tight"
+                            style={{ width: '14px' }}
+                          >
+                            {Number(stat.total_images) > 0 ? stat.total_images : ''}
+                          </span>
+                        </div>
+
+                        <div className="flex h-36 w-full items-end justify-center gap-0.5">
                           <div
-                            className="w-3 rounded-t bg-primary/70 transition-all duration-300 hover:bg-primary"
+                            className="w-3 rounded-t bg-orange-400/70 transition-all duration-300 hover:bg-orange-400"
                             style={{ height: `${costHeight}px` }}
-                            title={`费用: ${formatCost(stat.total_cost)}`}
                           />
                           <div
                             className="w-3 rounded-t bg-chart-2/70 transition-all duration-300 hover:bg-chart-2"
                             style={{ height: `${imgHeight}px` }}
-                            title={`图片: ${stat.total_images || 0} 张`}
                           />
                         </div>
 
-                        {/* Label */}
-                        <span className="text-[10px] text-muted-foreground">{label}</span>
+                        <span className="text-[10px] text-muted-foreground mt-1">{label}</span>
                       </div>
                     );
                   })}
                 </div>
               )}
 
-              {/* Legend */}
               <div className="mt-4 flex items-center justify-center gap-6 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1.5">
-                  <span className="h-3 w-3 rounded bg-primary/70" />
+                  <span className="h-3 w-3 rounded bg-orange-400/70" />
                   费用（元）
                 </span>
                 <span className="flex items-center gap-1.5">
@@ -247,9 +366,11 @@ export default function BillingPage() {
                     <thead>
                       <tr className="border-b border-border text-left text-xs text-muted-foreground">
                         <th className="px-6 py-3 font-medium">时间</th>
+                        <th className="px-6 py-3 font-medium">类别</th>
                         <th className="px-6 py-3 font-medium">工具</th>
+                        <th className="px-6 py-3 font-medium">模型</th>
                         <th className="px-6 py-3 font-medium">分辨率</th>
-                        <th className="px-6 py-3 font-medium text-center">图片数</th>
+                        <th className="px-6 py-3 font-medium text-center">消耗</th>
                         <th className="px-6 py-3 font-medium text-right">输入费用</th>
                         <th className="px-6 py-3 font-medium text-right">输出费用</th>
                         <th className="px-6 py-3 font-medium text-right">合计</th>
@@ -264,14 +385,32 @@ export default function BillingPage() {
                           <td className="px-6 py-3 text-muted-foreground whitespace-nowrap">
                             {formatDate(rec.created_at)}
                           </td>
+                          <td className="px-6 py-3">
+                            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                              rec.unit_type === 'per_1M_tokens'
+                                ? 'bg-blue-500/10 text-blue-400'
+                                : rec.unit_type === 'per_1k_calls'
+                                  ? 'bg-amber-500/10 text-amber-400'
+                                  : 'bg-primary/10 text-primary'
+                            }`}>
+                              {rec.unit_type === 'per_1M_tokens' ? '文本' : rec.unit_type === 'per_1k_calls' ? '工具' : '图片'}
+                            </span>
+                          </td>
                           <td className="px-6 py-3 text-foreground">
                             {rec.tool_name || rec.tool_key}
+                          </td>
+                          <td className="px-6 py-3 text-muted-foreground text-xs">
+                            {rec.model_name || '-'}
                           </td>
                           <td className="px-6 py-3 text-muted-foreground font-mono text-xs">
                             {rec.resolution || '-'}
                           </td>
-                          <td className="px-6 py-3 text-center text-foreground">
-                            {rec.image_count}
+                          <td className="px-6 py-3 text-center text-muted-foreground text-xs">
+                            {rec.unit_type === 'per_1M_tokens'
+                              ? `${rec.input_units?.toFixed(2) || 0}M/${rec.output_units?.toFixed(2) || 0}M tokens`
+                              : rec.unit_type === 'per_1k_calls'
+                                ? `${((rec.output_units || 0) * 1000).toFixed(0)} 次`
+                                : `${rec.image_count} 张`}
                           </td>
                           <td className="px-6 py-3 text-right text-muted-foreground">
                             {formatCost(rec.input_cost)}

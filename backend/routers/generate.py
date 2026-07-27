@@ -7,7 +7,7 @@ import json
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional
-from database import fetch_one, fetch_all, execute
+from database import fetch_one, fetch_all, execute, get_pool
 from services.task_queue import (
     create_task, get_task, get_project_tasks, get_queue_stats, cancel_task,
     delete_project_tasks, delete_single_task,
@@ -19,6 +19,7 @@ router = APIRouter(prefix="/api/generate", tags=["generate"])
 
 class GenerateRequest(BaseModel):
     project_id: str
+    model_id: Optional[str] = None
     prompt: Optional[str] = None
     style: Optional[str] = None
     ratio: Optional[str] = None
@@ -95,9 +96,9 @@ async def optimize_user_prompt(data: OptimizePromptRequest):
     if not data.prompt or not data.prompt.strip():
         raise HTTPException(status_code=400, detail="提示词不能为空")
 
-    # Load default text model config
+    # Load default text model config (full record with pricing)
     model = await fetch_one(
-        "SELECT model_name, api_key, api_base_url FROM model_configs WHERE type = 'text' AND is_default = true LIMIT 1"
+        "SELECT * FROM model_configs WHERE type = 'text' AND is_default = true LIMIT 1"
     )
     if not model:
         raise HTTPException(
@@ -110,6 +111,49 @@ async def optimize_user_prompt(data: OptimizePromptRequest):
         model=model,
         tool_key=data.tool_key,
     )
+
+    # Estimate token usage (chars → tokens)
+    # Chinese ~1.5 chars/token, English ~4 chars/token, use avg 2.5
+    input_chars = len(data.prompt)
+    output_chars = len(optimized)
+    estimated_input_tokens = input_chars / 2.5
+    estimated_output_tokens = output_chars / 2.5
+    input_units = round(estimated_input_tokens / 1_000_000, 6)  # per 1M tokens
+    output_units = round(estimated_output_tokens / 1_000_000, 6)
+
+    # Calculate cost from model pricing
+    input_unit_price = float(model.get("input_price", 0) or 0)
+    output_unit_price = float(model.get("output_price", 0) or 0)
+    input_cost = round(input_units * input_unit_price, 4)
+    output_cost = round(output_units * output_unit_price, 4)
+    total_cost = round(input_cost + output_cost, 4)
+
+    # Create billing record
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """INSERT INTO billing_records
+                   (project_id, tool_key, tool_name, image_count,
+                    model_id, model_name, unit_type,
+                    input_units, output_units,
+                    input_unit_price, output_unit_price,
+                    input_cost, output_cost, total_cost, status)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'completed')""",
+                None,  # project_id — null for standalone optimization
+                "prompt_optimize",
+                "提示词优化",
+                0,
+                model.get("id"),
+                model.get("name"),
+                "per_1M_tokens",
+                input_units, output_units,
+                input_unit_price, output_unit_price,
+                input_cost, output_cost, total_cost,
+            )
+    except Exception as e:
+        print(f"Failed to create billing record for prompt optimization: {e}")
+
     return {"optimized_prompt": optimized}
 
 
@@ -126,14 +170,27 @@ async def submit_generation(tool_key: str, data: GenerateRequest):
 
     # Check model configuration for AI-dependent tools
     if tool_key not in LOCAL_ONLY_TOOLS:
-        image_model = await fetch_one(
-            "SELECT id FROM model_configs WHERE type = 'image' AND is_default = true LIMIT 1"
-        )
-        if not image_model:
-            raise HTTPException(
-                status_code=400,
-                detail="未配置图片模型，请先在「模型配置」页面添加图片模型API密钥",
+        # Validate specific model if provided, otherwise check default exists
+        if data.model_id:
+            specific_model = await fetch_one(
+                "SELECT id, type FROM model_configs WHERE id = $1", data.model_id
             )
+            if not specific_model:
+                raise HTTPException(status_code=400, detail=f"指定的模型 {data.model_id} 不存在")
+            if specific_model["type"] != "image":
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"指定的模型类型为 {specific_model['type']}，图片生成需要 image 类型模型",
+                )
+        else:
+            image_model = await fetch_one(
+                "SELECT id FROM model_configs WHERE type = 'image' AND is_default = true LIMIT 1"
+            )
+            if not image_model:
+                raise HTTPException(
+                    status_code=400,
+                    detail="未配置图片模型，请先在「模型配置」页面添加图片模型API密钥",
+                )
 
         text_model = await fetch_one(
             "SELECT id FROM model_configs WHERE type = 'text' AND is_default = true LIMIT 1"

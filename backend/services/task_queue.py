@@ -268,10 +268,27 @@ async def _process_single_task(task: dict):
         async def on_progress(pct: int):
             await update_task_status(task["id"], "processing", progress=pct)
 
+        # Look up model config: prefer model_id from input_params, fallback to default
+        model_config = None
+        model_id = task["input_params"].get("model_id")
+        if model_id:
+            model_config = await fetch_one(
+                "SELECT * FROM model_configs WHERE id = $1", model_id
+            )
+        if not model_config:
+            model_config = await fetch_one(
+                "SELECT * FROM model_configs WHERE type = 'image' AND is_default = true LIMIT 1"
+            )
+        if not model_config:
+            model_config = await fetch_one(
+                "SELECT * FROM model_configs WHERE type = 'image' LIMIT 1"
+            )
+
         result = await execute_generation(
             task["tool_key"],
             task["input_params"],
             on_progress,
+            model_config,
         )
 
         # Generate default output names
@@ -303,6 +320,7 @@ async def _process_single_task(task: dict):
             task["tool_key"],
             task["input_params"],
             result["output_urls"],
+            model_config,
         )
 
     except Exception as e:
@@ -347,50 +365,57 @@ def stop_processing():
 
 
 # ── Billing ──────────────────────────────────────────────
-# Seedream pricing:
-#   Input image:  0.02 / image
-#   Output ≤ 2.36M px:  0.30 / image
-#   Output > 2.36M px:  0.60 / image
-PIXEL_THRESHOLD = 2_360_000
-INPUT_PRICE = 0.02
-OUTPUT_PRICE_LOW = 0.30
-OUTPUT_PRICE_HIGH = 0.60
+# Fallback defaults (used when model config has no pricing set)
+_FALLBACK_PIXEL_THRESHOLD = 2_360_000
+_FALLBACK_INPUT_PRICE = 0.02
+_FALLBACK_OUTPUT_PRICE_LOW = 0.30
+_FALLBACK_OUTPUT_PRICE_HIGH = 0.60
 
 # Tool name mapping for billing display
 _TOOL_NAMES = {
     "text_to_image": "文生图",
     "image_to_image": "图生图",
     "inpaint": "局部重绘",
+    "image_edit": "图片编辑",
     "character_tpose": "角色T-Pose",
     "character_three_view": "角色三视图",
     "character_directions": "角色多方向",
     "character_part_split": "角色拆分",
-    "prop_original": "道具原创",
+    "prop_generate": "道具生成",
     "prop_variant": "道具变体",
     "ui_layout_generate": "UI布局生成",
     "ui_component_place": "UI组件放置",
     "ui_component_split": "UI组件拆分",
     "scene_map_generate": "场景地图",
     "scene_map_split": "场景地图拆分",
-    "animation_action": "动作生成",
+    "animation_text": "动作生成",
+    "remove_bg": "去除背景",
+    "prompt_optimize": "提示词优化",
 }
 
 
-def _calculate_cost(input_params: dict, output_urls: list) -> dict:
-    """Calculate billing cost based on input/output and resolution."""
-    # Count input images (img2img, inpaint have input images)
+def _calculate_cost(input_params: dict, output_urls: list, model_config: dict | None = None) -> dict:
+    """Calculate billing cost based on model-specific pricing.
+    Falls back to hardcoded defaults when model_config has no pricing set."""
+    # Count input images (img2img, inpaint, etc.)
     input_image_count = 0
-    if input_params.get("source_image"):
+    if input_params.get("image_url"):
         input_image_count += 1
-    if input_params.get("mask_image"):
-        input_image_count += 1
-    if input_params.get("reference_image"):
+    if input_params.get("mask_url"):
         input_image_count += 1
 
     # Count output images
     output_count = len(output_urls) if output_urls else 0
     if output_count == 0:
-        return {"input_cost": 0, "output_cost": 0, "total_cost": 0, "total_pixels": 0}
+        return {"input_cost": 0, "output_cost": 0, "total_cost": 0,
+                "total_pixels": 0, "input_units": 0, "output_units": 0}
+
+    # Get model-driven pricing (with fallback)
+    price_unit = (model_config or {}).get("price_unit", "per_image") or "per_image"
+    input_unit_price = float((model_config or {}).get("input_price", 0) or 0)
+    output_unit_price = float((model_config or {}).get("output_price", 0) or 0)
+    output_price_high = float((model_config or {}).get("output_price_high", 0) or 0)
+    pixel_threshold = int((model_config or {}).get("pixel_threshold", 0) or 0)
 
     # Parse resolution to get total pixels
     resolution = input_params.get("resolution", "")
@@ -402,17 +427,30 @@ def _calculate_cost(input_params: dict, output_urls: list) -> dict:
         except (ValueError, IndexError):
             pass
 
-    # Determine output price per image
-    if total_pixels > 0 and total_pixels <= PIXEL_THRESHOLD:
-        output_price = OUTPUT_PRICE_LOW
-    elif total_pixels > PIXEL_THRESHOLD:
-        output_price = OUTPUT_PRICE_HIGH
-    else:
-        # Fallback: no resolution info, assume high tier
-        output_price = OUTPUT_PRICE_HIGH
+    # Determine tiered output price for image models
+    if price_unit == "per_image":
+        if output_price_high > 0 and pixel_threshold > 0 and total_pixels > pixel_threshold:
+            output_unit_price = output_price_high
+    # (text/tool models use flat output_unit_price as-is)
 
-    input_cost = round(input_image_count * INPUT_PRICE, 4)
-    output_cost = round(output_count * output_price, 4)
+    # Fallback to hardcoded defaults only when no model is configured at all.
+    # When a model exists, 0 means "free / not configured" — no fallback.
+    if not model_config:
+        if input_unit_price == 0:
+            input_unit_price = _FALLBACK_INPUT_PRICE
+        if output_unit_price == 0:
+            if total_pixels > 0 and total_pixels <= _FALLBACK_PIXEL_THRESHOLD:
+                output_unit_price = _FALLBACK_OUTPUT_PRICE_LOW
+            elif total_pixels > _FALLBACK_PIXEL_THRESHOLD:
+                output_unit_price = _FALLBACK_OUTPUT_PRICE_HIGH
+            else:
+                output_unit_price = _FALLBACK_OUTPUT_PRICE_HIGH
+
+    input_units = input_image_count
+    output_units = output_count
+
+    input_cost = round(input_units * input_unit_price, 4)
+    output_cost = round(output_units * output_unit_price, 4)
     total_cost = round(input_cost + output_cost, 4)
 
     return {
@@ -420,6 +458,11 @@ def _calculate_cost(input_params: dict, output_urls: list) -> dict:
         "output_cost": output_cost,
         "total_cost": total_cost,
         "total_pixels": total_pixels,
+        "input_units": input_units,
+        "output_units": output_units,
+        "input_unit_price": input_unit_price,
+        "output_unit_price": output_unit_price,
+        "unit_type": price_unit,
     }
 
 
@@ -429,89 +472,173 @@ async def _create_billing_record(
     tool_key: str,
     input_params: dict,
     output_urls: list,
+    model_config: dict | None = None,
 ):
     """Create a billing record after task completion."""
-    cost = _calculate_cost(input_params, output_urls)
+    cost = _calculate_cost(input_params, output_urls, model_config)
     tool_name = _TOOL_NAMES.get(tool_key, tool_key)
     resolution = input_params.get("resolution", "")
+
+    model_id = (model_config or {}).get("id")
+    model_name = (model_config or {}).get("name")
 
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.execute(
             """INSERT INTO billing_records
                (project_id, task_id, tool_key, tool_name, image_count,
-                resolution, total_pixels, input_cost, output_cost, total_cost, status)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'completed')""",
+                resolution, total_pixels, input_cost, output_cost, total_cost,
+                model_id, model_name, unit_type,
+                input_units, output_units, input_unit_price, output_unit_price,
+                status)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'completed')""",
             project_id, task_id, tool_key, tool_name,
             len(output_urls) if output_urls else 0,
             resolution, cost["total_pixels"],
             cost["input_cost"], cost["output_cost"], cost["total_cost"],
+            model_id, model_name, cost["unit_type"],
+            cost["input_units"], cost["output_units"],
+            cost["input_unit_price"], cost["output_unit_price"],
         )
 
 
-async def get_billing_stats(period: str = "daily", days: int = 30) -> list:
-    """Get billing statistics grouped by date.
-    period: 'daily' or 'monthly'
-    """
+def _build_billing_where(base_where: str, params: list, project_id: str | None = None, model_type: str | None = None) -> tuple[str, list]:
+    """Append optional filter conditions to a WHERE clause."""
+    conditions = [base_where]
+    idx = len(params) + 1
+    if project_id:
+        conditions.append(f"project_id = ${idx}")
+        params.append(project_id)
+        idx += 1
+    if model_type:
+        conditions.append(f"unit_type = ${idx}")
+        params.append(model_type)
+        idx += 1
+    return " AND ".join(conditions), params
+
+
+async def get_billing_stats(
+    period: str = "daily", days: int = 30,
+    project_id: str | None = None, model_type: str | None = None,
+) -> list:
+    """Get billing statistics grouped by date."""
     pool = await get_pool()
     async with pool.acquire() as conn:
-        if period == "monthly":
-            rows = await conn.fetch(
-                """SELECT
-                    TO_CHAR(created_at, 'YYYY-MM') as period,
+        fmt = "'YYYY-MM'" if period == "monthly" else "'YYYY-MM-DD'"
+        base_where = f"created_at >= NOW() - make_interval(days => $1)"
+        where, params = _build_billing_where(base_where, [days], project_id, model_type)
+        rows = await conn.fetch(
+            f"""SELECT
+                    TO_CHAR(created_at, {fmt}) as period,
                     COUNT(*) as task_count,
                     SUM(image_count) as total_images,
                     SUM(input_cost) as total_input_cost,
                     SUM(output_cost) as total_output_cost,
                     SUM(total_cost) as total_cost
-                   FROM billing_records
-                   WHERE created_at >= NOW() - make_interval(days => $1)
-                   GROUP BY TO_CHAR(created_at, 'YYYY-MM')
-                   ORDER BY period DESC""",
-                days,
-            )
-        else:
-            rows = await conn.fetch(
-                """SELECT
-                    TO_CHAR(created_at, 'YYYY-MM-DD') as period,
-                    COUNT(*) as task_count,
-                    SUM(image_count) as total_images,
-                    SUM(input_cost) as total_input_cost,
-                    SUM(output_cost) as total_output_cost,
-                    SUM(total_cost) as total_cost
-                   FROM billing_records
-                   WHERE created_at >= NOW() - make_interval(days => $1)
-                   GROUP BY TO_CHAR(created_at, 'YYYY-MM-DD')
-                   ORDER BY period DESC""",
-                days,
-            )
+                FROM billing_records
+                WHERE {where}
+                GROUP BY TO_CHAR(created_at, {fmt})
+                ORDER BY period DESC""",
+            *params,
+        )
     return [dict(r) for r in rows]
 
 
-async def get_billing_summary() -> dict:
-    """Get overall billing summary."""
+async def get_billing_summary(
+    project_id: str | None = None, model_type: str | None = None,
+) -> dict:
+    """Get overall billing summary, optionally filtered."""
     pool = await get_pool()
     async with pool.acquire() as conn:
+        conditions = ["1=1"]
+        params = []
+        idx = 1
+        if project_id:
+            conditions.append(f"project_id = ${idx}")
+            params.append(project_id)
+            idx += 1
+        if model_type:
+            conditions.append(f"unit_type = ${idx}")
+            params.append(model_type)
+            idx += 1
+        where = " AND ".join(conditions)
         row = await conn.fetchrow(
-            """SELECT
-                COUNT(*) as total_tasks,
-                COALESCE(SUM(image_count), 0) as total_images,
-                COALESCE(SUM(input_cost), 0) as total_input_cost,
-                COALESCE(SUM(output_cost), 0) as total_output_cost,
-                COALESCE(SUM(total_cost), 0) as total_cost
-               FROM billing_records"""
+            f"""SELECT
+                    COUNT(*) as total_tasks,
+                    COALESCE(SUM(image_count), 0) as total_images,
+                    COALESCE(SUM(input_cost), 0) as total_input_cost,
+                    COALESCE(SUM(output_cost), 0) as total_output_cost,
+                    COALESCE(SUM(total_cost), 0) as total_cost
+                FROM billing_records WHERE {where}""",
+            *params,
         )
     return dict(row) if row else {}
 
 
-async def get_billing_records(limit: int = 50, offset: int = 0) -> list:
-    """Get billing records with pagination."""
+async def get_billing_records(
+    limit: int = 50, offset: int = 0,
+    project_id: str | None = None, model_type: str | None = None,
+) -> list:
+    """Get billing records with pagination and optional filters."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        params = [limit, offset]
+        conditions = ["1=1"]
+        idx = 3
+        if project_id:
+            conditions.append(f"project_id = ${idx}")
+            params.append(project_id)
+            idx += 1
+        if model_type:
+            conditions.append(f"unit_type = ${idx}")
+            params.append(model_type)
+            idx += 1
+        where = " AND ".join(conditions)
+        rows = await conn.fetch(
+            f"""SELECT * FROM billing_records
+                WHERE {where}
+                ORDER BY created_at DESC
+                LIMIT $1 OFFSET $2""",
+            *params,
+        )
+    return [dict(r) for r in rows]
+
+
+async def get_billing_records_export(
+    dt_from, dt_to,
+    project_id: str | None = None, model_type: str | None = None,
+) -> list:
+    """Get all billing records in a date range for export (no pagination)."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        params = [dt_from, dt_to]
+        conditions = ["created_at >= $1", "created_at < $2"]
+        idx = 3
+        if project_id:
+            conditions.append(f"project_id = ${idx}")
+            params.append(project_id)
+            idx += 1
+        if model_type:
+            conditions.append(f"unit_type = ${idx}")
+            params.append(model_type)
+            idx += 1
+        where = " AND ".join(conditions)
+        rows = await conn.fetch(
+            f"SELECT * FROM billing_records WHERE {where} ORDER BY created_at DESC",
+            *params,
+        )
+    return [dict(r) for r in rows]
+
+
+async def get_distinct_projects() -> list:
+    """Get distinct projects with billing records."""
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            """SELECT * FROM billing_records
-               ORDER BY created_at DESC
-               LIMIT $1 OFFSET $2""",
-            limit, offset,
+            """SELECT DISTINCT br.project_id, p.name as project_name
+               FROM billing_records br
+               LEFT JOIN projects p ON br.project_id = p.id
+               WHERE br.project_id IS NOT NULL
+               ORDER BY p.name"""
         )
     return [dict(r) for r in rows]

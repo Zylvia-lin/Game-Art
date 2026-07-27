@@ -41,6 +41,11 @@ export default function ModelsSettingsPage() {
     api_key: string;
     model_name: string;
     is_default: boolean;
+    input_price: number;
+    output_price: number;
+    output_price_high: number;
+    pixel_threshold: number;
+    price_unit: string;
   }>({
     type: 'text',
     name: '',
@@ -49,6 +54,11 @@ export default function ModelsSettingsPage() {
     api_key: '',
     model_name: 'deepseek-chat',
     is_default: false,
+    input_price: 0,
+    output_price: 0,
+    output_price_high: 0,
+    pixel_threshold: 2360000,
+    price_unit: 'per_image',
   });
   const [saving, setSaving] = useState(false);
 
@@ -96,22 +106,24 @@ export default function ModelsSettingsPage() {
   }, []);
 
   const resetForm = () => {
-    setForm({ type: 'text', name: '', provider: 'deepseek', api_base_url: 'https://api.deepseek.com/v1', api_key: '', model_name: 'deepseek-chat', is_default: false });
+    setForm({ type: 'text', name: '', provider: 'deepseek', api_base_url: 'https://api.deepseek.com/v1', api_key: '', model_name: 'deepseek-chat', is_default: false, input_price: 0, output_price: 0, output_price_high: 0, pixel_threshold: 2360000, price_unit: 'per_image' });
     setEditingId(null);
     setShowForm(false);
   };
 
-  // 切换模型类型时，重置提供商和API地址
+  // 切换模型类型时，重置提供商和API地址，设置定价单位
   const handleTypeChange = (type: ModelType) => {
     const providers = PROVIDER_CONFIG[type];
     const firstProvider = Object.keys(providers)[0] as string;
     const config = providers[firstProvider as keyof typeof providers];
+    const priceUnit = type === 'image' ? 'per_image' : type === 'text' ? 'per_1M_tokens' : 'per_1k_calls';
     setForm({
       ...form,
       type,
       provider: firstProvider,
       api_base_url: config.apiUrl,
       model_name: config.defaultModel,
+      price_unit: priceUnit,
     });
   };
 
@@ -134,7 +146,7 @@ export default function ModelsSettingsPage() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const data: ModelConfigCreate = {
+      const data = {
         type: form.type as 'text' | 'image' | 'tool',
         name: form.name,
         provider: form.provider,
@@ -142,6 +154,11 @@ export default function ModelsSettingsPage() {
         api_key: form.api_key,
         model_name: form.model_name,
         is_default: form.is_default,
+        input_price: form.input_price,
+        output_price: form.output_price,
+        output_price_high: form.output_price_high,
+        pixel_threshold: form.pixel_threshold,
+        price_unit: form.price_unit,
       };
       if (editingId) {
         const updateData: Record<string, unknown> = { ...data };
@@ -150,7 +167,7 @@ export default function ModelsSettingsPage() {
         }
         await modelsApi.update(editingId, updateData as Partial<ModelConfig>);
       } else {
-        await modelsApi.create(data);
+        await modelsApi.create(data as ModelConfigCreate);
       }
       resetForm();
       fetchConfigs();
@@ -189,6 +206,11 @@ export default function ModelsSettingsPage() {
       api_key: '',
       model_name: config.model_name,
       is_default: config.is_default,
+      input_price: config.input_price || 0,
+      output_price: config.output_price || 0,
+      output_price_high: config.output_price_high || 0,
+      pixel_threshold: config.pixel_threshold || 2360000,
+      price_unit: config.price_unit || 'per_image',
     });
     setEditingId(config.id);
     setShowForm(true);
@@ -326,6 +348,77 @@ export default function ModelsSettingsPage() {
                 />
                 <label htmlFor="is_default" className="text-sm text-foreground">设为默认模型</label>
               </div>
+
+              {/* 定价配置 */}
+              <div className="border-t border-border pt-4">
+                <label className="mb-2 block text-sm font-medium text-foreground">定价配置</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs text-muted-foreground">
+                      {form.type === 'image' ? '输入图单价 (元/张)' : form.type === 'text' ? '输入单价 (元/1M tokens)' : '输入单价'}
+                    </label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      min="0"
+                      value={form.input_price}
+                      onChange={(e) => setForm({ ...form, input_price: parseFloat(e.target.value) || 0 })}
+                      className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-muted-foreground">
+                      {form.type === 'image' ? '低分辨率输出单价 (元/张)' : form.type === 'text' ? '输出单价 (元/1M tokens)' : '处理单价 (元/千次)'}
+                    </label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      min="0"
+                      value={form.output_price}
+                      onChange={(e) => setForm({ ...form, output_price: parseFloat(e.target.value) || 0 })}
+                      className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+                    />
+                  </div>
+                </div>
+                {form.type === 'image' && (
+                  <div className="grid grid-cols-2 gap-3 mt-3">
+                    <div>
+                      <label className="mb-1 block text-xs text-muted-foreground">高分辨率输出单价 (元/张)</label>
+                      <input
+                        type="number"
+                        step="0.0001"
+                        min="0"
+                        value={form.output_price_high}
+                        onChange={(e) => setForm({ ...form, output_price_high: parseFloat(e.target.value) || 0 })}
+                        className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-muted-foreground">像素阈值 (万)</label>
+                      <input
+                        type="number"
+                        step="1"
+                        min="0"
+                        value={Math.round(form.pixel_threshold / 10000)}
+                        onChange={(e) => setForm({ ...form, pixel_threshold: (parseInt(e.target.value) || 0) * 10000 })}
+                        className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+                      />
+                    </div>
+                  </div>
+                )}
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  计价单位：
+                  <span className="text-primary font-medium ml-1">
+                    {form.price_unit === 'per_image' ? '元/张' : form.price_unit === 'per_1M_tokens' ? '元/百万token' : '元/千次'}
+                  </span>
+                  {form.type === 'image' && form.output_price_high > 0 && (
+                    <span className="ml-1">
+                      · 超过 {Math.round(form.pixel_threshold / 10000)} 万像素自动使用高分辨率单价
+                    </span>
+                  )}
+                  <span className="ml-1">（根据模型类型自动设定）</span>
+                </p>
+              </div>
             </div>
             <div className="mt-6 flex gap-3">
               <button onClick={resetForm} className="flex-1 rounded-lg border border-border py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
@@ -333,7 +426,7 @@ export default function ModelsSettingsPage() {
               </button>
               <button
                 onClick={handleSave}
-                disabled={saving || !form.name || !form.api_base_url || !form.api_key || (form.type !== 'tool' && !form.model_name)}
+                disabled={saving || !form.name || !form.api_base_url || (!editingId && !form.api_key) || (form.type !== 'tool' && !form.model_name)}
                 className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary py-2 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 transition-all"
               >
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : '保存'}
@@ -371,6 +464,11 @@ export default function ModelsSettingsPage() {
                       {config.is_default && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">默认</span>}
                     </div>
                     <p className="text-xs text-muted-foreground">{config.provider} / {config.model_name}</p>
+                    {(config.input_price > 0 || config.output_price > 0) && (
+                      <p className="text-xs text-primary/70">
+                        入 ¥{config.input_price} / 出 ¥{config.output_price} / 百万token
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -420,6 +518,12 @@ export default function ModelsSettingsPage() {
                       {config.is_default && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">默认</span>}
                     </div>
                     <p className="text-xs text-muted-foreground">{config.provider} / {config.model_name}</p>
+                    {(config.input_price > 0 || config.output_price > 0) && (
+                      <p className="text-xs text-primary/70">
+                        入 ¥{config.input_price} / 出 ¥{config.output_price}
+                        {config.output_price_high > 0 ? ` / 高 ¥${config.output_price_high}` : ''} / 张
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -461,6 +565,9 @@ export default function ModelsSettingsPage() {
                       {config.is_default && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">默认</span>}
                     </div>
                     <p className="text-xs text-muted-foreground">{config.provider} / {config.model_name || '无模型名'}</p>
+                    {config.output_price > 0 && (
+                      <p className="text-xs text-primary/70">¥{config.output_price} / 千次</p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">

@@ -11,7 +11,9 @@ import { PromptInput } from '@/components/tools/prompt-input';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { useButtonCooldown } from '@/hooks/use-button-cooldown';
 import type { Task } from '@/lib/types';
-import { estimateCostFromResolution, formatCostDisplay } from '@/lib/types';
+import { estimateCostFromModel, formatCostDisplay } from '@/lib/types';
+import { ModelSelector } from '@/components/tools/model-selector';
+import type { ModelConfig } from '@/lib/types';
 
 interface UIComponent {
   id: string;
@@ -41,6 +43,8 @@ export default function UIPage() {
   const [sourceImage, setSourceImage] = useState<string | null>(null);
   const [components, setComponents] = useState<UIComponent[]>([]);
   const [dragging, setDragging] = useState<string | null>(null);
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<ModelConfig | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
   const handleTaskComplete = useCallback((_task: Task) => {}, []);
@@ -86,6 +90,7 @@ export default function UIPage() {
         ratio,
         resolution,
         components: components.length > 0 ? components : undefined,
+        model_id: selectedModelId || undefined,
       });
       toast.success('任务提交成功');
     } catch (err) {
@@ -165,6 +170,14 @@ export default function UIPage() {
         />
       )}
 
+      <ModelSelector
+        type="image"
+        value={selectedModelId}
+        onChange={(id, model) => {
+          setSelectedModelId(id);
+          setSelectedModel(model);
+        }}
+      />
       <PromptInput
         value={prompt}
         onChange={setPrompt}
@@ -185,7 +198,7 @@ export default function UIPage() {
         {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
         {submitting ? '生成中...' : '生成'}
         {!submitting && (
-          <span className="ml-1 text-xs opacity-80">≈{formatCostDisplay(estimateCostFromResolution(resolution, 1, sourceImage ? 1 : 0))}</span>
+          <span className="ml-1 text-xs opacity-80">≈{formatCostDisplay(estimateCostFromModel(selectedModel, resolution, 1, sourceImage ? 1 : 0))}</span>
         )}
       </button>
     </div>

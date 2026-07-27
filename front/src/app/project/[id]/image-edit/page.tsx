@@ -6,7 +6,9 @@ import { Eraser, Paintbrush, Sparkles, Loader2, Undo2, Redo2, X, Check, Wand2, Z
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { useButtonCooldown } from '@/hooks/use-button-cooldown';
 import { resolveImageUrl, generateApi } from '@/lib/api';
-import { clampDimensions, estimateCostFromPixels, formatCostDisplay } from '@/lib/types';
+import { clampDimensions, estimateCostFromModelWithPixels, formatCostDisplay } from '@/lib/types';
+import { ModelSelector } from '@/components/tools/model-selector';
+import type { ModelConfig } from '@/lib/types';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { PromptInput } from '@/components/tools/prompt-input';
 import { ResultImageCard } from '@/components/tools/result-image-card';
@@ -38,6 +40,8 @@ export default function ImageEditPage() {
   const [modalReady, setModalReady] = useState(false);
   const [savedMaskUrl, setSavedMaskUrl] = useState('');
   const [savedRawMaskUrl, setSavedRawMaskUrl] = useState('');
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<ModelConfig | null>(null);
 
   // Refs
   const modalCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -444,6 +448,7 @@ export default function ImageEditPage() {
         prompt,
         original_width: nat?.w,
         original_height: nat?.h,
+        model_id: selectedModelId || undefined,
       });
       toast.success('局部重绘任务已提交');
     } catch (err) {
@@ -474,12 +479,12 @@ export default function ImageEditPage() {
   const brushCursor = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='${brushSize * 2}' height='${brushSize * 2}'%3E%3Ccircle cx='${brushSize}' cy='${brushSize}' r='${brushSize - 1}' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E") ${brushSize} ${brushSize}, crosshair`;
 
   const costDisplay = originalDimensions
-    ? formatCostDisplay(estimateCostFromPixels(
+    ? formatCostDisplay(estimateCostFromModelWithPixels(selectedModel,
         clampDimensions(originalDimensions.w, originalDimensions.h).w *
         clampDimensions(originalDimensions.w, originalDimensions.h).h,
         1, 1
       ))
-    : formatCostDisplay(estimateCostFromPixels(4194304, 1, 1));
+    : formatCostDisplay(estimateCostFromModelWithPixels(selectedModel, 4194304, 1, 1));
 
   // --- Params panel ---
   const paramsPanel = (
@@ -499,6 +504,15 @@ export default function ImageEditPage() {
         </button>
       </div>
 
+      {/* Model selector */}
+      <ModelSelector
+        type="image"
+        value={selectedModelId}
+        onChange={(id, model) => {
+          setSelectedModelId(id);
+          setSelectedModel(model);
+        }}
+      />
       {/* Image source */}
       <ImageSourceSelector
         projectId={projectId}

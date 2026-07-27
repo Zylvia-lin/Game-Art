@@ -7,6 +7,11 @@ export interface ModelConfig {
   api_key: string;
   model_name: string;
   is_default: boolean;
+  input_price: number;
+  output_price: number;
+  output_price_high: number;
+  pixel_threshold: number;
+  price_unit: 'per_image' | 'per_1M_tokens' | 'per_1k_calls';
   created_at?: string;
   updated_at?: string;
 }
@@ -19,6 +24,11 @@ export interface ModelConfigCreate {
   api_key: string;
   model_name: string;
   is_default: boolean;
+  input_price?: number;
+  output_price?: number;
+  output_price_high?: number;
+  pixel_threshold?: number;
+  price_unit?: string;
 }
 
 export interface SystemPrompt {
@@ -303,6 +313,66 @@ export function getOutputPriceFromResolution(resolution: string): number {
 function round(n: number): number {
   return Math.round(n * 100) / 100;
 }
+
+// ── 模型驱动定价（新）──────────────────────────────────
+
+/**
+ * 基于模型配置计算预估费用。
+ * 对 image 模型使用 per_image 定价，对 text 模型使用 per_1M_tokens。
+ * 当 model 为 null 或价格为 0 时，回退到旧的硬编码定价。
+ */
+export function estimateCostFromModel(
+  model: ModelConfig | null,
+  resolution: string,
+  outputCount: number = 1,
+  inputCount: number = 0,
+): number {
+  // Fallback to old hardcoded pricing when no model at all
+  if (!model) {
+    return estimateCost(resolution, outputCount, inputCount);
+  }
+
+  // Use model pricing directly; 0 means free / not configured
+  const inputPrice = model.input_price ?? 0;
+  let outputPrice = model.output_price ?? 0;
+  if (model.output_price_high > 0 && model.pixel_threshold > 0) {
+    const tierConfig = RESOLUTION_TIERS.find((t) => t.value === resolution);
+    const pixels = tierConfig?.targetPixels ?? 0;
+    // Also handle WxH format
+    if (resolution.includes('x')) {
+      const parts = resolution.split('x').map(Number);
+      const px = parts[0] * parts[1];
+      if (px > model.pixel_threshold) {
+        outputPrice = model.output_price_high;
+      }
+    } else if (pixels > model.pixel_threshold) {
+      outputPrice = model.output_price_high;
+    }
+  }
+
+  return round(inputCount * inputPrice + outputCount * outputPrice);
+}
+
+/**
+ * 基于模型配置 + 像素数计算预估费用。
+ * 用于 image-edit 等已知像素数的场景。
+ */
+export function estimateCostFromModelWithPixels(
+  model: ModelConfig | null,
+  totalPixels: number,
+  outputCount: number = 1,
+  inputCount: number = 0,
+): number {
+  if (!model) {
+    return estimateCostFromPixels(totalPixels, outputCount, inputCount);
+  }
+
+  const inputPrice = model.input_price ?? 0;
+  let outputPrice = model.output_price ?? 0;
+
+  return round(inputCount * inputPrice + outputCount * outputPrice);
+}
+
 
 // ── 图生图"使用原图"相关辅助 ────────────────────
 

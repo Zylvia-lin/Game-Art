@@ -10,6 +10,9 @@ import { ResultImageCard } from '@/components/tools/result-image-card';
 import { generateApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { useButtonCooldown } from '@/hooks/use-button-cooldown';
+import { estimateCostFromModel, formatCostDisplay } from '@/lib/types';
+import { ModelSelector } from '@/components/tools/model-selector';
+import type { ModelConfig } from '@/lib/types';
 
 export default function InpaintPage() {
   const params = useParams();
@@ -23,6 +26,8 @@ export default function InpaintPage() {
   const [isDrawing, setIsDrawing] = useState(false);
   const [history, setHistory] = useState<ImageData[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<ModelConfig | null>(null);
   const { submitting, submitTask, completedTasks, refreshTasks } = useTaskQueue({ projectId });
   const { isCoolingDown: genCooldown, triggerCooldown: genTrigger } = useButtonCooldown(2000);
 
@@ -196,6 +201,7 @@ export default function InpaintPage() {
         prompt,
         original_width: originalDimensions?.w,
         original_height: originalDimensions?.h,
+        model_id: selectedModelId || undefined,
       });
     } catch (err) {
       console.error('Inpaint failed:', err);
@@ -217,6 +223,14 @@ export default function InpaintPage() {
 
   const paramsPanel = (
     <>
+      <ModelSelector
+        type="image"
+        value={selectedModelId}
+        onChange={(id, model) => {
+          setSelectedModelId(id);
+          setSelectedModel(model);
+        }}
+      />
       <ImageSourceSelector
         projectId={String(projectId)}
         imageUrl={imageUrl || null}
@@ -273,7 +287,7 @@ export default function InpaintPage() {
         disabled={submitting || genCooldown || !imageUrl || !prompt.trim()}
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-0.5"
       >
-        {submitting ? <><Loader2 className="h-4 w-4 animate-spin" />提交中...</> : <><Sparkles className="h-4 w-4" />局部重绘</>}
+        {submitting ? <><Loader2 className="h-4 w-4 animate-spin" />提交中...</> : <><Sparkles className="h-4 w-4" />局部重绘<span className="ml-1 text-xs opacity-80">≈{formatCostDisplay(estimateCostFromModel(selectedModel, '2K', 1, imageUrl ? 1 : 0))}</span></>}
       </button>
     </>
   );

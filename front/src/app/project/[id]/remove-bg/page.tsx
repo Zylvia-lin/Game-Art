@@ -7,10 +7,11 @@ import { toast } from 'sonner';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { ResultImageCard } from '@/components/tools/result-image-card';
-import { projectsApi, generateApi, toolsApi } from '@/lib/api';
+import { projectsApi, generateApi, toolsApi, modelsApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { useButtonCooldown } from '@/hooks/use-button-cooldown';
 import { resolveImageUrl, API_BASE } from '@/lib/api';
+import type { ModelConfig } from '@/lib/api';
 
 const SCENES = [
   { value: 'general', label: '通用', desc: '自动识别主体，适合大多数场景' },
@@ -25,6 +26,17 @@ export default function RemoveBgPage() {
   const [scene, setScene] = useState('general');
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [toolModel, setToolModel] = useState<ModelConfig | null>(null);
+
+  // Auto-load default tool model for pricing display
+  useEffect(() => {
+    modelsApi.list('tool').then(models => {
+      if (models.length > 0) {
+        const def = models.find(m => m.is_default) || models[0];
+        setToolModel(def);
+      }
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!projectId) return;
@@ -148,6 +160,11 @@ export default function RemoveBgPage() {
           <>
             <Scissors className="h-4 w-4" />
             去除背景
+            {toolModel && toolModel.output_price > 0 ? (
+              <span className="ml-1 text-xs opacity-80">
+                ≈¥{(toolModel.output_price / 1000).toFixed(4)}/次
+              </span>
+            ) : null}
           </>
         )}
       </button>

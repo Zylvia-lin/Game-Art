@@ -4,12 +4,14 @@ Frame extraction, background removal (local + AI), and mask-based background fil
 """
 import os
 import uuid
+import time
+import json
 import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from config import settings
 from services.image_processor import extract_frames, remove_background, apply_background_mask
-from database import fetch_one
+from database import fetch_one, get_pool
 from routers.storage import get_storage_config_raw
 
 router = APIRouter(prefix="/api/tools", tags=["tools"])
@@ -210,6 +212,9 @@ async def ai_remove_bg_endpoint(data: AIRemoveBgRequest):
 
     scene = data.scene if data.scene in ("general", "human", "product") else "general"
 
+    # Time the API call for billing
+    start_time = time.perf_counter()
+
     try:
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(
@@ -244,6 +249,9 @@ async def ai_remove_bg_endpoint(data: AIRemoveBgRequest):
             img_resp.raise_for_status()
             img_bytes = img_resp.content
 
+        # Calculate elapsed time for billing
+        elapsed_seconds = round(time.perf_counter() - start_time, 2)
+
         # Save locally
         upload_dir = settings.UPLOAD_DIR
         os.makedirs(upload_dir, exist_ok=True)
@@ -251,6 +259,31 @@ async def ai_remove_bg_endpoint(data: AIRemoveBgRequest):
         filepath = os.path.join(upload_dir, filename)
         with open(filepath, "wb") as f:
             f.write(img_bytes)
+
+        # Create billing record for tool usage (per_1k_calls: 每次调用计为 0.001 千次)
+        output_unit_price = float(config.get("output_price", 0) or 0)  # 元/千次
+        output_units = 0.001  # 1 次调用 = 0.001 千次
+        total_cost = round(output_units * output_unit_price, 6)
+
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """INSERT INTO billing_records
+                   (project_id, tool_key, tool_name, image_count,
+                    model_id, model_name, unit_type,
+                    output_units, output_unit_price, total_cost, status)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'completed')""",
+                None,  # project_id — null for standalone tool usage
+                "remove_bg",
+                "去除背景",
+                1,
+                config.get("id"),
+                config.get("name"),
+                "per_1k_calls",
+                output_units,
+                output_unit_price,
+                total_cost,
+            )
 
         return {
             "url": f"/uploads/{filename}",

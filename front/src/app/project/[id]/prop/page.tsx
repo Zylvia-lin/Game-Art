@@ -13,7 +13,9 @@ import { projectsApi, generateApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { useButtonCooldown } from '@/hooks/use-button-cooldown';
 import type { Project } from '@/lib/types';
-import { estimateCostFromResolution, formatCostDisplay } from '@/lib/types';
+import { estimateCostFromModel, formatCostDisplay } from '@/lib/types';
+import { ModelSelector } from '@/components/tools/model-selector';
+import type { ModelConfig } from '@/lib/types';
 
 export default function PropPage() {
   const params = useParams();
@@ -26,6 +28,8 @@ export default function PropPage() {
   const [variantCount, setVariantCount] = useState(4);
   const [sourceImage, setSourceImage] = useState<string | null>(null);
   const [project, setProject] = useState<Project | null>(null);
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<ModelConfig | null>(null);
 
   const toolKeyMap: Record<string, string> = {
     generate: 'prop_generate',
@@ -106,6 +110,7 @@ export default function PropPage() {
         style,
         ratio,
         resolution,
+        model_id: selectedModelId || undefined,
       });
       toast.success('任务已提交，请在任务队列中查看进度');
     } catch (err) {
@@ -115,6 +120,14 @@ export default function PropPage() {
 
   const paramsPanel = (
     <>
+      <ModelSelector
+        type="image"
+        value={selectedModelId}
+        onChange={(id, model) => {
+          setSelectedModelId(id);
+          setSelectedModel(model);
+        }}
+      />
       <div>
         <label className="mb-1.5 block text-sm font-medium text-foreground">功能</label>
         <div className="flex gap-2">
@@ -178,7 +191,7 @@ export default function PropPage() {
         disabled={submitting || genCooldown || (subTool === 'generate' ? !prompt.trim() : !sourceImage)}
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-0.5"
       >
-        {submitting ? <><Loader2 className="h-4 w-4 animate-spin" />提交中...</> : <><Sparkles className="h-4 w-4" />{subTool === 'variant' ? '衍生变体' : '生成道具'}<span className="ml-1 text-xs opacity-80">≈{formatCostDisplay(estimateCostFromResolution(resolution, 1, sourceImage ? 1 : 0))}</span></>}
+        {submitting ? <><Loader2 className="h-4 w-4 animate-spin" />提交中...</> : <><Sparkles className="h-4 w-4" />{subTool === 'variant' ? '衍生变体' : '生成道具'}<span className="ml-1 text-xs opacity-80">≈{formatCostDisplay(estimateCostFromModel(selectedModel, resolution, 1, sourceImage ? 1 : 0))}</span></>}
       </button>
     </>
   );

@@ -11,7 +11,9 @@ import { ResultImageCard } from '@/components/tools/result-image-card';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { useButtonCooldown } from '@/hooks/use-button-cooldown';
 import { projectsApi, generateApi } from '@/lib/api';
-import { computeSize, estimateCost, formatCostDisplay } from '@/lib/types';
+import { computeSize, estimateCostFromModel, formatCostDisplay } from '@/lib/types';
+import { ModelSelector } from '@/components/tools/model-selector';
+import type { ModelConfig } from '@/lib/types';
 
 export default function TextToImagePage() {
   const params = useParams();
@@ -21,6 +23,8 @@ export default function TextToImagePage() {
   const [ratio, setRatio] = useState('1:1');
   const [resolution, setResolution] = useState('2K');
   const [error, setError] = useState<string | null>(null);
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<ModelConfig | null>(null);
 
   const { submitting, submitTask, completedTasks, refreshTasks } = useTaskQueue({
     projectId,
@@ -80,6 +84,7 @@ export default function TextToImagePage() {
         style,
         ratio,
         resolution: computeSize(ratio, resolution),
+        model_id: selectedModelId || undefined,
       });
       toast.success('任务提交成功');
     } catch (err) {
@@ -90,6 +95,14 @@ export default function TextToImagePage() {
 
   const paramsPanel = (
     <>
+      <ModelSelector
+        type="image"
+        value={selectedModelId}
+        onChange={(id, model) => {
+          setSelectedModelId(id);
+          setSelectedModel(model);
+        }}
+      />
       <PromptInput value={prompt} onChange={setPrompt} toolKey="text_to_image" />
       <StyleSelector value={style} onChange={setStyle} />
       <RatioSelector value={ratio} onChange={setRatio} />
@@ -114,7 +127,7 @@ export default function TextToImagePage() {
             <Sparkles className="h-4 w-4" />
             生成
             <span className="ml-1 text-xs opacity-80">
-              {formatCostDisplay(estimateCost(resolution, 1, 0))}
+              {formatCostDisplay(estimateCostFromModel(selectedModel, resolution, 1, 0))}
             </span>
           </>
         )}

@@ -22,6 +22,11 @@ export interface ModelConfig {
   api_key: string;
   model_name: string;
   is_default: boolean;
+  input_price: number;
+  output_price: number;
+  output_price_high: number;
+  pixel_threshold: number;
+  price_unit: string;
   created_at: string;
   updated_at: string;
 }
@@ -430,11 +435,37 @@ export function downloadImage(url: string, filename?: string): void {
 // ============================================
 
 export const billingApi = {
-  getSummary: () => request(`/api/billing/summary`),
+  getSummary: (projectId?: string, modelType?: string) => {
+    const params = new URLSearchParams();
+    if (projectId) params.set('project_id', projectId);
+    if (modelType) params.set('model_type', modelType);
+    const qs = params.toString();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return request<any>(`/api/billing/summary${qs ? `?${qs}` : ''}`);
+  },
 
-  getStats: (period: 'daily' | 'monthly' = 'daily', days = 30) =>
-    request(`/api/billing/stats?period=${period}&days=${days}`),
+  getStats: (period: 'daily' | 'monthly' = 'daily', days = 30, projectId?: string, modelType?: string) => {
+    const params = new URLSearchParams({ period, days: String(days) });
+    if (projectId) params.set('project_id', projectId);
+    if (modelType) params.set('model_type', modelType);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return request<any>(`/api/billing/stats?${params.toString()}`);
+  },
 
-  getRecords: (limit = 50, offset = 0) =>
-    request(`/api/billing/records?limit=${limit}&offset=${offset}`),
+  getRecords: (limit = 50, offset = 0, projectId?: string, modelType?: string) => {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (projectId) params.set('project_id', projectId);
+    if (modelType) params.set('model_type', modelType);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return request<any>(`/api/billing/records?${params.toString()}`);
+  },
+
+  getProjects: () => request<{ project_id: string; project_name: string }[]>('/api/billing/projects'),
+
+  getExportUrl: (dateFrom: string, dateTo: string, projectId?: string, modelType?: string) => {
+    const params = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
+    if (projectId) params.set('project_id', projectId);
+    if (modelType) params.set('model_type', modelType);
+    return `${API_BASE}/api/billing/export?${params.toString()}`;
+  },
 };

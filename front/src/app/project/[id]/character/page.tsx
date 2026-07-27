@@ -13,7 +13,9 @@ import { ResultImageCard } from '@/components/tools/result-image-card';
 import { projectsApi, generateApi } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { useButtonCooldown } from '@/hooks/use-button-cooldown';
-import { estimateCostFromResolution, formatCostDisplay } from '@/lib/types';
+import { estimateCostFromModel, formatCostDisplay } from '@/lib/types';
+import { ModelSelector } from '@/components/tools/model-selector';
+import type { ModelConfig } from '@/lib/types';
 
 const SUB_TOOLS = [
   { key: 'tpose', label: '基础角色生成', desc: '生成标准站姿角色' },
@@ -70,6 +72,8 @@ export default function CharacterPage() {
   const [ratio, setRatio] = useState('1:1');
   const [resolution, setResolution] = useState('1024x1024');
   const [sourceImage, setSourceImage] = useState<string | null>(null);
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<ModelConfig | null>(null);
 
   const { submitting, submitTask, completedTasks, refreshTasks } = useTaskQueue({
     projectId,
@@ -124,6 +128,7 @@ export default function CharacterPage() {
         style,
         ratio,
         resolution,
+        model_id: selectedModelId || undefined,
       });
       toast.success('任务提交成功');
     } catch (err) {
@@ -176,6 +181,14 @@ export default function CharacterPage() {
         />
       )}
 
+      <ModelSelector
+        type="image"
+        value={selectedModelId}
+        onChange={(id, model) => {
+          setSelectedModelId(id);
+          setSelectedModel(model);
+        }}
+      />
       <PromptInput
         value={prompt}
         onChange={setPrompt}
@@ -244,7 +257,7 @@ export default function CharacterPage() {
         disabled={submitting || genCooldown || (subTool === 'directions' || subTool === 'part_split' ? !sourceImage : !prompt.trim()) || (subTool === 'tpose' && pose === 'custom' && !customPose.trim())}
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-0.5"
       >
-        {submitting ? <><Loader2 className="h-4 w-4 animate-spin" />提交中...</> : <><Sparkles className="h-4 w-4" />生成角色<span className="ml-1 text-xs opacity-80">≈{formatCostDisplay(estimateCostFromResolution(resolution, 1, sourceImage ? 1 : 0))}</span></>}
+        {submitting ? <><Loader2 className="h-4 w-4 animate-spin" />提交中...</> : <><Sparkles className="h-4 w-4" />生成角色<span className="ml-1 text-xs opacity-80">≈{formatCostDisplay(estimateCostFromModel(selectedModel, resolution, 1, sourceImage ? 1 : 0))}</span></>}
       </button>
     </>
   );
