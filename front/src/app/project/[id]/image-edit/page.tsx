@@ -210,81 +210,51 @@ export default function ImageEditPage() {
     const canvas = maskPreviewRef.current;
     if (!canvas) return;
 
-    const fullUrl = resolveImageUrl(imageUrl);
+    // Use same-origin path via Next.js rewrite proxy (no CORS issues)
+    const imgSrc = imageUrl.startsWith('http')
+      ? new URL(imageUrl).pathname  // extract /uploads/... from full URL
+      : imageUrl.startsWith('/')
+        ? imageUrl
+        : `/${imageUrl}`;
 
-    // Load original image via fetch+blob to avoid CORS taint
-    const loadImg = (src: string): Promise<HTMLImageElement> => {
-      return new Promise((resolve, reject) => {
-        if (src.startsWith('data:') || src.startsWith('blob:')) {
-          const img = new window.Image();
-          img.onload = () => resolve(img);
-          img.onerror = reject;
-          img.src = src;
-        } else {
-          fetch(src)
-            .then((r) => r.blob())
-            .then((b) => {
-              const url = URL.createObjectURL(b);
-              const img = new window.Image();
-              img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
-              img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('img load failed')); };
-              img.src = url;
-            })
-            .catch(reject);
-        }
-      });
-    };
+    const img = new window.Image();
+    img.onload = () => {
+      const w = img.naturalWidth;
+      const h = img.naturalHeight;
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
 
-    const loadMask = (src: string): Promise<HTMLImageElement> => {
-      return new Promise((resolve, reject) => {
-        const img = new window.Image();
-        img.onload = () => resolve(img);
-        img.onerror = reject;
-        img.src = src;
-      });
-    };
+      // 1. Draw original image as base
+      ctx.drawImage(img, 0, 0);
 
-    (async () => {
-      try {
-        const [img, maskImg] = await Promise.all([
-          loadImg(fullUrl),
-          loadMask(savedMaskUrl),
-        ]);
-        const w = img.naturalWidth;
-        const h = img.naturalHeight;
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        // 1. Draw original image
-        ctx.drawImage(img, 0, 0);
-
-        // 2. Read mask pixels and draw semi-transparent red overlay
+      // 2. Load binary mask and overlay semi-transparent red on masked areas
+      const maskImg = new window.Image();
+      maskImg.onload = () => {
         const tmp = document.createElement('canvas');
         tmp.width = w;
         tmp.height = h;
         const tmpCtx = tmp.getContext('2d');
         if (!tmpCtx) return;
         tmpCtx.drawImage(maskImg, 0, 0, w, h);
-        const maskData = tmpCtx.getImageData(0, 0, w, h);
-        const md = maskData.data;
+        const maskData = tmpCtx.getImageData(0, 0, w, h).data;
 
-        const overlay = ctx.getImageData(0, 0, w, h);
-        const od = overlay.data;
-        for (let i = 0; i < md.length; i += 4) {
-          // White pixel in mask (R > 128) → semi-transparent red
-          if (md[i] > 128) {
-            od[i]     = Math.round(od[i]     * 0.5 + 239 * 0.5); // R
-            od[i + 1] = Math.round(od[i + 1] * 0.5 + 68  * 0.5); // G
-            od[i + 2] = Math.round(od[i + 2] * 0.5 + 68  * 0.5); // B
+        // Read original image pixels and blend red where mask is white
+        const baseData = ctx.getImageData(0, 0, w, h);
+        const bd = baseData.data;
+        for (let i = 0; i < maskData.length; i += 4) {
+          if (maskData[i] > 128) {
+            bd[i]     = Math.round(bd[i]     * 0.5 + 239 * 0.5);
+            bd[i + 1] = Math.round(bd[i + 1] * 0.5 + 68  * 0.5);
+            bd[i + 2] = Math.round(bd[i + 2] * 0.5 + 68  * 0.5);
           }
         }
-        ctx.putImageData(overlay, 0, 0);
-      } catch {
-        // Silently ignore load failures
-      }
-    })();
+        ctx.putImageData(baseData, 0, 0);
+      };
+      maskImg.src = savedMaskUrl;
+    };
+    img.src = imgSrc;
   }, [hasMask, savedMaskUrl, imageUrl]);
 
   // --- Mask modal operations ---
