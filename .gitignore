@@ -72,3 +72,6 @@ backend/uv.lock
 # Project docs (not tracked)
 AGENTS.md
 DESIGN.md
+
+# Artifacts / logs
+assets/
