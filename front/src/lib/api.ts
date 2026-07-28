@@ -27,6 +27,7 @@ export interface ModelConfig {
   output_price: number;
   output_price_high: number;
   pixel_threshold: number;
+  price_config?: Record<string, { video_reference: number; text_image: number }>;
   price_unit: 'per_image' | 'per_1M_tokens' | 'per_1k_calls';
   created_at: string;
   updated_at: string;
@@ -192,6 +193,24 @@ export const storageApi = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
+};
+
+// ============================================
+// Provider API
+// ============================================
+
+export interface ProviderConfig {
+  provider: string;
+  api_key: string;
+  configured: boolean;
+}
+
+export const providerApi = {
+  get: (provider: string) => request<ProviderConfig>(`/api/providers/${provider}`),
+  update: (provider: string, apiKey: string) => request<ProviderConfig>(`/api/providers/${provider}`, {
+    method: 'PUT',
+    body: JSON.stringify({ api_key: apiKey }),
+  }),
 };
 
 // ============================================

@@ -4,7 +4,7 @@
 CREATE TABLE IF NOT EXISTS model_configs (
   id SERIAL PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
-  type VARCHAR(50) NOT NULL CHECK (type IN ('text', 'image', 'video')),
+  type VARCHAR(50) NOT NULL CHECK (type IN ('text', 'image', 'video', 'tool')),
   provider VARCHAR(100) NOT NULL,
   api_base_url TEXT NOT NULL,
   api_key TEXT NOT NULL,

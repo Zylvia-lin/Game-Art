@@ -1,3 +1,4 @@
+import json
 """
 Model configuration CRUD endpoints.
 """
@@ -14,7 +15,7 @@ class ModelConfigCreate(BaseModel):
     name: str
     provider: str
     api_base_url: str
-    api_key: str
+    api_key: str = ""
     model_name: str
     is_default: bool = False
     input_price: float = 0
@@ -22,6 +23,7 @@ class ModelConfigCreate(BaseModel):
     output_price_high: float = 0
     pixel_threshold: int = 2360000
     price_unit: str = "per_image"
+    price_config: dict = {}
 
 
 class ModelConfigUpdate(BaseModel):
@@ -36,6 +38,7 @@ class ModelConfigUpdate(BaseModel):
     output_price_high: Optional[float] = None
     pixel_threshold: Optional[int] = None
     price_unit: Optional[str] = None
+    price_config: Optional[dict] = None
 
 
 def _mask_api_key(config: dict) -> dict:
@@ -46,6 +49,14 @@ def _mask_api_key(config: dict) -> dict:
 
 
 def _to_response(row: dict) -> dict:
+    price_config = row.get("price_config", {}) or {}
+    if isinstance(price_config, str):
+        try:
+            price_config = json.loads(price_config)
+        except json.JSONDecodeError:
+            price_config = {}
+    if not isinstance(price_config, dict):
+        price_config = {}
     return {
         "id": row["id"],
         "name": row["name"],
@@ -60,6 +71,7 @@ def _to_response(row: dict) -> dict:
         "output_price_high": float(row.get("output_price_high", 0) or 0),
         "pixel_threshold": int(row.get("pixel_threshold", 2360000) or 2360000),
         "price_unit": row.get("price_unit", "per_image"),
+        "price_config": price_config,
         "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
         "updated_at": row["updated_at"].isoformat() if row.get("updated_at") else None,
     }
@@ -86,13 +98,13 @@ async def create_model(config: ModelConfigCreate):
                 config.type,
             )
         row = await conn.fetchrow(
-            """INSERT INTO model_configs (name, type, provider, api_base_url, api_key, model_name, is_default, input_price, output_price, output_price_high, pixel_threshold, price_unit)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            """INSERT INTO model_configs (name, type, provider, api_base_url, api_key, model_name, is_default, input_price, output_price, output_price_high, pixel_threshold, price_unit, price_config)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)
                RETURNING *""",
             config.name, config.type, config.provider,
             config.api_base_url, config.api_key, config.model_name, config.is_default,
             config.input_price, config.output_price, config.output_price_high,
-            config.pixel_threshold, config.price_unit,
+            config.pixel_threshold, config.price_unit, json.dumps(config.price_config),
         )
         return _to_response(dict(row))
 
@@ -133,6 +145,7 @@ async def update_model(model_id: str, config: ModelConfigUpdate):
                  output_price_high = COALESCE($10, output_price_high),
                  pixel_threshold = COALESCE($11, pixel_threshold),
                  price_unit = COALESCE($12, price_unit),
+                 price_config = COALESCE($13::jsonb, price_config),
                  updated_at = NOW()
                WHERE id = $1
                RETURNING *""",
@@ -148,6 +161,7 @@ async def update_model(model_id: str, config: ModelConfigUpdate):
             update_data.get("output_price_high"),
             update_data.get("pixel_threshold"),
             update_data.get("price_unit"),
+            json.dumps(update_data["price_config"]) if "price_config" in update_data else None,
         )
         return _to_response(dict(row))
 

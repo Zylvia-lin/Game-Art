@@ -11,6 +11,7 @@ export interface ModelConfig {
   output_price: number;
   output_price_high: number;
   pixel_threshold: number;
+  price_config?: Record<string, { video_reference: number; text_image: number }>;
   price_unit: 'per_image' | 'per_1M_tokens' | 'per_1k_calls';
   created_at?: string;
   updated_at?: string;

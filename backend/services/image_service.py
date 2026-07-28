@@ -7,6 +7,7 @@ import io
 import json
 import math
 import httpx
+from services.provider_service import get_provider_api_key
 import base64
 import numpy as np
 from PIL import Image
@@ -379,8 +380,11 @@ async def generate_image(
         body["mask"] = _preprocess_mask_binary(resolved_mask)
 
     url = model["api_base_url"].rstrip("/")
+    api_key = await get_provider_api_key(model.get("provider", ""), model.get("api_key", ""))
+    if not api_key:
+        raise ValueError(f"未配置 {model.get('provider', '当前服务商')} API Key")
     headers = {
-        "Authorization": f"Bearer {model['api_key']}",
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
 

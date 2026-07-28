@@ -15,7 +15,7 @@ SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS model_configs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL,
-    type VARCHAR(50) NOT NULL CHECK (type IN ('text', 'image', 'tool')),
+    type VARCHAR(50) NOT NULL CHECK (type IN ('text', 'image', 'video', 'tool')),
     provider VARCHAR(100),
     api_base_url TEXT,
     api_key TEXT,
@@ -30,7 +30,7 @@ DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE table_name = 'model_configs' AND constraint_name = 'model_configs_type_check') THEN
         ALTER TABLE model_configs DROP CONSTRAINT model_configs_type_check;
-        ALTER TABLE model_configs ADD CONSTRAINT model_configs_type_check CHECK (type IN ('text', 'image', 'tool'));
+        ALTER TABLE model_configs ADD CONSTRAINT model_configs_type_check CHECK (type IN ('text', 'image', 'video', 'tool'));
     END IF;
 END $$;
 
@@ -116,6 +116,14 @@ CREATE TABLE IF NOT EXISTS billing_records (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 服务提供商凭据（同一提供商的模型共享 API Key）
+CREATE TABLE IF NOT EXISTS provider_configs (
+    provider VARCHAR(100) PRIMARY KEY,
+    api_key TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- 对象存储配置
 CREATE TABLE IF NOT EXISTS storage_configs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -130,6 +138,24 @@ CREATE TABLE IF NOT EXISTS storage_configs (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 视频生成任务
+CREATE TABLE IF NOT EXISTS video_tasks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID REFERENCES projects(id) ON DELETE SET NULL,
+    model_id UUID NOT NULL REFERENCES model_configs(id) ON DELETE RESTRICT,
+    provider_task_id VARCHAR(255) NOT NULL UNIQUE,
+    request_payload JSONB NOT NULL DEFAULT '{}',
+    provider_response JSONB NOT NULL DEFAULT '{}',
+    status VARCHAR(50) NOT NULL DEFAULT 'submitted',
+    output_url TEXT,
+    input_tokens NUMERIC(16,2) DEFAULT 0,
+    output_tokens NUMERIC(16,2) DEFAULT 0,
+    billed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    completed_at TIMESTAMPTZ
+);
+
 -- 索引
 CREATE INDEX IF NOT EXISTS idx_assets_project_id ON assets(project_id);
 CREATE INDEX IF NOT EXISTS idx_generations_project_id ON generations(project_id);
@@ -137,6 +163,8 @@ CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_billing_project_id ON billing_records(project_id);
 CREATE INDEX IF NOT EXISTS idx_billing_created_at ON billing_records(created_at);
+CREATE INDEX IF NOT EXISTS idx_video_tasks_project_id ON video_tasks(project_id);
+CREATE INDEX IF NOT EXISTS idx_video_tasks_status ON video_tasks(status);
 """
 
 
@@ -268,6 +296,12 @@ async def init_db():
                     WHERE table_name = 'model_configs' AND column_name = 'pixel_threshold'
                 ) THEN
                     ALTER TABLE model_configs ADD COLUMN pixel_threshold BIGINT DEFAULT 2360000;
+                END IF;
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'model_configs' AND column_name = 'price_config'
+                ) THEN
+                    ALTER TABLE model_configs ADD COLUMN price_config JSONB DEFAULT '{}';
                 END IF;
             END $$;
         """)

@@ -14,6 +14,7 @@ from services.image_processor import extract_frames, remove_background, apply_ba
 from database import fetch_one, get_pool
 from routers.storage import get_storage_config_raw
 
+
 router = APIRouter(prefix="/api/tools", tags=["tools"])
 
 
