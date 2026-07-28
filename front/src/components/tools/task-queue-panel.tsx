@@ -22,8 +22,6 @@ const TOOL_LABELS: Record<string, string> = {
   character_directions: '多方向',
   character_three_view: '三视图',
   character_part_split: '部件拆分',
-  animation_text: '动作生成',
-  animation_frame_extract: '帧提取',
   prop_generate: '道具生成',
   prop_variant: '变体衍生',
   ui_layout_generate: 'UI布局',

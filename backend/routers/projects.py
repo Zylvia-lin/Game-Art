@@ -163,7 +163,7 @@ _TOOL_KEY_PATTERNS = {
     "prop": ["prop_generate", "prop_variant"],
     "ui": ["ui_layout_generate", "ui_component_place", "ui_component_split"],
     "scene": ["scene_map_generate", "scene_map_split"],
-    "animation_frame": ["animation_text", "animation_frame_extract"],
+    "animation_frame": ["animation_video_generate", "animation_video_edit"],
 }
 
 

@@ -43,7 +43,7 @@ class GenerateRequest(BaseModel):
 
 
 # Tools that don't need AI models (local processing only)
-LOCAL_ONLY_TOOLS = {"animation_frame_extract", "ui_component_place", "ui_component_split", "scene_map_split"}
+LOCAL_ONLY_TOOLS = {"ui_component_place", "ui_component_split", "scene_map_split"}
 
 
 class OptimizePromptRequest(BaseModel):

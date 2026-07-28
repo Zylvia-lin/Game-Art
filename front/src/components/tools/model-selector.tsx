@@ -5,7 +5,7 @@ import { modelsApi } from '@/lib/api';
 import type { ModelConfig } from '@/lib/api';
 
 interface ModelSelectorProps {
-  type: 'image' | 'text' | 'tool';
+  type: 'image' | 'text' | 'video' | 'tool';
   value: string | null;
   onChange: (modelId: string, model: ModelConfig) => void;
   label?: string;

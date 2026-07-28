@@ -60,7 +60,7 @@ export default function PromptsSettingsPage() {
     { label: '系统', keys: ['prompt_optimize'] },
     { label: '基础生成', keys: ['text_to_image', 'image_to_image', 'inpaint'] },
     { label: '角色', keys: ['character_tpose', 'character_three_view', 'character_directions_4', 'character_directions_8', 'character_directions', 'character_part_split'] },
-    { label: '动画', keys: ['animation_text', 'animation_frame_extract'] },
+    { label: '动画', keys: ['animation_video_generate', 'animation_video_edit'] },
     { label: '道具', keys: ['prop_generate', 'prop_variant'] },
     { label: 'UI', keys: ['ui_layout_generate', 'ui_component_place', 'ui_component_split'] },
     { label: '场景', keys: ['scene_map_generate', 'scene_map_split'] },

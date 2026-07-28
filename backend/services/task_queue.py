@@ -418,7 +418,7 @@ _TOOL_NAMES = {
     "ui_component_split": "UI组件拆分",
     "scene_map_generate": "场景地图",
     "scene_map_split": "场景地图拆分",
-    "animation_text": "动作生成",
+    "animation_video_generate": "动作生成",
     "remove_bg": "去除背景",
     "prompt_optimize": "提示词优化",
 }

@@ -16,6 +16,7 @@ ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
 
 @router.post("")
+@router.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
     """Upload an image file."""
     if not file:

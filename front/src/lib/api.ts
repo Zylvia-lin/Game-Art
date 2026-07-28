@@ -338,8 +338,6 @@ export const generateApi = {
     generateApi.submit('character_three_view', data),
   characterPartSplit: (data: Record<string, unknown> & { project_id: string }) =>
     generateApi.submit('character_part_split', data),
-  animationText: (data: Record<string, unknown> & { project_id: string }) =>
-    generateApi.submit('animation_text', data),
   propGenerate: (data: Record<string, unknown> & { project_id: string }) =>
     generateApi.submit('prop_generate', data),
   propVariant: (data: Record<string, unknown> & { project_id: string }) =>

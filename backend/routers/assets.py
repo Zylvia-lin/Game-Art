@@ -16,6 +16,7 @@ class AssetCreate(BaseModel):
     type: str
     url: str
     description: Optional[str] = None
+    metadata: Optional[dict] = None
 
 
 class AssetUpdate(BaseModel):
@@ -47,7 +48,7 @@ def _to_asset(row: dict) -> dict:
 
 @router.post("", status_code=201)
 async def create_asset(data: AssetCreate):
-    metadata = {}
+    metadata = dict(data.metadata or {})
     if data.description:
         metadata["description"] = data.description
 

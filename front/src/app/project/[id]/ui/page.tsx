@@ -1,22 +1,35 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { toast } from 'sonner';
+import {
+  useCallback, useEffect, useMemo, useRef, useState,
+} from 'react';
 import { useParams } from 'next/navigation';
-import { Sparkles, Loader2, Layout, Plus, Trash2, GripHorizontal } from 'lucide-react';
+import {
+  Circle, ImagePlus, Layout, Loader2, RectangleHorizontal,
+  Save, Sparkles, Trash2,
+} from 'lucide-react';
+import { toast } from 'sonner';
 import { ToolLayout } from '@/components/tools/tool-layout';
 import { RatioSelector, ResolutionSelector } from '@/components/tools/selectors';
 import { ImageSourceSelector } from '@/components/tools/image-source-selector';
 import { PromptInput } from '@/components/tools/prompt-input';
+import { ResultImageCard } from '@/components/tools/result-image-card';
+import { ModelSelector } from '@/components/tools/model-selector';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  assetsApi, generateApi, projectsApi, resolveImageUrl, type Asset,
+} from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { useButtonCooldown } from '@/hooks/use-button-cooldown';
-import type { Task } from '@/lib/types';
-import { estimateCostFromModel, formatCostDisplay } from '@/lib/types';
-import { ModelSelector } from '@/components/tools/model-selector';
 import type { ModelConfig } from '@/lib/types';
+
+type SubTool = 'layout_generate' | 'component_place' | 'component_split';
+type Shape = 'rectangle' | 'circle';
 
 interface UIComponent {
   id: string;
+  shape: Shape;
   x: number;
   y: number;
   width: number;
@@ -25,42 +38,88 @@ interface UIComponent {
   label: string;
 }
 
-const SUB_TOOLS = [
-  { key: 'layout_generate', label: '布局生成', desc: '生成完整UI布局' },
-  { key: 'component_place', label: '组件摆放', desc: '自定义调整组件' },
-  { key: 'component_split', label: '组件拆分', desc: '拆分为独立素材' },
-] as const;
+interface LayoutMetadata extends Record<string, unknown> {
+  kind: 'ui_component_layout';
+  version: 1;
+  ratio: string;
+  background_url: string | null;
+  components: UIComponent[];
+}
 
+const SUB_TOOLS: { key: SubTool; label: string; desc: string }[] = [
+  { key: 'layout_generate', label: '布局生成', desc: '生成完整 UI 布局' },
+  { key: 'component_place', label: '组件摆放', desc: '在比例画框内手动排版' },
+  { key: 'component_split', label: '组件拆分', desc: '拆分为独立 UI 素材' },
+];
 const COLORS = ['#6366f1', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#64748b'];
+const EXPORT_WIDTH = 1280;
+
+function parseRatio(value: string) {
+  const [width, height] = value.split(':').map(Number);
+  return width > 0 && height > 0 ? width / height : 16 / 9;
+}
+
+function clampComponent(component: UIComponent, aspect = 1): UIComponent {
+  const maxWidth = component.shape === 'circle' ? Math.min(1, 1 / aspect) : 1;
+  const width = Math.min(Math.max(component.width, 0.04), maxWidth);
+  const height = component.shape === 'circle'
+    ? width * aspect
+    : Math.min(Math.max(component.height, 0.04), 1);
+  return {
+    ...component,
+    width,
+    height,
+    x: Math.min(Math.max(component.x, 0), 1 - width),
+    y: Math.min(Math.max(component.y, 0), 1 - height),
+  };
+}
+
+function isLayoutMetadata(value: unknown): value is LayoutMetadata {
+  if (!value || typeof value !== 'object') return false;
+  const metadata = value as Partial<LayoutMetadata>;
+  return metadata.kind === 'ui_component_layout'
+    && metadata.version === 1
+    && typeof metadata.ratio === 'string'
+    && Array.isArray(metadata.components);
+}
 
 export default function UIPage() {
-  const params = useParams();
-  const projectId = params.id as string;
-  const [subTool, setSubTool] = useState<string>('layout_generate');
+  const params = useParams<{ id: string }>();
+  const projectId = String(params.id);
+  const [subTool, setSubTool] = useState<SubTool>('layout_generate');
   const [prompt, setPrompt] = useState('');
   const [ratio, setRatio] = useState('16:9');
   const [resolution, setResolution] = useState('1920x1080');
   const [sourceImage, setSourceImage] = useState<string | null>(null);
   const [components, setComponents] = useState<UIComponent[]>([]);
-  const [dragging, setDragging] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<ModelConfig | null>(null);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [savedLayouts, setSavedLayouts] = useState<Asset[]>([]);
+  const [savingReference, setSavingReference] = useState(false);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const interactionRef = useRef<{
+    id: string;
+    mode: 'move' | 'resize';
+    startX: number;
+    startY: number;
+    initial: UIComponent;
+  } | null>(null);
 
-  const handleTaskComplete = useCallback((_task: Task) => {}, []);
-  const { submitting, submitTask } = useTaskQueue({ projectId, onTaskComplete: handleTaskComplete });
-  const { isCoolingDown: genCooldown, triggerCooldown: genTrigger } = useButtonCooldown(2000);
+  const {
+    submitting, submitTask, completedTasks, refreshTasks,
+  } = useTaskQueue({ projectId });
+  const { isCoolingDown, triggerCooldown } = useButtonCooldown(2000);
 
-  // Wait for params to load
-  if (!params.id) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  const loadSavedLayouts = useCallback(async () => {
+    const assets = await projectsApi.assets(projectId, 'ui');
+    setSavedLayouts(assets.filter((asset) => isLayoutMetadata(asset.metadata_)));
+  }, [projectId]);
 
-  // Check sessionStorage for pre-selected image
+  useEffect(() => {
+    loadSavedLayouts().catch(() => toast.error('加载已保存 UI 参考失败'));
+  }, [loadSavedLayouts]);
+
   useEffect(() => {
     const saved = sessionStorage.getItem('ui_source_image');
     if (saved) {
@@ -69,107 +128,291 @@ export default function UIPage() {
     }
   }, []);
 
-  const toolKeyMap: Record<string, string> = {
-    layout_generate: 'ui_layout_generate',
-    component_place: 'ui_component_place',
-    component_split: 'ui_component_split',
+  const activeResultKeys = subTool === 'component_split'
+    ? ['ui_component_split']
+    : ['ui_layout_generate'];
+  const results = useMemo(() => completedTasks
+    .filter((task) => activeResultKeys.includes(task.tool_key))
+    .sort((a, b) => new Date(b.completed_at || 0).getTime() - new Date(a.completed_at || 0).getTime())
+    .flatMap((task) => (task.output_urls || []).map((url, index) => ({
+      url,
+      taskId: task.id,
+      taskIndex: index,
+      name: task.output_names?.[index] || '',
+    }))), [completedTasks, subTool]);
+
+  const updateComponent = useCallback((id: string, updates: Partial<UIComponent>) => {
+    setComponents((current) => current.map((component) => (
+      component.id === id ? clampComponent({ ...component, ...updates }, parseRatio(ratio)) : component
+    )));
+  }, [ratio]);
+
+  const addComponent = (shape: Shape) => {
+    const size = shape === 'circle' ? 0.14 : 0.18;
+    const component: UIComponent = clampComponent({
+      id: crypto.randomUUID(),
+      shape,
+      x: 0.5 - size / 2,
+      y: 0.5 - size / 2,
+      width: size,
+      height: shape === 'circle' ? size : 0.1,
+      color: COLORS[components.length % COLORS.length],
+      label: shape === 'circle' ? `圆形 ${components.length + 1}` : `方形 ${components.length + 1}`,
+    }, parseRatio(ratio));
+    setComponents((current) => [...current, component]);
+    setSelectedId(component.id);
   };
 
-  const needsImage = subTool === 'component_split' || subTool === 'component_place';
+  const startInteraction = (
+    event: React.PointerEvent,
+    component: UIComponent,
+    mode: 'move' | 'resize',
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    interactionRef.current = {
+      id: component.id,
+      mode,
+      startX: event.clientX,
+      startY: event.clientY,
+      initial: component,
+    };
+    setSelectedId(component.id);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
 
-  const handleGenerate = async () => {
-    if (subTool === 'layout_generate' && !prompt.trim()) return;
-    if (subTool === 'component_split' && !sourceImage) return;
-    if (subTool === 'component_place' && !sourceImage) return;
-    genTrigger();
-    try {
-      await submitTask(toolKeyMap[subTool], {
-        prompt: prompt || '基于参考图生成',
-        sub_tool: subTool,
-        image_url: sourceImage || undefined,
-        ratio,
-        resolution,
-        components: components.length > 0 ? components : undefined,
-        model_id: selectedModelId || undefined,
+  const moveInteraction = (event: React.PointerEvent) => {
+    const interaction = interactionRef.current;
+    const canvas = canvasRef.current;
+    if (!interaction || !canvas) return;
+    const bounds = canvas.getBoundingClientRect();
+    const dx = (event.clientX - interaction.startX) / bounds.width;
+    const dy = (event.clientY - interaction.startY) / bounds.height;
+    if (interaction.mode === 'move') {
+      updateComponent(interaction.id, {
+        x: interaction.initial.x + dx,
+        y: interaction.initial.y + dy,
       });
-      toast.success('任务提交成功');
-    } catch (err) {
-      toast.error('任务提交失败');
+    } else {
+      const nextWidth = interaction.initial.width + dx;
+      updateComponent(interaction.id, {
+        width: nextWidth,
+        height: interaction.initial.shape === 'circle'
+          ? nextWidth
+          : interaction.initial.height + dy,
+      });
     }
   };
 
-  const addComponent = () => {
-    const newComp: UIComponent = {
-      id: `comp_${Date.now()}`,
-      x: 50 + Math.random() * 200,
-      y: 50 + Math.random() * 200,
-      width: 120,
-      height: 60,
-      color: COLORS[components.length % COLORS.length],
-      label: `组件 ${components.length + 1}`,
-    };
-    setComponents([...components, newComp]);
+  const endInteraction = () => {
+    interactionRef.current = null;
   };
 
-  const removeComponent = (id: string) => {
-    setComponents(components.filter((c) => c.id !== id));
+  const submitGeneration = async () => {
+    if (subTool === 'layout_generate' && !prompt.trim()) return;
+    if (subTool === 'component_split' && !sourceImage) return;
+    triggerCooldown();
+    try {
+      await submitTask(
+        subTool === 'component_split' ? 'ui_component_split' : 'ui_layout_generate',
+        {
+          prompt: prompt || '拆分参考图中的 UI 组件',
+          image_url: sourceImage || undefined,
+          ratio,
+          resolution,
+          model_id: selectedModelId || undefined,
+        },
+      );
+      toast.success('任务已提交');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '任务提交失败');
+    }
   };
 
-  const updateComponent = (id: string, updates: Partial<UIComponent>) => {
-    setComponents(components.map((c) => (c.id === id ? { ...c, ...updates } : c)));
+  const renderReferenceBlob = async (): Promise<Blob> => {
+    const aspect = parseRatio(ratio);
+    const width = EXPORT_WIDTH;
+    const height = Math.round(width / aspect);
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('浏览器不支持 Canvas');
+    context.fillStyle = '#111827';
+    context.fillRect(0, 0, width, height);
+
+    if (sourceImage) {
+      const image = new Image();
+      image.crossOrigin = 'anonymous';
+      await new Promise<void>((resolve, reject) => {
+        image.onload = () => resolve();
+        image.onerror = () => reject(new Error('参考背景加载失败'));
+        image.src = resolveImageUrl(sourceImage);
+      });
+      context.drawImage(image, 0, 0, width, height);
+    }
+
+    for (const component of components) {
+      const x = component.x * width;
+      const y = component.y * height;
+      const componentWidth = component.width * width;
+      const componentHeight = component.height * height;
+      context.fillStyle = component.color;
+      if (component.shape === 'circle') {
+        context.beginPath();
+        context.arc(
+          x + componentWidth / 2,
+          y + componentHeight / 2,
+          Math.min(componentWidth, componentHeight) / 2,
+          0,
+          Math.PI * 2,
+        );
+        context.fill();
+      } else {
+        context.fillRect(x, y, componentWidth, componentHeight);
+      }
+      context.fillStyle = '#ffffff';
+      context.font = `${Math.max(14, Math.round(height * 0.025))}px sans-serif`;
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillText(component.label, x + componentWidth / 2, y + componentHeight / 2);
+    }
+
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('截图生成失败'))), 'image/png');
+    });
   };
 
-  const handleDragStart = (e: React.MouseEvent, id: string) => {
-    setDragging(id);
-    const rect = (e.target as HTMLElement).getBoundingClientRect();
-    setDragOffset({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  const applyToReference = async () => {
+    if (!components.length) return toast.error('请先添加组件');
+    setSavingReference(true);
+    try {
+      const blob = await renderReferenceBlob();
+      const file = new File([blob], `ui-layout-${Date.now()}.png`, { type: 'image/png' });
+      const uploaded = await generateApi.upload(file);
+      const metadata: LayoutMetadata = {
+        kind: 'ui_component_layout',
+        version: 1,
+        ratio,
+        background_url: sourceImage,
+        components,
+      };
+      await assetsApi.create({
+        project_id: projectId,
+        name: `UI 组件布局 ${new Date().toLocaleString()}`,
+        type: 'ui',
+        url: uploaded.url,
+        description: `${ratio} UI 组件摆放参考`,
+        metadata,
+      });
+      setSourceImage(uploaded.url);
+      setComponents([]);
+      setSelectedId(null);
+      await loadSavedLayouts();
+      toast.success('已截图并保存为项目参考，可继续生成或再次编辑');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '保存参考失败');
+    } finally {
+      setSavingReference(false);
+    }
   };
 
-  const handleDragMove = (e: React.MouseEvent) => {
-    if (!dragging) return;
-    const container = (e.target as HTMLElement).closest('.ui-canvas');
-    if (!container) return;
-    const containerRect = container.getBoundingClientRect();
-    const x = e.clientX - containerRect.left - dragOffset.x;
-    const y = e.clientY - containerRect.top - dragOffset.y;
-    updateComponent(dragging, { x, y });
+  const restoreLayout = (asset: Asset) => {
+    const metadata = asset.metadata_;
+    if (!isLayoutMetadata(metadata)) return;
+    setRatio(metadata.ratio);
+    setComponents(metadata.components.map((component) => clampComponent(component, parseRatio(metadata.ratio))));
+    setSourceImage(metadata.background_url || null);
+    setSelectedId(null);
+    toast.success(`已载入 ${asset.name}`);
   };
 
-  const handleDragEnd = () => {
-    setDragging(null);
-  };
-
-  const paramsPanel = (
-    <div className="space-y-4">
-      <div>
-        <label className="text-sm font-medium text-foreground">子功能</label>
-        <div className="mt-2 grid grid-cols-3 gap-2">
-          {SUB_TOOLS.map((t) => (
+  useEffect(() => {
+    setComponents((current) => current.map((component) => clampComponent(component, parseRatio(ratio))));
+  }, [ratio]);
+  const selected = components.find((component) => component.id === selectedId);
+  const placementParams = (
+    <>
+      <RatioSelector value={ratio} onChange={setRatio} />
+      <ImageSourceSelector
+        projectId={projectId}
+        imageUrl={sourceImage}
+        onImageChange={setSourceImage}
+        label="可选背景参考"
+        assetType="ui"
+      />
+      <div className="grid grid-cols-2 gap-2">
+        <Button type="button" variant="outline" onClick={() => addComponent('rectangle')}>
+          <RectangleHorizontal />添加方形
+        </Button>
+        <Button type="button" variant="outline" onClick={() => addComponent('circle')}>
+          <Circle />添加圆形
+        </Button>
+      </div>
+      {selected && (
+        <div className="space-y-3 rounded-lg border p-3">
+          <p className="text-sm font-medium">选中组件</p>
+          <label className="space-y-1 text-xs">
+            <span>名称</span>
+            <Input value={selected.label} onChange={(event) => updateComponent(selected.id, { label: event.target.value })} />
+          </label>
+          <label className="space-y-1 text-xs">
+            <span>颜色</span>
+            <Input type="color" value={selected.color} onChange={(event) => updateComponent(selected.id, { color: event.target.value })} />
+          </label>
+          <label className="space-y-1 text-xs">
+            <span>{selected.shape === 'circle' ? '大小' : '宽度'}：{Math.round(selected.width * 100)}%</span>
+            <Input type="range" min={4} max={100} value={selected.width * 100} onChange={(event) => updateComponent(selected.id, { width: Number(event.target.value) / 100 })} />
+          </label>
+          {selected.shape === 'rectangle' && (
+            <label className="space-y-1 text-xs">
+              <span>高度：{Math.round(selected.height * 100)}%</span>
+              <Input type="range" min={4} max={100} value={selected.height * 100} onChange={(event) => updateComponent(selected.id, { height: Number(event.target.value) / 100 })} />
+            </label>
+          )}
+          <Button type="button" variant="destructive" size="sm" onClick={() => {
+            setComponents((current) => current.filter((component) => component.id !== selected.id));
+            setSelectedId(null);
+          }}>
+            <Trash2 />删除组件
+          </Button>
+        </div>
+      )}
+      <Button type="button" className="w-full" disabled={savingReference || !components.length} onClick={applyToReference}>
+        {savingReference ? <Loader2 className="animate-spin" /> : <Save />}
+        应用到参考并保存
+      </Button>
+      {savedLayouts.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-sm font-medium">已保存的可编辑参考</p>
+          {savedLayouts.map((asset) => (
             <button
-              key={t.key}
-              onClick={() => setSubTool(t.key)}
-              className={`rounded-lg border px-3 py-2 text-xs transition-all ${
-                subTool === t.key
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border text-muted-foreground hover:border-primary/50'
-              }`}
+              type="button"
+              key={asset.id}
+              onClick={() => restoreLayout(asset)}
+              className="flex w-full items-center gap-2 rounded-lg border p-2 text-left hover:border-primary"
             >
-              {t.label}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={resolveImageUrl(asset.url)} alt="" className="size-12 rounded object-cover" />
+              <span className="min-w-0 truncate text-xs">{asset.name}</span>
             </button>
           ))}
         </div>
-      </div>
+      )}
+    </>
+  );
 
-      {needsImage && (
+  const generationParams = (
+    <>
+      {(subTool === 'component_split' || subTool === 'layout_generate') && (
         <ImageSourceSelector
-          projectId={String(projectId)}
+          projectId={projectId}
           imageUrl={sourceImage}
           onImageChange={setSourceImage}
-          label="UI 参考图片"
+          label={subTool === 'layout_generate' ? '可选参考图（用户图片或 UI 摆放布局）' : '待拆分 UI 图片'}
           assetType="ui"
         />
       )}
-
       <ModelSelector
         type="image"
         value={selectedModelId}
@@ -183,85 +426,138 @@ export default function UIPage() {
         onChange={setPrompt}
         toolKey="ui"
         label="描述"
-        placeholder={subTool === 'layout_generate' ? '描述UI类型，如：RPG游戏背包界面，包含物品格子、金币显示、关闭按钮...' : subTool === 'component_split' ? '描述需要拆分的组件类型...' : '描述组件摆放需求...'}
+        placeholder={subTool === 'component_split'
+          ? '描述需要拆分的组件类型……'
+          : '描述 UI 类型、布局、层级和视觉风格……'}
         rows={6}
       />
-
       <RatioSelector value={ratio} onChange={setRatio} />
       <ResolutionSelector ratio={ratio} value={resolution} onChange={setResolution} />
-
-      <button
-        onClick={handleGenerate}
-        disabled={submitting || genCooldown || (subTool === 'layout_generate' ? !prompt.trim() : !sourceImage)}
-        className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-50"
+      <Button
+        className="w-full"
+        onClick={submitGeneration}
+        disabled={submitting || isCoolingDown || (subTool === 'layout_generate' ? !prompt.trim() : !sourceImage)}
       >
-        {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-        {submitting ? '生成中...' : '生成'}
-        {!submitting && (
-          <span className="ml-1 text-xs opacity-80">≈{formatCostDisplay(estimateCostFromModel(selectedModel, resolution, 1, sourceImage ? 1 : 0))}</span>
-        )}
-      </button>
+        {submitting ? <Loader2 className="animate-spin" /> : <Sparkles />}
+        {submitting ? '提交中……' : '生成'}
+      </Button>
+      {selectedModel && <p className="text-xs text-muted-foreground">当前模型：{selectedModel.name}</p>}
+    </>
+  );
+
+  const paramsPanel = (
+    <>
+      <div>
+        <label className="mb-2 block text-sm font-medium">子功能</label>
+        <div className="space-y-2">
+          {SUB_TOOLS.map((tool) => (
+            <button
+              type="button"
+              key={tool.key}
+              onClick={() => setSubTool(tool.key)}
+              className={`w-full rounded-lg border p-2 text-left ${subTool === tool.key ? 'border-primary bg-primary/10' : 'border-border'}`}
+            >
+              <span className="block text-sm font-medium">{tool.label}</span>
+              <span className="text-xs text-muted-foreground">{tool.desc}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      {subTool === 'component_place' ? placementParams : generationParams}
+    </>
+  );
+
+  const placementCanvas = (
+    <div className="flex h-full min-h-[560px] flex-col">
+      <div className="mb-3 flex items-center justify-between">
+        <div>
+          <h3 className="font-medium">组件摆放画布</h3>
+          <p className="text-xs text-muted-foreground">所有组件都被限制在 {ratio} 屏幕比例框内</p>
+        </div>
+        <Button type="button" size="sm" variant="outline" onClick={() => {
+          setComponents([]);
+          setSelectedId(null);
+        }}>
+          清空
+        </Button>
+      </div>
+      <div className="flex flex-1 items-center justify-center overflow-auto rounded-xl bg-muted/40 p-6">
+        <div
+          ref={canvasRef}
+          className="relative w-full max-w-5xl overflow-hidden border-2 border-primary/60 bg-slate-900 shadow-2xl"
+          style={{ aspectRatio: String(parseRatio(ratio)) }}
+          onPointerMove={moveInteraction}
+          onPointerUp={endInteraction}
+          onPointerCancel={endInteraction}
+          onPointerLeave={endInteraction}
+          onPointerDown={() => setSelectedId(null)}
+        >
+          {sourceImage && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={resolveImageUrl(sourceImage)} alt="" className="pointer-events-none absolute inset-0 size-full object-fill opacity-60" />
+          )}
+          {components.length === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center text-center text-slate-400">
+              <div><Layout className="mx-auto mb-2 size-12 opacity-40" /><p className="text-sm">从左侧添加方形或圆形组件</p></div>
+            </div>
+          )}
+          {components.map((component) => (
+            <div
+              key={component.id}
+              className={`absolute touch-none select-none border-2 text-white shadow-lg ${selectedId === component.id ? 'border-white' : 'border-white/30'}`}
+              style={{
+                left: `${component.x * 100}%`,
+                top: `${component.y * 100}%`,
+                width: `${component.width * 100}%`,
+                height: `${component.height * 100}%`,
+                borderRadius: component.shape === 'circle' ? '9999px' : '8px',
+                backgroundColor: component.color,
+              }}
+              onPointerDown={(event) => startInteraction(event, component, 'move')}
+
+            >
+              <span className="pointer-events-none flex size-full items-center justify-center truncate px-1 text-xs font-medium">
+                {component.label}
+              </span>
+              {selectedId === component.id && (
+                <button
+                  type="button"
+                  aria-label={`调整 ${component.label} 大小`}
+                  className="absolute -bottom-2 -right-2 size-5 cursor-nwse-resize rounded-full border-2 border-white bg-primary"
+                  onPointerDown={(event) => startInteraction(event, component, 'resize')}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 
-  const mainContent = (
-    <div className="flex h-full flex-col">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-medium text-foreground">UI 画布</h3>
-        <button
-          onClick={addComponent}
-          className="flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:border-primary hover:text-primary"
-        >
-          <Plus className="h-3 w-3" /> 添加组件
-        </button>
-      </div>
-
-      <div
-        className="ui-canvas relative flex-1 overflow-hidden rounded-lg border border-border bg-secondary/20"
-        onMouseMove={handleDragMove}
-        onMouseUp={handleDragEnd}
-        onMouseLeave={handleDragEnd}
-      >
-        {components.length === 0 ? (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center">
-              <Layout className="mx-auto h-12 w-12 text-muted-foreground/30" />
-              <p className="mt-2 text-sm text-muted-foreground">输入描述生成 UI 布局</p>
-              <p className="text-xs text-muted-foreground/60">或点击「添加组件」手动创建</p>
-            </div>
-          </div>
-        ) : (
-          components.map((comp) => (
-            <div
-              key={comp.id}
-              className="absolute cursor-move rounded-lg border-2 border-white/20 shadow-lg transition-shadow hover:shadow-xl"
-              style={{
-                left: comp.x,
-                top: comp.y,
-                width: comp.width,
-                height: comp.height,
-                backgroundColor: comp.color,
-              }}
-              onMouseDown={(e) => handleDragStart(e, comp.id)}
-            >
-              <div className="flex h-full items-center justify-between px-2">
-                <span className="text-xs font-medium text-white/90">{comp.label}</span>
-                <div className="flex gap-1">
-                  <GripHorizontal className="h-3 w-3 text-white/50" />
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeComponent(comp.id);
-                    }}
-                    className="rounded p-0.5 hover:bg-white/20"
-                  >
-                    <Trash2 className="h-3 w-3 text-white/70" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))
-        )}
+  const resultCanvas = results.length ? (
+    <div className="columns-1 gap-3 sm:columns-3 lg:columns-5">
+      {results.map((result, index) => (
+        <ResultImageCard
+          key={`${result.taskId}-${result.taskIndex}`}
+          url={result.url}
+          projectId={projectId}
+          index={index}
+          name={result.name}
+          taskId={result.taskId}
+          taskIndex={result.taskIndex}
+          onDelete={async () => {
+            await generateApi.deleteOutput(result.taskId, result.taskIndex);
+            await refreshTasks();
+          }}
+        />
+      ))}
+    </div>
+  ) : (
+    <div className="flex h-full items-center justify-center text-center text-muted-foreground">
+      <div>
+        <ImagePlus className="mx-auto mb-3 size-14 opacity-30" />
+        <p>{subTool === 'component_split' ? '选择 UI 图片并提交组件拆分' : '描述需要生成的 UI 布局'}</p>
+        <p className="mt-1 text-xs">生成结果会保留在这里，刷新页面后仍可查看</p>
       </div>
     </div>
   );
@@ -269,11 +565,11 @@ export default function UIPage() {
   return (
     <ToolLayout
       title="UI 生成"
-      description="生成游戏UI布局，自定义组件摆放与拆分"
-      toolKey="ui_layout_generate"
-      toolName="UI布局生成"
-      params={paramsPanel}
-      canvas={mainContent}
+      description="生成 UI 布局、在比例画框内摆放组件，或拆分 UI 素材"
+      toolKey={subTool === 'component_place' ? undefined : (subTool === 'component_split' ? 'ui_component_split' : 'ui_layout_generate')}
+      toolName={subTool === 'component_split' ? 'UI 组件拆分' : 'UI 布局生成'}
+      paramsPanel={paramsPanel}
+      canvas={subTool === 'component_place' ? placementCanvas : resultCanvas}
     />
   );
 }

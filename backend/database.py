@@ -156,6 +156,25 @@ CREATE TABLE IF NOT EXISTS video_tasks (
     completed_at TIMESTAMPTZ
 );
 
+CREATE TABLE IF NOT EXISTS frame_extractions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    source_video_task_id UUID NOT NULL REFERENCES video_tasks(id) ON DELETE CASCADE,
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    extraction_fps NUMERIC(8,3) NOT NULL DEFAULT 24,
+    total_frames INTEGER NOT NULL DEFAULT 0,
+    frames JSONB NOT NULL DEFAULT '[]',
+    selected_frames JSONB NOT NULL DEFAULT '[]',
+    export_video_path TEXT,
+    export_video_fps NUMERIC(8,3),
+    sequence_dir TEXT,
+    zip_cache JSONB NOT NULL DEFAULT '{}',
+    error_message TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    completed_at TIMESTAMPTZ
+);
+
 -- 索引
 CREATE INDEX IF NOT EXISTS idx_assets_project_id ON assets(project_id);
 CREATE INDEX IF NOT EXISTS idx_generations_project_id ON generations(project_id);
@@ -165,6 +184,8 @@ CREATE INDEX IF NOT EXISTS idx_billing_project_id ON billing_records(project_id)
 CREATE INDEX IF NOT EXISTS idx_billing_created_at ON billing_records(created_at);
 CREATE INDEX IF NOT EXISTS idx_video_tasks_project_id ON video_tasks(project_id);
 CREATE INDEX IF NOT EXISTS idx_video_tasks_status ON video_tasks(status);
+CREATE INDEX IF NOT EXISTS idx_frame_extractions_project_id ON frame_extractions(project_id);
+CREATE INDEX IF NOT EXISTS idx_frame_extractions_source_video ON frame_extractions(source_video_task_id);
 """
 
 
@@ -358,6 +379,20 @@ async def init_db():
                     ALTER TABLE billing_records ADD COLUMN user_id UUID;
                 END IF;
             END $$;
+        """)
+        await conn.execute("""
+            ALTER TABLE video_tasks
+                ADD COLUMN IF NOT EXISTS task_type VARCHAR(20) NOT NULL DEFAULT 'generate',
+                ADD COLUMN IF NOT EXISTS source_video_task_id UUID REFERENCES video_tasks(id) ON DELETE SET NULL,
+                ADD COLUMN IF NOT EXISTS user_prompt TEXT,
+                ADD COLUMN IF NOT EXISTS enhanced_prompt TEXT,
+                ADD COLUMN IF NOT EXISTS reference_asset_ids JSONB NOT NULL DEFAULT '[]',
+                ADD COLUMN IF NOT EXISTS local_output_path TEXT,
+                ADD COLUMN IF NOT EXISTS ratio VARCHAR(20),
+                ADD COLUMN IF NOT EXISTS resolution VARCHAR(20),
+                ADD COLUMN IF NOT EXISTS duration NUMERIC(8,3),
+                ADD COLUMN IF NOT EXISTS fps NUMERIC(8,3);
+            CREATE INDEX IF NOT EXISTS idx_video_tasks_source_video ON video_tasks(source_video_task_id);
         """)
         # Migration: backfill unit_type + model_name for old billing records
         await conn.execute("""
