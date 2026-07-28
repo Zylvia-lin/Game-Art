@@ -117,6 +117,22 @@ async def get_queue_stats(project_id: str | None = None) -> dict:
     return stats
 
 
+async def fail_interrupted_tasks() -> int:
+    """Mark tasks left processing by a previous server process as failed."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            """UPDATE tasks
+               SET status = 'failed',
+                   error_message = '服务重启导致任务中断，请重新提交',
+                   completed_at = NOW(),
+                   updated_at = NOW()
+               WHERE status = 'processing'"""
+        )
+    parts = result.split()
+    return int(parts[1]) if len(parts) > 1 else 0
+
+
 async def update_task_status(
     task_id: str,
     status: str,
@@ -124,6 +140,7 @@ async def update_task_status(
     output_names: list | None = None,
     error_message: str | None = None,
     progress: int | None = None,
+    expected_status: str | None = None,
 ) -> dict | None:
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     started_at = now if status == "processing" else None
@@ -141,13 +158,13 @@ async def update_task_status(
                  started_at = COALESCE(started_at, $7),
                  completed_at = COALESCE($8, completed_at),
                  updated_at = $9
-               WHERE id = $1
+               WHERE id = $1 AND ($10::varchar IS NULL OR status = $10)
                RETURNING *""",
             task_id, status,
             output_urls if output_urls else None,
             output_names if output_names else None,
             error_message, progress,
-            started_at, completed_at, now,
+            started_at, completed_at, now, expected_status,
         )
         return _to_task(dict(row)) if row else None
 
@@ -248,13 +265,26 @@ async def delete_output_image(task_id: str, index: int) -> dict:
         return {"deleted": True, "url": url_to_delete, "task_removed": False}
 
 
-async def _get_next_pending_task() -> dict | None:
+async def _claim_next_pending_task() -> dict | None:
+    """Atomically claim one pending task so it can only have one worker."""
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            """SELECT * FROM tasks WHERE status = 'pending'
-               ORDER BY created_at ASC LIMIT 1
-               FOR UPDATE SKIP LOCKED"""
+            """WITH next_task AS (
+                   SELECT id FROM tasks
+                   WHERE status = 'pending'
+                   ORDER BY created_at ASC
+                   LIMIT 1
+                   FOR UPDATE SKIP LOCKED
+               )
+               UPDATE tasks
+               SET status = 'processing',
+                   progress = 10,
+                   started_at = COALESCE(started_at, NOW()),
+                   updated_at = NOW()
+               FROM next_task
+               WHERE tasks.id = next_task.id
+               RETURNING tasks.*"""
         )
         return _to_task(dict(row)) if row else None
 
@@ -262,10 +292,11 @@ async def _get_next_pending_task() -> dict | None:
 async def _process_single_task(task: dict):
     """Process a single generation task."""
     try:
-        await update_task_status(task["id"], "processing", progress=10)
-
         async def on_progress(pct: int):
-            await update_task_status(task["id"], "processing", progress=pct)
+            await update_task_status(
+                task["id"], "processing", progress=pct,
+                expected_status="processing",
+            )
 
         # Look up model config: prefer model_id from input_params, fallback to default
         model_config = None
@@ -293,12 +324,15 @@ async def _process_single_task(task: dict):
         # Generate default output names
         default_names = [f"output_{i+1}" for i in range(len(result["output_urls"]))]
 
-        await update_task_status(
+        completed_task = await update_task_status(
             task["id"], "completed",
             output_urls=result["output_urls"],
             output_names=default_names,
             progress=100,
+            expected_status="processing",
         )
+        if not completed_task:
+            return
 
         # Save to generations history
         pool = await get_pool()
@@ -327,6 +361,7 @@ async def _process_single_task(task: dict):
         await update_task_status(
             task["id"], "failed",
             error_message=str(e),
+            expected_status="processing",
         )
 
 
@@ -334,7 +369,7 @@ async def _process_queue():
     """Background loop that processes pending tasks concurrently without limits."""
     while True:
         try:
-            task = await _get_next_pending_task()
+            task = await _claim_next_pending_task()
             if task:
                 asyncio.create_task(_process_single_task(task))
             else:

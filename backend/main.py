@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from config import settings
 from database import init_db, close_pool
 from seed_data import seed_system_prompts
-from services.task_queue import start_processing, stop_processing
+from services.task_queue import fail_interrupted_tasks, start_processing, stop_processing
 
 from routers.models import router as models_router
 from routers.prompts import router as prompts_router
@@ -36,6 +36,9 @@ async def lifespan(app: FastAPI):
     await init_db()
     await seed_system_prompts()
     os.makedirs(UPLOAD_DIR, exist_ok=True)
+    interrupted_count = await fail_interrupted_tasks()
+    if interrupted_count:
+        print(f"[Task Queue] Marked {interrupted_count} interrupted task(s) as failed")
     start_processing()
     print(f"GameArt AI Backend started on port {settings.BACKEND_PORT}")
     yield

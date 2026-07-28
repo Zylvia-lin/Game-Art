@@ -129,8 +129,8 @@ export default function CharacterPage() {
         image_url: sourceImage || undefined,
         directions,
         pose: poseText,
-        style,
-        ratio: subTool === 'three_view' ? '16:9' : subTool === 'directions' ? '1:1' : ratio,
+        style: subTool === 'part_split' ? undefined : style,
+        ratio: subTool === 'three_view' || subTool === 'part_split' ? '16:9' : subTool === 'directions' ? '1:1' : ratio,
         resolution,
         model_id: selectedModelId || undefined,
       });
@@ -200,7 +200,7 @@ export default function CharacterPage() {
         placeholder={needsImage ? '描述需要调整的内容...' : '描述角色外观，如：身穿银色铠甲的女骑士，手持长剑...'}
         rows={3}
       />
-      {subTool !== 'three_view' && subTool !== 'directions' && (
+      {subTool !== 'three_view' && subTool !== 'directions' && subTool !== 'part_split' && (
         <StyleSelector value={style} onChange={setStyle} />
       )}
       {subTool === 'tpose' && (
@@ -255,10 +255,10 @@ export default function CharacterPage() {
           </div>
         </div>
       )}
-      {subTool !== 'three_view' && subTool !== 'directions' && (
+      {subTool !== 'three_view' && subTool !== 'directions' && subTool !== 'part_split' && (
         <RatioSelector value={ratio} onChange={setRatio} />
       )}
-      <ResolutionSelector ratio={subTool === 'three_view' ? '16:9' : subTool === 'directions' ? '1:1' : ratio} value={resolution} onChange={setResolution} />
+      <ResolutionSelector ratio={subTool === 'three_view' || subTool === 'part_split' ? '16:9' : subTool === 'directions' ? '1:1' : ratio} value={resolution} onChange={setResolution} />
       <button
         onClick={handleGenerate}
         disabled={submitting || genCooldown || (subTool === 'directions' || subTool === 'part_split' || subTool === 'three_view' ? !sourceImage : !prompt.trim()) || (subTool === 'tpose' && pose === 'custom' && !customPose.trim())}

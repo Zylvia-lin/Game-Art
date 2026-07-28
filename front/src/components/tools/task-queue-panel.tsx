@@ -269,9 +269,9 @@ export function TaskQueuePanel({ projectId, onTaskComplete }: TaskQueuePanelProp
                       <div className="text-xs font-medium text-foreground">
                         {toolLabel(task.tool_key)}
                       </div>
-                      <div className="truncate text-[11px] text-muted-foreground">
+                      <div className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
                         {task.input_params?.prompt
-                          ? String(task.input_params.prompt).slice(0, 40) + (String(task.input_params.prompt).length > 40 ? '...' : '')
+                          ? String(task.input_params.prompt)
                           : formatTime(task.created_at)}
                       </div>
                     </div>
@@ -315,15 +315,20 @@ export function TaskQueuePanel({ projectId, onTaskComplete }: TaskQueuePanelProp
                       <div className="text-xs font-medium text-foreground">
                         {toolLabel(task.tool_key)}
                       </div>
-                      <div
-                        className="truncate text-[11px] text-muted-foreground"
-                        title={task.error_message || undefined}
-                      >
-                        {task.error_message
-                          ? (task.error_message.length > 300 ? task.error_message.slice(0, 300) + '...' : task.error_message)
-                          : task.input_params?.prompt
-                            ? String(task.input_params.prompt).slice(0, 40) + (String(task.input_params.prompt).length > 40 ? '...' : '')
-                            : formatTime(task.completed_at || task.created_at)}
+                      <div className="mt-0.5 whitespace-pre-wrap break-words text-[11px] leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
+                        {task.error_message ? (
+                          <>
+                            <span className="font-medium text-red-400">错误信息：</span>
+                            {task.error_message}
+                          </>
+                        ) : task.input_params?.prompt ? (
+                          <>
+                            <span className="font-medium text-foreground/70">提示词：</span>
+                            {String(task.input_params.prompt)}
+                          </>
+                        ) : (
+                          formatTime(task.completed_at || task.created_at)
+                        )}
                       </div>
                     </div>
                     <span className="shrink-0 text-[10px] text-muted-foreground">
