@@ -29,6 +29,7 @@ interface ResultImageCardProps {
   taskIndex?: number;
   onNameChange?: (newName: string) => void;
   onDelete?: () => void;
+  prominentPreview?: boolean;
 }
 
 export function ResultImageCard({
@@ -40,6 +41,7 @@ export function ResultImageCard({
   taskIndex,
   onNameChange,
   onDelete,
+  prominentPreview = false,
 }: ResultImageCardProps) {
   const [dimensions, setDimensions] = useState<{ w: number; h: number } | null>(null);
   const [displayName, setDisplayName] = useState(name || `生成图片 ${index + 1}`);
@@ -52,6 +54,8 @@ export function ResultImageCard({
   const [previewZoom, setPreviewZoom] = useState(1);
   const [deleting, setDeleting] = useState(false);
   const [addedType, setAddedType] = useState<string | null>(null);
+  const previewDialogRef = useRef<HTMLDivElement>(null);
+  const previewTriggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (name) setDisplayName(name);
@@ -167,20 +171,37 @@ export function ResultImageCard({
     setPreviewZoom((prev) => Math.max(0.2, Math.min(5, Math.round((prev + delta) * 100) / 100)));
   };
 
-  // ESC key to close preview
+  // Keep keyboard focus inside the full-screen preview and restore it on close.
   useEffect(() => {
     if (!showPreview) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopPropagation();
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    requestAnimationFrame(() => previewDialogRef.current?.querySelector<HTMLElement>('[data-preview-close]')?.focus());
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
         handleClosePreview();
+        return;
+      }
+      if (event.key !== "Tab" || !previewDialogRef.current) return;
+      const focusable = Array.from(previewDialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
       }
     };
     window.addEventListener("keydown", handleKeyDown, true);
-    return () => window.removeEventListener("keydown", handleKeyDown, true);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown, true);
+      (previewTriggerRef.current || previousFocus)?.focus();
+    };
   }, [showPreview]);
-
   // Render action buttons (shared between card and preview)
   const renderActions = (isPreview = false) => (
     <div className={`flex items-center justify-center gap-2 ${isPreview ? "" : "px-2 py-2"}`}>
@@ -240,13 +261,22 @@ export function ResultImageCard({
           )}
 
           {/* Zoom icon - center, hover only */}
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all duration-200 group-hover:bg-black/20 group-hover:opacity-100">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-background/80 backdrop-blur-sm">
-              <ZoomIn className="h-5 w-5 text-foreground" />
-            </div>
+          <div className={`pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 transition-all duration-200 group-hover:bg-black/20 ${prominentPreview ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+            <button
+              type="button"
+              className="pointer-events-auto flex items-center gap-2 rounded-full bg-background/90 px-4 py-2 text-sm font-medium text-foreground shadow-lg backdrop-blur-sm hover:bg-background"
+              onClick={(event) => {
+                event.stopPropagation();
+                previewTriggerRef.current = event.currentTarget;
+                handleImageClick();
+              }}
+              aria-label={`查看大图：${displayName}`}
+            >
+              <ZoomIn className="h-5 w-5" />
+              {prominentPreview && <span>查看大图</span>}
+            </button>
           </div>
         </div>
-
         {/* Name badge - top left, editable on hover */}
         {editing ? (
           <div className="absolute inset-x-0 top-0 z-30 flex items-center gap-1 bg-black/80 px-2 py-1.5 backdrop-blur-sm">
@@ -342,6 +372,10 @@ export function ResultImageCard({
       {/* Full-screen preview modal */}
       {showPreview && (
         <div
+          ref={previewDialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`大图预览：${displayName}`}
           className="fixed inset-0 z-50 flex flex-col bg-black/90 backdrop-blur-sm"
           onClick={handleClosePreview}
         >
@@ -359,6 +393,7 @@ export function ResultImageCard({
               </button>
             </div>
             <button
+              data-preview-close
               onClick={handleClosePreview}
               className="flex h-10 w-10 items-center justify-center rounded-full bg-background/80 text-foreground hover:bg-background"
               title="关闭"

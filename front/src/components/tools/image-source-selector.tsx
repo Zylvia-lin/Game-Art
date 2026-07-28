@@ -13,9 +13,17 @@ interface ImageSourceSelectorProps {
   onImageChange: (url: string | null) => void;
   label?: string;
   assetType?: string;
+  allowUpload?: boolean;
 }
 
-export function ImageSourceSelector({ projectId, imageUrl, onImageChange, label = '输入图片', assetType }: ImageSourceSelectorProps) {
+export function ImageSourceSelector({
+  projectId,
+  imageUrl,
+  onImageChange,
+  label = '输入图片',
+  assetType,
+  allowUpload = true,
+}: ImageSourceSelectorProps) {
   const [showAssetSelector, setShowAssetSelector] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -71,6 +79,8 @@ export function ImageSourceSelector({ projectId, imageUrl, onImageChange, label 
         <div className="relative group rounded-lg overflow-hidden border border-[#27272a]">
           <img src={resolveImageUrl(imageUrl)} alt="Source" className="w-full h-40 object-contain bg-[#0a0a0f]" />
           <button
+            type="button"
+            aria-label="移除参考图"
             onClick={() => onImageChange(null)}
             className="absolute top-2 right-2 p-1.5 rounded-md bg-black/60 text-zinc-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
           >
@@ -80,35 +90,46 @@ export function ImageSourceSelector({ projectId, imageUrl, onImageChange, label 
       ) : (
         <div
           className="flex gap-2"
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
+          onDragOver={allowUpload ? handleDragOver : undefined}
+          onDragLeave={allowUpload ? handleDragLeave : undefined}
+          onDrop={allowUpload ? handleDrop : undefined}
         >
           {/* Upload from local / drag & drop */}
-          <div
-            className={`flex-1 rounded-lg border border-dashed transition-colors cursor-pointer ${
-              dragOver
-                ? 'border-indigo-500 bg-indigo-500/10'
-                : 'border-[#27272a] hover:border-indigo-500/50 bg-[#0a0a0f]/50'
-            }`}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <div className="flex flex-col items-center justify-center gap-2 py-6 text-zinc-500 hover:text-zinc-300">
-              {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-              <span className="text-xs">{uploading ? '上传中...' : dragOver ? '松开以上传' : '拖拽或点击上传'}</span>
+          {allowUpload && (
+            <div
+              className={`flex-1 rounded-lg border border-dashed transition-colors cursor-pointer ${
+                dragOver
+                  ? 'border-indigo-500 bg-indigo-500/10'
+                  : 'border-[#27272a] hover:border-indigo-500/50 bg-[#0a0a0f]/50'
+              }`}
+              role="button"
+              tabIndex={0}
+              aria-label="上传本地图片"
+              onClick={() => fileInputRef.current?.click()}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  fileInputRef.current?.click();
+                }
+              }}
+            >
+              <div className="flex flex-col items-center justify-center gap-2 py-6 text-zinc-500 hover:text-zinc-300">
+                {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                <span className="text-xs">{uploading ? '上传中...' : dragOver ? '松开以上传' : '拖拽或点击上传'}</span>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileUpload}
+              />
             </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleFileUpload}
-            />
-          </div>
+          )}
           {/* Select from project assets */}
           <Button
             variant="outline"
-            className="flex-1 h-auto py-6 flex-col gap-2 border-dashed border-[#27272a] hover:border-indigo-500/50 bg-[#0a0a0f]/50 text-zinc-500 hover:text-zinc-300"
+            className={`${allowUpload ? 'flex-1' : 'w-full'} h-auto py-6 flex-col gap-2 border-dashed border-[#27272a] hover:border-indigo-500/50 bg-[#0a0a0f]/50 text-zinc-500 hover:text-zinc-300`}
             onClick={() => setShowAssetSelector(true)}
           >
             <FolderOpen className="w-4 h-4" />

@@ -22,7 +22,7 @@ import {
 } from '@/lib/api';
 import { useTaskQueue } from '@/hooks/use-task-queue';
 import { useButtonCooldown } from '@/hooks/use-button-cooldown';
-import type { ModelConfig } from '@/lib/types';
+import { estimateCostFromModel, formatCostDisplay, type ModelConfig } from '@/lib/types';
 
 type SubTool = 'layout_generate' | 'component_place' | 'component_split';
 type Shape = 'rectangle' | 'circle';
@@ -90,7 +90,9 @@ export default function UIPage() {
   const [prompt, setPrompt] = useState('');
   const [ratio, setRatio] = useState('16:9');
   const [resolution, setResolution] = useState('1920x1080');
-  const [sourceImage, setSourceImage] = useState<string | null>(null);
+  const [layoutReference, setLayoutReference] = useState<string | null>(null);
+  const [placementBackground, setPlacementBackground] = useState<string | null>(null);
+  const [splitAssetImage, setSplitAssetImage] = useState<string | null>(null);
   const [components, setComponents] = useState<UIComponent[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
@@ -123,7 +125,7 @@ export default function UIPage() {
   useEffect(() => {
     const saved = sessionStorage.getItem('ui_source_image');
     if (saved) {
-      setSourceImage(saved);
+      setLayoutReference(saved);
       sessionStorage.removeItem('ui_source_image');
     }
   }, []);
@@ -210,14 +212,14 @@ export default function UIPage() {
 
   const submitGeneration = async () => {
     if (subTool === 'layout_generate' && !prompt.trim()) return;
-    if (subTool === 'component_split' && !sourceImage) return;
+    if (subTool === 'component_split' && !splitAssetImage) return;
     triggerCooldown();
     try {
       await submitTask(
         subTool === 'component_split' ? 'ui_component_split' : 'ui_layout_generate',
         {
           prompt: prompt || '拆分参考图中的 UI 组件',
-          image_url: sourceImage || undefined,
+          image_url: (subTool === 'component_split' ? splitAssetImage : layoutReference) || undefined,
           ratio,
           resolution,
           model_id: selectedModelId || undefined,
@@ -241,13 +243,13 @@ export default function UIPage() {
     context.fillStyle = '#111827';
     context.fillRect(0, 0, width, height);
 
-    if (sourceImage) {
+    if (placementBackground) {
       const image = new Image();
       image.crossOrigin = 'anonymous';
       await new Promise<void>((resolve, reject) => {
         image.onload = () => resolve();
         image.onerror = () => reject(new Error('参考背景加载失败'));
-        image.src = resolveImageUrl(sourceImage);
+        image.src = resolveImageUrl(placementBackground);
       });
       context.drawImage(image, 0, 0, width, height);
     }
@@ -294,7 +296,7 @@ export default function UIPage() {
         kind: 'ui_component_layout',
         version: 1,
         ratio,
-        background_url: sourceImage,
+        background_url: placementBackground,
         components,
       };
       await assetsApi.create({
@@ -305,7 +307,7 @@ export default function UIPage() {
         description: `${ratio} UI 组件摆放参考`,
         metadata,
       });
-      setSourceImage(uploaded.url);
+      setPlacementBackground(uploaded.url);
       setComponents([]);
       setSelectedId(null);
       await loadSavedLayouts();
@@ -322,7 +324,7 @@ export default function UIPage() {
     if (!isLayoutMetadata(metadata)) return;
     setRatio(metadata.ratio);
     setComponents(metadata.components.map((component) => clampComponent(component, parseRatio(metadata.ratio))));
-    setSourceImage(metadata.background_url || null);
+    setPlacementBackground(metadata.background_url || null);
     setSelectedId(null);
     toast.success(`已载入 ${asset.name}`);
   };
@@ -336,8 +338,8 @@ export default function UIPage() {
       <RatioSelector value={ratio} onChange={setRatio} />
       <ImageSourceSelector
         projectId={projectId}
-        imageUrl={sourceImage}
-        onImageChange={setSourceImage}
+        imageUrl={placementBackground}
+        onImageChange={setPlacementBackground}
         label="可选背景参考"
         assetType="ui"
       />
@@ -404,13 +406,23 @@ export default function UIPage() {
 
   const generationParams = (
     <>
-      {(subTool === 'component_split' || subTool === 'layout_generate') && (
+      {subTool === 'layout_generate' && (
         <ImageSourceSelector
           projectId={projectId}
-          imageUrl={sourceImage}
-          onImageChange={setSourceImage}
-          label={subTool === 'layout_generate' ? '可选参考图（用户图片或 UI 摆放布局）' : '待拆分 UI 图片'}
+          imageUrl={layoutReference}
+          onImageChange={setLayoutReference}
+          label="可选参考图（用户图片或 UI 摆放布局）"
           assetType="ui"
+        />
+      )}
+      {subTool === 'component_split' && (
+        <ImageSourceSelector
+          projectId={projectId}
+          imageUrl={splitAssetImage}
+          onImageChange={setSplitAssetImage}
+          label="从资产库选择待拆分的 UI 图片"
+          assetType="ui"
+          allowUpload={false}
         />
       )}
       <ModelSelector
@@ -436,10 +448,22 @@ export default function UIPage() {
       <Button
         className="w-full"
         onClick={submitGeneration}
-        disabled={submitting || isCoolingDown || (subTool === 'layout_generate' ? !prompt.trim() : !sourceImage)}
+        disabled={submitting || isCoolingDown || (subTool === 'layout_generate' ? !prompt.trim() : !splitAssetImage)}
       >
         {submitting ? <Loader2 className="animate-spin" /> : <Sparkles />}
-        {submitting ? '提交中……' : '生成'}
+        {submitting ? '提交中……' : (
+          <>
+            生成
+            <span className="ml-1 text-xs opacity-80">
+              ≈{formatCostDisplay(estimateCostFromModel(
+                selectedModel,
+                resolution,
+                1,
+                (subTool === 'component_split' ? splitAssetImage : layoutReference) ? 1 : 0,
+              ))}
+            </span>
+          </>
+        )}
       </Button>
       {selectedModel && <p className="text-xs text-muted-foreground">当前模型：{selectedModel.name}</p>}
     </>
@@ -492,9 +516,9 @@ export default function UIPage() {
           onPointerLeave={endInteraction}
           onPointerDown={() => setSelectedId(null)}
         >
-          {sourceImage && (
+          {placementBackground && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={resolveImageUrl(sourceImage)} alt="" className="pointer-events-none absolute inset-0 size-full object-fill opacity-60" />
+            <img src={resolveImageUrl(placementBackground)} alt="" className="pointer-events-none absolute inset-0 size-full object-fill opacity-60" />
           )}
           {components.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center text-center text-slate-400">
@@ -535,7 +559,7 @@ export default function UIPage() {
   );
 
   const resultCanvas = results.length ? (
-    <div className="columns-1 gap-3 sm:columns-3 lg:columns-5">
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 2xl:grid-cols-3">
       {results.map((result, index) => (
         <ResultImageCard
           key={`${result.taskId}-${result.taskIndex}`}
@@ -545,6 +569,7 @@ export default function UIPage() {
           name={result.name}
           taskId={result.taskId}
           taskIndex={result.taskIndex}
+          prominentPreview
           onDelete={async () => {
             await generateApi.deleteOutput(result.taskId, result.taskIndex);
             await refreshTasks();
